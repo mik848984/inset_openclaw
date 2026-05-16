@@ -1,0 +1,66 @@
+# dependencies
+node_modules/
+.pnp
+.pnp.js
+
+# next
+.next/
+out/
+dist/
+build/
+
+# env / secrets
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+usersfile
+letsencrypt/
+acme.json
+
+# database / runtime
+.mongodb_data/
+.mongodb_data_empty_*/
+mongo-data/
+mongo-data-stage/
+*.sqlite
+*.sqlite-shm
+*.sqlite-wal
+
+# logs
+logs/
+_logs/
+*.log
+combined.log
+error.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# archives / backups
+*.zip
+*.tar
+*.tar.gz
+*.tgz
+backups/
+exports/
+
+# OS / editor
+.DS_Store
+.vscode/
+.idea/
+
+# uploads policy
+# Keep uploads/blog because blog articles reference those images.
+uploads/*
+!uploads/blog/
+!uploads/blog/**
+
+# local backup files with possible secrets
+*.bak_before_*
+*.bak
+
+# local backup files with possible secrets
+*.bak_before_*
+*.bak

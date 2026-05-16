@@ -1,0 +1,275 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:ital,opsz,wght@0,14..32,100..900;1,14..32,100..900&display=swap');
+
+body {
+    font-family: 'Inter', serif;
+}
+
+option {
+    color: black;
+}
+
+.react-modal-sheet-container {
+    border-top-right-radius: 16px !important;
+    border-top-left-radius: 16px !important;
+    background-color: #fbfcff;
+}
+
+:root[data-theme='dark'] .react-modal-sheet-container {
+    background-color: #0b1437 !important;
+}
+
+:root[data-theme='dark'] .payment-modal .react-modal-sheet-container {
+    background-color: #fbfcff !important;
+    color: #000000;
+}
+
+:root[data-theme='dark']
+.payment-modal
+.react-modal-sheet-container
+.chakra-divider {
+    border-color: #c7c7c7;
+}
+
+:root[data-theme='dark'] .payment-modal .react-modal-sheet-container svg {
+    color: #000000;
+}
+
+:root[data-theme='dark']
+.payment-modal
+.react-modal-sheet-container
+chakra-button:hover {
+    background: #e9e9e9;
+}
+
+table {
+    margin-top: 12px;
+    margin-bottom: 12px;
+}
+
+table,
+tr,
+td {
+    border: 1px solid #d4d4d4;
+}
+
+td {
+    padding-left: 6px;
+    padding-right: 6px;
+}
+
+.chakra-switch__track[data-checked] {
+    --switch-bg: #422afb !important;
+}
+
+img {
+    border-radius: 20px;
+}
+
+pre {
+    max-width: calc(100vw - (150px + 280px));
+    overflow: auto;
+}
+
+@media (max-width: 500px) {
+    div[data-copy] {
+        display: flex;
+        right: 10px;
+        top: 10px;
+        background: #fefefe;
+        border-radius: 50%;
+        width: 22px;
+        height: 22px;
+        align-items: center;
+        justify-content: center;
+    }
+}
+
+@media screen and (max-width: 1280px) {
+    pre {
+        max-width: 100%;
+    }
+}
+
+.models::-webkit-scrollbar {
+    display: none;
+}
+
+div[data-copy] {
+    position: absolute;
+    right: 15px;
+    top: 15px;
+    cursor: pointer;
+    transition: 0.5s;
+}
+
+div[data-copy]:hover {
+    opacity: 0.6;
+}
+
+.chat {
+    word-break: break-word;
+}
+
+.chat img {
+    width: 100%;
+    max-width: 524px;
+}
+
+[data-status='success'] {
+    background: #b0e3ca !important;
+    color: #000;
+    z-index: 100;
+}
+
+[data-status="info"] {
+    background: #c1d9f1 !important;
+    /*color: white !important;*/
+}
+
+.react-modal-sheet-content {
+    display: block !important;
+    overflow: auto !important;
+    touch-action: auto !important;
+}
+
+@media (max-width: 1279px) {
+    [data-pre-container] {
+        width: calc(100vw - 100px);
+    }
+}
+
+.chat a {
+    color: #4197dd !important;
+}
+
+.chat hr {
+    margin-top: 12px;
+    margin-bottom: 12px;
+}
+
+.chat svg {
+    display: inline;
+}
+
+.documents a {
+    font-size: 12px;
+}
+
+.checkout-modal__content {
+    border-radius: 12px;
+}
+
+.modal-sheet div:nth-child(2) {
+    margin: 0 auto;
+    max-width: 800px;
+}
+
+ol, ul {
+    display: block;
+    list-style-type: disc;
+    margin-block-start: 0.3em !important;
+    margin-block-end: 0.3em !important;
+    margin-inline-start: 0 !important;
+    margin-inline-end: 0 !important;
+    padding-inline-start: 20px;
+    unicode-bidi: isolate;
+}
+
+@media screen and (max-width: 768px) {
+    .modal-sheet div:nth-child(2) {
+        margin: 0;
+    }
+
+}
+
+/* :root[data-theme='dark'] .modal-sheet div:nth-child(2) {
+  background;
+} */
+
+
+.users-table tr:first-child td:first-child {
+    border-top-left-radius: 12px;
+}
+
+.users-table tr:first-child td:last-child {
+    border-top-right-radius: 12px;
+}
+
+.users-table tr:last-child td:first-child {
+    border-bottom-left-radius: 12px;
+}
+
+.users-table tr:last-child td:last-child {
+    border-bottom-right-radius: 12px;
+}
+
+
+.reason ul {
+    padding-left: 35px;
+}
+
+.tabs [aria-selected=true], .tabs[data-selected] {
+    --tabs-color: #3311DB !important;
+}
+
+:root[data-theme='dark'] .tabs [aria-selected=true], :root[data-theme='dark'] .tabs[data-selected] {
+    --tabs-color: white !important;
+}
+
+.chakra-alert {
+    border-radius: 12px;
+    align-items: flex-start;
+}
+
+.search:hover[disabled] {
+    background: linear-gradient(15.46deg, #4A25E1 26.3%, #7B5AFF 86.4%) !important;
+}
+
+
+/* Blog article typography */
+.blog-content {
+    font-size: 18px;
+    line-height: 1.7;
+    color: #1a1a1a;
+}
+
+:root[data-theme='dark'] .blog-content {
+    color: #f5f5f5;
+}
+
+.blog-content p {
+    margin-bottom: 1em;
+}
+
+.blog-content h2,
+.blog-content h3,
+.blog-content h4 {
+    margin-top: 1.5em;
+    margin-bottom: 0.6em;
+    font-weight: 700;
+}
+
+.blog-content ul,
+.blog-content ol {
+    margin-bottom: 1em;
+    padding-left: 1.5rem;
+}
+
+.blog-content li {
+    margin-bottom: 0.35em;
+}
+
+.blog-content img {
+    display: block;
+    max-width: 100%;
+    height: auto;
+    margin: 24px auto;
+    border-radius: 16px;
+}
+
+/* Make code blocks in articles scrollable on small screens */
+.blog-content pre {
+    max-width: 100%;
+    overflow-x: auto;
+}
+

@@ -1,0 +1,25 @@
+#!/bin/bash
+set -e
+
+echo "🚀 Запуск деплоя проекта IISet..."
+
+cd /root/app/iiset || { echo "❌ Ошибка: директория /root/app/iiset не найдена"; exit 1; }
+
+echo "📦 Обновляем код из GitHub..."
+# git fetch --all
+# git reset --hard origin/main
+
+echo "🧱 Останавливаем контейнеры..."
+docker-compose down || true
+
+echo "🧹 Удаляем старый контейнер 'app' (если остался)..."
+docker rm -f app 2>/dev/null || true
+
+echo "⚙️ Пересобираем и запускаем контейнеры..."
+docker-compose up -d --build app traefik mongodb
+
+echo "🔍 Проверяем состояние контейнеров..."
+docker ps
+
+echo "✅ Деплой завершён!"
+echo "🌐 Проверь сайт: https://iiset.io"
