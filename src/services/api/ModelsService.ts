@@ -1123,7 +1123,7 @@ async transformMessagesToQuery({ userMessages, user }: IImagesRequest) {
         'В тексте ответа обязательно ссылайся на источники в формате [1], [2] и т.п. ' +
         'Не используй таблицы в ответе, кроме случаев, когда пользователь прямо просит оформить информацию в виде таблицы. ' +
         'Для списков мест, преимуществ, шагов и подобных вещей используй обычный текст с подзаголовками и маркированными/нумерованными списками. ' +
-        'В конце ответа обязательно добавь раздел «Источники» со списком ссылок по формату: [1] Название — URL.';
+        'Не выводи в конце ответа отдельный раздел «Источники» и не дублируй голые URL — интерфейс покажет источники отдельным блоком карточек.';
 
       const answerMessages = [
         {
@@ -1142,16 +1142,60 @@ async transformMessagesToQuery({ userMessages, user }: IImagesRequest) {
         },
       ];
 
+      // ── Build sources array for Perplexity-like source cards ─────
+      const sourcesPayload = docsToUse
+        .slice(0, 6)
+        .map((doc: any, i: number) => {
+          const url = doc.url;
+          let domain = '';
+          try {
+            domain = new URL(url).hostname.replace(/^www\./, '');
+          } catch {
+            domain = '';
+          }
+          return {
+            title: doc.title || domain || url,
+            url,
+            domain,
+            snippet:
+              typeof doc.snippet === 'string' && doc.snippet.length > 0
+                ? doc.snippet.slice(0, 240)
+                : '',
+            index: i + 1,
+          };
+        })
+        .filter((s) => s.url);
+
+      const sourcesMarker = `__IISET_SOURCES__=${JSON.stringify(
+        sourcesPayload,
+      )}\n`;
+
       // 4. Финальный ответ через GPT-OSS (Deepinfra)
       console.log(
-        `[CHAT-WS] final_llm_request_start dt_total_pre_llm=${wsDt()}ms`,
+        `[CHAT-WS] final_llm_request_start dt_total_pre_llm=${wsDt()}ms sources=${sourcesPayload.length}`,
       );
-      return await this.llmBaseRequest({
+      const llmStreamResult = (await this.llmBaseRequest({
         model: 'openai/gpt-oss-120b',
         messages: answerMessages as any[],
         stream: true,
         onClose,
         textToLast: '',
+      })) as ReadableStream<Uint8Array>;
+
+      // Prepend the sources marker to the stream so the client receives it
+      // as the very first chunk, before any LLM text.
+      return new ReadableStream<Uint8Array>({
+        async start(controller) {
+          const encoder = new TextEncoder();
+          controller.enqueue(encoder.encode(sourcesMarker));
+          const reader = llmStreamResult.getReader();
+          while (true) {
+            const { done, value } = await reader.read();
+            if (done) break;
+            if (value) controller.enqueue(value);
+          }
+          controller.close();
+        },
       });
     } catch (e: any) {
       console.error('[CHAT-WS] webSearchRequest error', e);
@@ -1263,7 +1307,8 @@ async transformMessagesToQuery({ userMessages, user }: IImagesRequest) {
         {
           role: 'system',
           content:
-            'Ты ИИСеть, ты должна помогать пользователям с их разными вопросами! Пиши на русском! Старайся красиво и удобно выводить ответ пользователю!',
+            'Ты ИИСеть, ты должна помогать пользователям с их разными вопросами! Пиши на русском! Старайся красиво и удобно выводить ответ пользователю! ' +
+            'Не выводи скрытые рассуждения, теги <think> или chain-of-thought — дай только финальный ответ.',
         },
         ...messages,
       ],

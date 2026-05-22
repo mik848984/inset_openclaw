@@ -4,13 +4,14 @@ import { ChatAiContext, IMessage } from '@/contexts/ChatAiContext';
 import {
   Box,
   Button,
-  CircularProgress,
+  Collapse,
   Flex,
   Grid,
   Icon,
   IconButton,
   Text,
   useColorModeValue,
+  useDisclosure,
   useToast,
   Menu,
   MenuButton,
@@ -18,8 +19,14 @@ import {
   MenuItem,
 } from '@chakra-ui/react';
 import { MdAutoAwesome } from 'react-icons/md';
+import { LuChevronDown, LuLink } from 'react-icons/lu';
 import { markdown } from '@/services/ui/MarkdownService';
-import React, { useContext } from 'react';
+import {
+  extractThinkBlocks,
+  parseSourcesFromContent,
+  ISource,
+} from '@/utils/normalizeModelOutput';
+import React, { useContext, useEffect, useMemo, useState } from 'react';
 import { NextAvatar } from '@/components/image/Avatar';
 import { useSession } from 'next-auth/react';
 import { TbCreditCardPay, TbSettingsDollar } from 'react-icons/tb';
@@ -100,10 +107,38 @@ function Message({ message, isLast }: IProps) {
   );
 
   const { data: session } = useSession();
-  const { regenerateLastMessage, loading, webSearch, messages, setMessages } =
-    useContext(ChatAiContext);
+  const {
+    regenerateLastMessage,
+    loading,
+    webSearch,
+    messages,
+    setMessages,
+    reasoningEnabled,
+  } = useContext(ChatAiContext);
   const { setTariffModalOpen, setPayBalanceModalOpen } =
     useContext(ModalContext);
+
+  // Reasoning collapsible state — closed by default
+  const reasoningDisclosure = useDisclosure({ defaultIsOpen: false });
+
+  // Glass tokens for reasoning block + dots loader
+  const reasoningBg = useColorModeValue(
+    'rgba(255,255,255,0.62)',
+    'rgba(13,18,34,0.58)',
+  );
+  const reasoningBorder = useColorModeValue(
+    'rgba(0,0,0,0.06)',
+    'rgba(255,255,255,0.08)',
+  );
+  const dotsPillBg = useColorModeValue(
+    'rgba(255,255,255,0.72)',
+    'rgba(15,18,32,0.62)',
+  );
+  const dotsPillBorder = useColorModeValue(
+    'rgba(0,0,0,0.08)',
+    'rgba(255,255,255,0.10)',
+  );
+  const dotsColor = useColorModeValue('#6e6e73', 'rgba(245,245,247,0.66)');
 
   const { isAnonymous, user, refreshUser } = useUser(false);
 
@@ -288,6 +323,34 @@ function Message({ message, isLast }: IProps) {
   };
 
   if (message.role === 'assistant') {
+    // ── Parse sources marker (Perplexity cards) and reasoning ─────
+    // Priority: live `message.sources` (during streaming) > marker re-parse
+    // from content (after reload). The marker is always stripped from text.
+    const { cleanText, reasoningText, sources } = useMemo(() => {
+      const raw = message.content || '';
+      const sourcesParsed = parseSourcesFromContent(raw);
+      const liveSources: ISource[] | undefined = (message as any).sources;
+      const finalSources: ISource[] =
+        liveSources && liveSources.length > 0
+          ? liveSources
+          : sourcesParsed.sources;
+
+      const withoutSources = sourcesParsed.cleanContent;
+      if (reasoningEnabled) {
+        const ext = extractThinkBlocks(withoutSources);
+        return {
+          cleanText: ext.cleanText,
+          reasoningText: ext.reasoningText,
+          sources: finalSources,
+        };
+      }
+      return {
+        cleanText: withoutSources,
+        reasoningText: '',
+        sources: finalSources,
+      };
+    }, [message.content, (message as any).sources, reasoningEnabled]);
+
     return (
       <Flex
         w="100%"
@@ -296,6 +359,13 @@ function Message({ message, isLast }: IProps) {
         align={'start'}
         mb={{ base: '16px', md: '20px' }}
         position="relative"
+        sx={{
+          '@keyframes iisetMsgIn': {
+            from: { opacity: 0, transform: 'translateY(2px)' },
+            to: { opacity: 1, transform: 'translateY(0)' },
+          },
+          animation: 'iisetMsgIn 200ms ease-out both',
+        }}
       >
         {message.content && (
           <Box
@@ -436,7 +506,92 @@ function Message({ message, isLast }: IProps) {
         </Flex>
         <Flex w="100%" minW={0}>
           <Grid w="100%" minW={0}>
-            {message.content && (
+            {/* Collapsible reasoning block — only shown when the user
+                explicitly turned on "Размышление" AND the model produced
+                <think> content for THIS message. */}
+            {reasoningEnabled && reasoningText && (
+              <Box
+                mb="10px"
+                bg={reasoningBg}
+                border="1px solid"
+                borderColor={reasoningBorder}
+                borderRadius="14px"
+                backdropFilter="blur(18px) saturate(180%)"
+                sx={{ WebkitBackdropFilter: 'blur(18px) saturate(180%)' }}
+                px={{ base: '12px', md: '14px' }}
+                py={{ base: '10px', md: '12px' }}
+              >
+                <Flex
+                  as="button"
+                  type="button"
+                  onClick={reasoningDisclosure.onToggle}
+                  align="center"
+                  justify="space-between"
+                  width="100%"
+                  cursor="pointer"
+                  bg="transparent"
+                  border="none"
+                  textAlign="left"
+                  p="0"
+                >
+                  <Box>
+                    <Text
+                      fontFamily={FONT_APPLE_TEXT}
+                      fontSize="13px"
+                      fontWeight="600"
+                      letterSpacing="-0.15px"
+                      color={textPrimary}
+                      lineHeight="1.3"
+                    >
+                      Размышление
+                    </Text>
+                    <Text
+                      fontFamily={FONT_APPLE_TEXT}
+                      fontSize="12px"
+                      letterSpacing="-0.1px"
+                      color={textSecondary}
+                      lineHeight="1.3"
+                      mt="2px"
+                    >
+                      Модель сначала набросала ход мысли
+                    </Text>
+                  </Box>
+                  <Icon
+                    as={LuChevronDown}
+                    w="16px"
+                    h="16px"
+                    color={textSecondary}
+                    transform={
+                      reasoningDisclosure.isOpen
+                        ? 'rotate(180deg)'
+                        : 'rotate(0deg)'
+                    }
+                    transition="transform 0.18s ease"
+                    flexShrink={0}
+                    ml="10px"
+                  />
+                </Flex>
+                <Collapse in={reasoningDisclosure.isOpen} animateOpacity>
+                  <Box
+                    mt="10px"
+                    pt="10px"
+                    borderTop="1px solid"
+                    borderColor={reasoningBorder}
+                    fontFamily={FONT_APPLE_TEXT}
+                    fontSize="13px"
+                    lineHeight="1.6"
+                    letterSpacing="-0.05px"
+                    color={textSecondary}
+                    whiteSpace="pre-wrap"
+                    wordBreak="break-word"
+                  >
+                    {reasoningText}
+                  </Box>
+                </Collapse>
+              </Box>
+            )}
+
+            {cleanText && (
               <Box
                 color={textColor}
                 fontFamily={FONT_APPLE_TEXT}
@@ -448,16 +603,14 @@ function Message({ message, isLast }: IProps) {
                 minW={0}
               >
                 <Box
-                  opacity={message.content ? '1' : '0'}
-                  transition="opacity 0.6s ease"
                   sx={markdownSx}
                   dangerouslySetInnerHTML={{
                     __html: markdown.markdownItWithPlugins.render(
-                      message.content === '__WEB_SEARCH_REGISTER__' ||
-                      message.content === '__WEB_SEARCH_FREE_LIMIT__' ||
-                      message.content === '__WEB_SEARCH_PRO_LIMIT__'
+                      cleanText === '__WEB_SEARCH_REGISTER__' ||
+                        cleanText === '__WEB_SEARCH_FREE_LIMIT__' ||
+                        cleanText === '__WEB_SEARCH_PRO_LIMIT__'
                         ? ''
-                        : message.content,
+                        : cleanText,
                     ),
                   }}
                 />
@@ -620,37 +773,71 @@ function Message({ message, isLast }: IProps) {
               </Grid>
             )}
 
-            <Flex
-              pointerEvents={!message.content ? 'auto' : 'none'}
-              height={!message.content ? 'auto' : '0px'}
-              transition="opacity 0.5s, height 2s"
-              opacity={!message.content ? '1' : '0'}
-              gap="12px"
-              mt="14px"
-            >
-              <CircularProgress
-                size="35px"
-                isIndeterminate
-                color="brand.500"
-              />
-              <Text color="gray.400" mt="14px">
-                🚀 Работаем над этим...{' '}
-              </Text>
-            </Flex>
+            {/* Apple-style premium thinking indicator.
+                If webSearch is ON, cycle Perplexity-like phase statuses.
+                Otherwise show neutral "Думаю…". */}
+            {!cleanText && isLast && loading && (
+              <Box mt="8px">
+                {webSearch ? (
+                  <WebSearchProgress
+                    pillBg={dotsPillBg}
+                    pillBorder={dotsPillBorder}
+                    dotsColor={dotsColor}
+                    textPrimary={textPrimary}
+                  />
+                ) : (
+                  <ThinkingPill
+                    pillBg={dotsPillBg}
+                    pillBorder={dotsPillBorder}
+                    dotsColor={dotsColor}
+                    label="Думаю…"
+                  />
+                )}
+              </Box>
+            )}
+
+            {/* Source cards under the answer (Perplexity-like) */}
+            {sources && sources.length > 0 && cleanText && (
+              <SourcesBlock sources={sources} />
+            )}
 
             {!loading && isLast && (
               <Box>
                 <Button
-                  w="auto"
                   mt="20px"
                   onClick={handleRegenerate}
+                  bg={dotsPillBg}
                   border="1px solid"
-                  borderColor={borderColor}
+                  borderColor={dotsPillBorder}
+                  backdropFilter="blur(16px) saturate(180%)"
+                  sx={{
+                    WebkitBackdropFilter: 'blur(16px) saturate(180%)',
+                  }}
+                  borderRadius="9999px"
+                  h={{ base: '38px', md: '40px' }}
+                  px={{ base: '14px', md: '16px' }}
+                  fontFamily={FONT_APPLE_TEXT}
+                  fontSize={{ base: '13px', md: '14px' }}
+                  fontWeight="500"
+                  letterSpacing="-0.15px"
+                  color={textPrimary}
                   rightIcon={
-                    <Icon as={PiRepeat} width="20px" height="20px" />
+                    <Icon
+                      as={PiRepeat}
+                      width="15px"
+                      height="15px"
+                      color={textSecondary}
+                    />
                   }
+                  _hover={{
+                    borderColor: 'rgba(0,102,204,0.28)',
+                    transform: 'translateY(-1px)',
+                    color: '#0066cc',
+                  }}
+                  _active={{ transform: 'scale(0.98)' }}
+                  transition="border-color 0.16s ease, transform 0.12s ease, color 0.16s ease"
                 >
-                  Перегенерировать
+                  Повторить ответ
                 </Button>
               </Box>
             )}
@@ -788,6 +975,320 @@ function Message({ message, isLast }: IProps) {
   }
 
   return null;
+}
+
+// ──────────────────────────────────────────────────────────────────
+// ThinkingPill — neutral "Думаю…" Apple glass pill with 3 staggered dots
+// ──────────────────────────────────────────────────────────────────
+interface ThinkingPillProps {
+  pillBg: string;
+  pillBorder: string;
+  dotsColor: string;
+  label: string;
+}
+
+function ThinkingPill({
+  pillBg,
+  pillBorder,
+  dotsColor,
+  label,
+}: ThinkingPillProps) {
+  return (
+    <Flex
+      align="center"
+      gap="10px"
+      px="14px"
+      py="8px"
+      bg={pillBg}
+      border="1px solid"
+      borderColor={pillBorder}
+      borderRadius="9999px"
+      backdropFilter="blur(18px) saturate(180%)"
+      sx={{
+        WebkitBackdropFilter: 'blur(18px) saturate(180%)',
+        '@keyframes iisetThinkingDot': {
+          '0%, 80%, 100%': { opacity: 0.25, transform: 'scale(0.85)' },
+          '40%': { opacity: 1, transform: 'scale(1)' },
+        },
+      }}
+      maxWidth="100%"
+      minWidth={0}
+      display="inline-flex"
+      width="fit-content"
+    >
+      <Flex gap="4px" align="center">
+        {[0, 1, 2].map((i) => (
+          <Box
+            key={i}
+            w="6px"
+            h="6px"
+            borderRadius="9999px"
+            bg={dotsColor}
+            sx={{
+              animation: `iisetThinkingDot 1.2s ease-in-out ${
+                i * 0.16
+              }s infinite`,
+            }}
+          />
+        ))}
+      </Flex>
+      <Text
+        fontFamily={FONT_APPLE_TEXT}
+        fontSize="13px"
+        fontWeight="500"
+        letterSpacing="-0.1px"
+        color={dotsColor}
+        whiteSpace="nowrap"
+      >
+        {label}
+      </Text>
+    </Flex>
+  );
+}
+
+// ──────────────────────────────────────────────────────────────────
+// WebSearchProgress — Perplexity-like staged loader.
+// Cycles through 4 phases via timer. Replaces the indicator the moment
+// the first token of the answer arrives (parent controls visibility).
+// ──────────────────────────────────────────────────────────────────
+const WEB_SEARCH_PHASES = [
+  'Ищу источники…',
+  'Отбираю релевантные материалы…',
+  'Читаю найденные страницы…',
+  'Собираю ответ с источниками…',
+];
+
+interface WebSearchProgressProps {
+  pillBg: string;
+  pillBorder: string;
+  dotsColor: string;
+  textPrimary: string;
+}
+
+function WebSearchProgress({
+  pillBg,
+  pillBorder,
+  dotsColor,
+  textPrimary,
+}: WebSearchProgressProps) {
+  const [phase, setPhase] = useState(0);
+
+  useEffect(() => {
+    const id = window.setInterval(() => {
+      setPhase((p) => (p + 1 < WEB_SEARCH_PHASES.length ? p + 1 : p));
+    }, 1100);
+    return () => window.clearInterval(id);
+  }, []);
+
+  return (
+    <Flex
+      align="center"
+      gap="10px"
+      px="14px"
+      py="9px"
+      bg={pillBg}
+      border="1px solid"
+      borderColor={pillBorder}
+      borderRadius="9999px"
+      backdropFilter="blur(18px) saturate(180%)"
+      sx={{
+        WebkitBackdropFilter: 'blur(18px) saturate(180%)',
+        '@keyframes iisetThinkingDot': {
+          '0%, 80%, 100%': { opacity: 0.25, transform: 'scale(0.85)' },
+          '40%': { opacity: 1, transform: 'scale(1)' },
+        },
+      }}
+      maxWidth="100%"
+      minWidth={0}
+      display="inline-flex"
+      width="fit-content"
+    >
+      <Flex gap="4px" align="center">
+        {[0, 1, 2].map((i) => (
+          <Box
+            key={i}
+            w="6px"
+            h="6px"
+            borderRadius="9999px"
+            bg={dotsColor}
+            sx={{
+              animation: `iisetThinkingDot 1.2s ease-in-out ${
+                i * 0.16
+              }s infinite`,
+            }}
+          />
+        ))}
+      </Flex>
+      <Text
+        fontFamily={FONT_APPLE_TEXT}
+        fontSize="13px"
+        fontWeight="500"
+        letterSpacing="-0.1px"
+        color={textPrimary}
+        sx={{
+          transition: 'opacity 0.3s ease',
+        }}
+      >
+        {WEB_SEARCH_PHASES[phase]}
+      </Text>
+    </Flex>
+  );
+}
+
+// ──────────────────────────────────────────────────────────────────
+// SourcesBlock — Perplexity-like source cards under the answer.
+// Mobile: 1 column. Desktop: 2 columns. All cards click-open in new tab.
+// ──────────────────────────────────────────────────────────────────
+interface SourcesBlockProps {
+  sources: ISource[];
+}
+
+function SourcesBlock({ sources }: SourcesBlockProps) {
+  const cardBg = useColorModeValue(
+    'rgba(255,255,255,0.66)',
+    'rgba(15,18,32,0.58)',
+  );
+  const cardBgHover = useColorModeValue(
+    'rgba(255,255,255,0.84)',
+    'rgba(15,18,32,0.78)',
+  );
+  const cardBorder = useColorModeValue(
+    'rgba(0,0,0,0.07)',
+    'rgba(255,255,255,0.10)',
+  );
+  const cardBorderHover = useColorModeValue(
+    'rgba(0,102,204,0.28)',
+    'rgba(41,151,255,0.34)',
+  );
+  const titleColor = useColorModeValue('#1d1d1f', '#f5f5f7');
+  const metaColor = useColorModeValue('#6e6e73', 'rgba(245,245,247,0.62)');
+  const snippetColor = useColorModeValue(
+    '#3c3c43',
+    'rgba(245,245,247,0.72)',
+  );
+  const accentBlue = useColorModeValue('#0066cc', '#2997ff');
+  const indexPillBg = useColorModeValue(
+    'rgba(0,102,204,0.08)',
+    'rgba(41,151,255,0.14)',
+  );
+
+  return (
+    <Box mt="20px" width="100%" maxWidth="100%" minWidth={0}>
+      <Flex align="center" gap="6px" mb="10px">
+        <Icon as={LuLink} w="13px" h="13px" color={metaColor} />
+        <Text
+          fontFamily={FONT_APPLE_TEXT}
+          fontSize="11px"
+          fontWeight="600"
+          letterSpacing="0.5px"
+          textTransform="uppercase"
+          color={metaColor}
+        >
+          Источники
+        </Text>
+      </Flex>
+      <Box
+        display="grid"
+        gridTemplateColumns={{
+          base: '1fr',
+          md: 'repeat(2, minmax(0, 1fr))',
+        }}
+        gap={{ base: '8px', md: '10px' }}
+        width="100%"
+        minWidth={0}
+      >
+        {sources.map((s) => (
+          <Box
+            key={`${s.index ?? 0}-${s.url}`}
+            as="a"
+            href={s.url}
+            target="_blank"
+            rel="noopener noreferrer"
+            display="block"
+            bg={cardBg}
+            backdropFilter="blur(16px) saturate(180%)"
+            sx={{ WebkitBackdropFilter: 'blur(16px) saturate(180%)' }}
+            border="1px solid"
+            borderColor={cardBorder}
+            borderRadius={{ base: '16px', md: '18px' }}
+            p={{ base: '12px', md: '14px' }}
+            textDecoration="none"
+            transition="background 0.16s ease, border-color 0.16s ease, transform 0.14s ease"
+            _hover={{
+              bg: cardBgHover,
+              borderColor: cardBorderHover,
+              transform: 'translateY(-1px)',
+            }}
+            width="100%"
+            maxWidth="100%"
+            minWidth={0}
+          >
+            <Flex align="center" gap="6px" mb="6px" minWidth={0}>
+              {typeof s.index === 'number' && (
+                <Flex
+                  align="center"
+                  justify="center"
+                  w="18px"
+                  h="18px"
+                  minW="18px"
+                  borderRadius="9999px"
+                  bg={indexPillBg}
+                  flexShrink={0}
+                >
+                  <Text
+                    fontFamily={FONT_APPLE_TEXT}
+                    fontSize="10px"
+                    fontWeight="600"
+                    color={accentBlue}
+                    letterSpacing="-0.05px"
+                  >
+                    {s.index}
+                  </Text>
+                </Flex>
+              )}
+              {s.domain && (
+                <Text
+                  fontFamily={FONT_APPLE_TEXT}
+                  fontSize="11px"
+                  fontWeight="500"
+                  letterSpacing="-0.1px"
+                  color={metaColor}
+                  noOfLines={1}
+                >
+                  {s.domain}
+                </Text>
+              )}
+            </Flex>
+            <Text
+              fontFamily={FONT_APPLE_TEXT}
+              fontSize={{ base: '13px', md: '14px' }}
+              fontWeight="600"
+              lineHeight="1.35"
+              letterSpacing="-0.15px"
+              color={titleColor}
+              noOfLines={2}
+              mb={s.snippet ? '4px' : '0'}
+              wordBreak="break-word"
+            >
+              {s.title}
+            </Text>
+            {s.snippet && (
+              <Text
+                fontFamily={FONT_APPLE_TEXT}
+                fontSize="12px"
+                lineHeight="1.45"
+                letterSpacing="-0.05px"
+                color={snippetColor}
+                noOfLines={2}
+              >
+                {s.snippet}
+              </Text>
+            )}
+          </Box>
+        ))}
+      </Box>
+    </Box>
+  );
 }
 
 export default Message;

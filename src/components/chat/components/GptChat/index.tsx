@@ -469,6 +469,8 @@ const handleSend = async (messageOverride?: string) => {
     setMode,
     mode,
     setMessages,
+    reasoningEnabled,
+    setReasoningEnabled,
   } = useContext(ChatAiContext);
 
   const [visibleQuickPrompts, setVisibleQuickPrompts] = useState(
@@ -1030,6 +1032,45 @@ const handleSend = async (messageOverride?: string) => {
                 _hover={{ bg: 'transparent' }}
               >
                 🖼️ Генерация изображений
+              </Button>
+            </Flex>
+
+            {/* Reasoning chip — controls visibility of model <think> blocks.
+                OFF by default. Persisted via useLocalStorageState in provider. */}
+            <Flex
+              onClick={() => setReasoningEnabled!(!reasoningEnabled)}
+              gap="6px"
+              align="center"
+              h="32px"
+              bg={reasoningEnabled ? surfaceActive : surface}
+              border="1px solid"
+              borderColor={reasoningEnabled ? borderActive : border}
+              borderRadius="9999px"
+              pl="10px"
+              pr="4px"
+              transition="background 0.14s ease, border-color 0.14s ease"
+              cursor="pointer"
+              flexShrink={0}
+            >
+              <Switch
+                size="sm"
+                style={{ pointerEvents: 'none' }}
+                isChecked={!!reasoningEnabled}
+              />
+              <Button
+                paddingLeft="8px"
+                paddingRight="12px"
+                variant="ghost"
+                size="sm"
+                h="26px"
+                fontSize="13px"
+                fontWeight="500"
+                letterSpacing="-0.2px"
+                color={reasoningEnabled ? accentBlue : textPrimary}
+                borderRadius="9999px"
+                _hover={{ bg: 'transparent' }}
+              >
+                🧩 Размышление
               </Button>
             </Flex>
           </Flex>
