@@ -11,12 +11,22 @@ export interface IMessageSource {
   index?: number;
 }
 
+// Visual reference returned by web-search (Perplexity-like image strip).
+export interface IMessageImage {
+  title?: string;
+  imageUrl: string;
+  sourceUrl?: string;
+  domain?: string;
+}
+
 export interface IMessage {
   role: string;
   content: string;
   // Optional metadata for web-search responses (live streaming only;
-  // after reload, sources are re-parsed from content marker).
+  // after reload, sources/images/followUps are re-parsed from content marker).
   sources?: IMessageSource[];
+  images?: IMessageImage[];
+  followUps?: string[];
 }
 
 export interface IChatState {

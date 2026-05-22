@@ -11,6 +11,7 @@ import {
   parseSourcesFromContent,
   stripSourcesMarker,
   ISource,
+  SearchImage,
 } from '@/utils/normalizeModelOutput';
 
 interface IProps {
@@ -135,8 +136,12 @@ function ChatAiContextProvider({ children }: IProps) {
     let displayFullAnswer = '';
     let visibleAnswer = '';
     let pendingText = '';
-    // Sources extracted from the leading __IISET_SOURCES__ marker (if any)
+    // Search metadata extracted from the leading __IISET_SOURCES__ marker
+    // (if any). All three fields travel together so source cards, image
+    // strip and follow-up chips can render LIVE during streaming.
     let messageSources: ISource[] | undefined = undefined;
+    let messageImages: SearchImage[] | undefined = undefined;
+    let messageFollowUps: string[] | undefined = undefined;
     let flushTimer: ReturnType<typeof setInterval> | null = null;
 
     // Adaptive chunk size — more text in buffer ⇒ faster output.
@@ -150,15 +155,32 @@ function ChatAiContextProvider({ children }: IProps) {
     };
 
     // Immutable assistant message update — React/Message memo sees a new object.
-    // Sources travel via optional field so source cards can render LIVE during
-    // streaming (before the user reload pulls them from the marker in content).
+    // Search metadata (sources/images/followUps) travels via optional fields
+    // so the Perplexity-like UI can render LIVE during streaming, before the
+    // reload path re-parses the marker from content.
     const updateAssistantMessage = (content: string) => {
-      setMessages([
-        ...newMessages,
-        messageSources && messageSources.length > 0
-          ? { role: 'assistant', content, sources: messageSources }
-          : { role: 'assistant', content },
-      ]);
+      const hasMeta =
+        (messageSources && messageSources.length > 0) ||
+        (messageImages && messageImages.length > 0) ||
+        (messageFollowUps && messageFollowUps.length > 0);
+
+      const next: IMessage = hasMeta
+        ? {
+            role: 'assistant',
+            content,
+            ...(messageSources && messageSources.length > 0
+              ? { sources: messageSources }
+              : {}),
+            ...(messageImages && messageImages.length > 0
+              ? { images: messageImages }
+              : {}),
+            ...(messageFollowUps && messageFollowUps.length > 0
+              ? { followUps: messageFollowUps }
+              : {}),
+          }
+        : { role: 'assistant', content };
+
+      setMessages([...newMessages, next]);
     };
 
     // Per-tick flush: take a word-aligned slice from pendingText.
@@ -193,12 +215,24 @@ function ChatAiContextProvider({ children }: IProps) {
       if (!rawChunk) return;
       rawAccumulator += rawChunk;
 
-      // Detect a freshly-complete sources marker once.
-      if (!messageSources) {
+      // Detect a freshly-complete sources marker once. The marker may also
+      // carry images and follow-up suggestions (v2 payload).
+      if (
+        !messageSources &&
+        !messageImages &&
+        !messageFollowUps
+      ) {
         const parsed = parseSourcesFromContent(rawAccumulator);
-        if (parsed.sources.length > 0) {
-          messageSources = parsed.sources;
-          // Refresh UI now that we know sources — even before first LLM token
+        const gotAnything =
+          parsed.sources.length > 0 ||
+          parsed.images.length > 0 ||
+          parsed.followUps.length > 0;
+        if (gotAnything) {
+          if (parsed.sources.length > 0) messageSources = parsed.sources;
+          if (parsed.images.length > 0) messageImages = parsed.images;
+          if (parsed.followUps.length > 0)
+            messageFollowUps = parsed.followUps;
+          // Refresh UI now that we know meta — even before first LLM token
           updateAssistantMessage(visibleAnswer);
         }
       }

@@ -928,33 +928,87 @@ async transformMessagesToQuery({ userMessages, user }: IImagesRequest) {
         return 'Сервис веб-поиска временно недоступен. Пожалуйста, попробуйте позже.';
       }
 
-      // 1. Поиск в Serper (google.serper.dev/search)
+      // fetch with hard timeout — Serper sometimes hangs on slow targets,
+      // and we never want web-search to block the whole answer indefinitely.
+      const fetchWithTimeout = async (
+        input: string,
+        init: RequestInit,
+        timeoutMs: number,
+      ): Promise<Response> => {
+        const ctrl = new AbortController();
+        const timer = setTimeout(() => ctrl.abort(), timeoutMs);
+        try {
+          return await fetch(input, { ...init, signal: ctrl.signal });
+        } finally {
+          clearTimeout(timer);
+        }
+      };
+
+      // 1. Параллельно: текстовый поиск и поиск картинок через Serper.
+      //    Промежуточные сбои не должны валить весь web-search ответ.
       const tSerper =
         typeof performance !== 'undefined' ? performance.now() : Date.now();
-      const searchResponse = await fetch('https://google.serper.dev/search', {
-        method: 'POST',
-        headers: {
-          'X-API-KEY': serperApiKey,
-          'Content-Type': 'application/json',
-        } as any,
-        body: JSON.stringify({
-          q: query,
-          gl: 'ru',
-          hl: 'ru',
-          num: 15,
-          autocorrect: true,
-          type: 'search',
-        }),
-      });
+      const serperHeaders = {
+        'X-API-KEY': serperApiKey,
+        'Content-Type': 'application/json',
+      } as any;
 
-      const searchJson: any = await searchResponse.json();
+      const searchPromise = fetchWithTimeout(
+        'https://google.serper.dev/search',
+        {
+          method: 'POST',
+          headers: serperHeaders,
+          body: JSON.stringify({
+            q: query,
+            gl: 'ru',
+            hl: 'ru',
+            num: 15,
+            autocorrect: true,
+            type: 'search',
+          }),
+        },
+        9000,
+      ).then((r) => r.json());
+
+      const imagesPromise = fetchWithTimeout(
+        'https://google.serper.dev/images',
+        {
+          method: 'POST',
+          headers: serperHeaders,
+          body: JSON.stringify({
+            q: query,
+            gl: 'ru',
+            hl: 'ru',
+            num: 12,
+            autocorrect: true,
+          }),
+        },
+        7000,
+      ).then((r) => r.json());
+
+      const [searchSettled, imagesSettled] = await Promise.allSettled([
+        searchPromise,
+        imagesPromise,
+      ]);
+
+      const searchJson: any =
+        searchSettled.status === 'fulfilled' ? searchSettled.value : {};
+      const imagesJson: any =
+        imagesSettled.status === 'fulfilled' ? imagesSettled.value : {};
+
       const organic = ((searchJson && searchJson.organic) || []) as any[];
+      const serperImages = ((imagesJson && imagesJson.images) || []) as any[];
+      const relatedSearches = ((searchJson && searchJson.relatedSearches) ||
+        []) as any[];
+
       console.log(
-        `[CHAT-WS] serper_search_done dt=${Math.round(
+        `[CHAT-WS] serper_search+images_done dt=${Math.round(
           (typeof performance !== 'undefined'
             ? performance.now()
             : Date.now()) - tSerper,
-        )}ms organic_count=${organic.length}`,
+        )}ms organic_count=${organic.length} images_count=${
+          serperImages.length
+        } related_count=${relatedSearches.length}`,
       );
 
       const buildFallbackMessages = () => [
@@ -1011,10 +1065,12 @@ async transformMessagesToQuery({ userMessages, user }: IImagesRequest) {
         Math.max(3, Math.min(5, baseList.length)),
       );
 
-      // 2. Переход по ссылкам через Serper Webpages (scrape.serper.dev)
+      // 2. Переход по ссылкам через Serper Webpages (scrape.serper.dev).
+      //    Используем allSettled + timeout, чтобы один зависший таргет не
+      //    блокировал ответ. Если scrape выдал пусто — берём сниппет.
       const tScrape =
         typeof performance !== 'undefined' ? performance.now() : Date.now();
-      const scrapedPages = await Promise.all(
+      const scrapeSettled = await Promise.allSettled(
         topResults.map(async (item: any) => {
           const url = item.link || item.url;
 
@@ -1023,16 +1079,15 @@ async transformMessagesToQuery({ userMessages, user }: IImagesRequest) {
           }
 
           try {
-            const scrapeResponse = await fetch('https://scrape.serper.dev', {
-              method: 'POST',
-              headers: {
-                'X-API-KEY': serperApiKey,
-                'Content-Type': 'application/json',
-              } as any,
-              body: JSON.stringify({
-                url,
-              }),
-            });
+            const scrapeResponse = await fetchWithTimeout(
+              'https://scrape.serper.dev',
+              {
+                method: 'POST',
+                headers: serperHeaders,
+                body: JSON.stringify({ url }),
+              },
+              6000,
+            );
 
             const scrapeJson: any = await scrapeResponse.json();
 
@@ -1055,6 +1110,18 @@ async transformMessagesToQuery({ userMessages, user }: IImagesRequest) {
           }
         }),
       );
+      const scrapedPages = scrapeSettled.map((r, idx) => {
+        if (r.status === 'fulfilled') return r.value;
+        const item = topResults[idx];
+        return item
+          ? {
+              title: item.title,
+              url: item.link || item.url,
+              snippet: item.snippet,
+              content: '',
+            }
+          : null;
+      });
 
       console.log(
         `[CHAT-WS] serper_scrape_done dt=${Math.round(
@@ -1142,21 +1209,26 @@ async transformMessagesToQuery({ userMessages, user }: IImagesRequest) {
         },
       ];
 
-      // ── Build sources array for Perplexity-like source cards ─────
+      // ── Build structured search metadata for Perplexity-like UI ──
+      //   * sources       — карточки источников
+      //   * images        — визуальные материалы (image strip)
+      //   * followUps     — chips «Можно уточнить»
+      const safeDomain = (url: string) => {
+        try {
+          return new URL(url).hostname.replace(/^www\./, '');
+        } catch {
+          return '';
+        }
+      };
+
       const sourcesPayload = docsToUse
         .slice(0, 6)
         .map((doc: any, i: number) => {
           const url = doc.url;
-          let domain = '';
-          try {
-            domain = new URL(url).hostname.replace(/^www\./, '');
-          } catch {
-            domain = '';
-          }
           return {
-            title: doc.title || domain || url,
+            title: doc.title || safeDomain(url) || url,
             url,
-            domain,
+            domain: safeDomain(url),
             snippet:
               typeof doc.snippet === 'string' && doc.snippet.length > 0
                 ? doc.snippet.slice(0, 240)
@@ -1164,15 +1236,58 @@ async transformMessagesToQuery({ userMessages, user }: IImagesRequest) {
             index: i + 1,
           };
         })
-        .filter((s) => s.url);
+        .filter((s: any) => s.url);
+
+      // Дедупликация по imageUrl, фильтр пустых картинок, ограничение 6.
+      const seenImageUrls = new Set<string>();
+      const imagesPayload = (serperImages as any[])
+        .map((img: any) => {
+          const imageUrl = img.imageUrl || img.image || '';
+          const sourceUrl = img.link || img.source || '';
+          if (!imageUrl) return null;
+          if (seenImageUrls.has(imageUrl)) return null;
+          seenImageUrls.add(imageUrl);
+          return {
+            title:
+              typeof img.title === 'string' ? img.title.slice(0, 120) : '',
+            imageUrl,
+            sourceUrl,
+            domain: safeDomain(sourceUrl),
+          };
+        })
+        .filter(Boolean)
+        .slice(0, 6);
+
+      // followUps: предпочитаем relatedSearches от Serper, иначе — три
+      // нейтральных fallback-вопроса, которые работают для любого запроса.
+      const fallbackFollowUps = [
+        'Дай краткое резюме',
+        'Сравни ключевые варианты',
+        'Покажи свежие данные',
+      ];
+      const followUpsFromSerper = (relatedSearches as any[])
+        .map((r: any) => (typeof r === 'string' ? r : r?.query))
+        .filter((q: any) => typeof q === 'string' && q.trim().length > 0)
+        .map((q: string) => q.trim().slice(0, 120));
+      const followUpsPayload = (
+        followUpsFromSerper.length > 0
+          ? followUpsFromSerper
+          : fallbackFollowUps
+      ).slice(0, 4);
+
+      const searchMetaPayload = {
+        sources: sourcesPayload,
+        images: imagesPayload,
+        followUps: followUpsPayload,
+      };
 
       const sourcesMarker = `__IISET_SOURCES__=${JSON.stringify(
-        sourcesPayload,
+        searchMetaPayload,
       )}\n`;
 
       // 4. Финальный ответ через GPT-OSS (Deepinfra)
       console.log(
-        `[CHAT-WS] final_llm_request_start dt_total_pre_llm=${wsDt()}ms sources=${sourcesPayload.length}`,
+        `[CHAT-WS] final_llm_request_start dt_total_pre_llm=${wsDt()}ms sources=${sourcesPayload.length} images=${imagesPayload.length} followUps=${followUpsPayload.length}`,
       );
       const llmStreamResult = (await this.llmBaseRequest({
         model: 'openai/gpt-oss-120b',

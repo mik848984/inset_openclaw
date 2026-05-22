@@ -19,12 +19,13 @@ import {
   MenuItem,
 } from '@chakra-ui/react';
 import { MdAutoAwesome } from 'react-icons/md';
-import { LuChevronDown, LuLink } from 'react-icons/lu';
+import { LuChevronDown, LuLink, LuImages, LuSparkles } from 'react-icons/lu';
 import { markdown } from '@/services/ui/MarkdownService';
 import {
   extractThinkBlocks,
   parseSourcesFromContent,
   ISource,
+  SearchImage,
 } from '@/utils/normalizeModelOutput';
 import React, { useContext, useEffect, useMemo, useState } from 'react';
 import { NextAvatar } from '@/components/image/Avatar';
@@ -114,6 +115,7 @@ function Message({ message, isLast }: IProps) {
     messages,
     setMessages,
     reasoningEnabled,
+    sendMessage,
   } = useContext(ChatAiContext);
   const { setTariffModalOpen, setPayBalanceModalOpen } =
     useContext(ModalContext);
@@ -324,32 +326,57 @@ function Message({ message, isLast }: IProps) {
 
   if (message.role === 'assistant') {
     // ── Parse sources marker (Perplexity cards) and reasoning ─────
-    // Priority: live `message.sources` (during streaming) > marker re-parse
-    // from content (after reload). The marker is always stripped from text.
-    const { cleanText, reasoningText, sources } = useMemo(() => {
-      const raw = message.content || '';
-      const sourcesParsed = parseSourcesFromContent(raw);
-      const liveSources: ISource[] | undefined = (message as any).sources;
-      const finalSources: ISource[] =
-        liveSources && liveSources.length > 0
-          ? liveSources
-          : sourcesParsed.sources;
+    // Priority: live `message.sources/images/followUps` (during streaming)
+    // > marker re-parse from content (after reload). Marker is stripped.
+    const { cleanText, reasoningText, sources, images, followUps } = useMemo(
+      () => {
+        const raw = message.content || '';
+        const sourcesParsed = parseSourcesFromContent(raw);
 
-      const withoutSources = sourcesParsed.cleanContent;
-      if (reasoningEnabled) {
-        const ext = extractThinkBlocks(withoutSources);
+        const liveSources: ISource[] | undefined = (message as any).sources;
+        const liveImages: SearchImage[] | undefined = (message as any).images;
+        const liveFollowUps: string[] | undefined = (message as any).followUps;
+
+        const finalSources: ISource[] =
+          liveSources && liveSources.length > 0
+            ? liveSources
+            : sourcesParsed.sources;
+        const finalImages: SearchImage[] =
+          liveImages && liveImages.length > 0
+            ? liveImages
+            : sourcesParsed.images;
+        const finalFollowUps: string[] =
+          liveFollowUps && liveFollowUps.length > 0
+            ? liveFollowUps
+            : sourcesParsed.followUps;
+
+        const withoutSources = sourcesParsed.cleanContent;
+        if (reasoningEnabled) {
+          const ext = extractThinkBlocks(withoutSources);
+          return {
+            cleanText: ext.cleanText,
+            reasoningText: ext.reasoningText,
+            sources: finalSources,
+            images: finalImages,
+            followUps: finalFollowUps,
+          };
+        }
         return {
-          cleanText: ext.cleanText,
-          reasoningText: ext.reasoningText,
+          cleanText: withoutSources,
+          reasoningText: '',
           sources: finalSources,
+          images: finalImages,
+          followUps: finalFollowUps,
         };
-      }
-      return {
-        cleanText: withoutSources,
-        reasoningText: '',
-        sources: finalSources,
-      };
-    }, [message.content, (message as any).sources, reasoningEnabled]);
+      },
+      [
+        message.content,
+        (message as any).sources,
+        (message as any).images,
+        (message as any).followUps,
+        reasoningEnabled,
+      ],
+    );
 
     return (
       <Flex
@@ -796,10 +823,21 @@ function Message({ message, isLast }: IProps) {
               </Box>
             )}
 
-            {/* Source cards under the answer (Perplexity-like) */}
-            {sources && sources.length > 0 && cleanText && (
-              <SourcesBlock sources={sources} />
-            )}
+            {/* Source cards / image strip / follow-ups under the answer */}
+            {((sources && sources.length > 0) ||
+              (images && images.length > 0) ||
+              (followUps && followUps.length > 0)) &&
+              cleanText && (
+                <SourcesBlock
+                  sources={sources}
+                  images={images}
+                  followUps={followUps}
+                  onFollowUp={(q) => {
+                    if (!q || loading || !sendMessage) return;
+                    sendMessage(q);
+                  }}
+                />
+              )}
 
             {!loading && isLast && (
               <Box>
@@ -1136,14 +1174,36 @@ function WebSearchProgress({
 }
 
 // ──────────────────────────────────────────────────────────────────
-// SourcesBlock — Perplexity-like source cards under the answer.
-// Mobile: 1 column. Desktop: 2 columns. All cards click-open in new tab.
+// SourcesBlock — Perplexity-like search result block under the answer.
+//
+// Sections (each rendered only if non-empty):
+//   1. "Ответ с источниками · N источников" badge
+//   2. Sources cards (responsive grid: 1 col mobile, 2 cols desktop)
+//   3. "Визуальные материалы" — horizontal image strip (mobile-safe)
+//   4. "Можно уточнить" — follow-up chips, click → sendMessage(q)
 // ──────────────────────────────────────────────────────────────────
 interface SourcesBlockProps {
-  sources: ISource[];
+  sources?: ISource[];
+  images?: SearchImage[];
+  followUps?: string[];
+  onFollowUp?: (q: string) => void;
 }
 
-function SourcesBlock({ sources }: SourcesBlockProps) {
+function ruMaterialNoun(n: number): string {
+  const mod10 = n % 10;
+  const mod100 = n % 100;
+  if (mod100 >= 11 && mod100 <= 14) return 'источников';
+  if (mod10 === 1) return 'источник';
+  if (mod10 >= 2 && mod10 <= 4) return 'источника';
+  return 'источников';
+}
+
+function SourcesBlock({
+  sources = [],
+  images = [],
+  followUps = [],
+  onFollowUp,
+}: SourcesBlockProps) {
   const cardBg = useColorModeValue(
     'rgba(255,255,255,0.66)',
     'rgba(15,18,32,0.58)',
@@ -1172,121 +1232,337 @@ function SourcesBlock({ sources }: SourcesBlockProps) {
     'rgba(41,151,255,0.14)',
   );
 
+  // Badge pill colors (subtle blue tint)
+  const badgeBg = useColorModeValue(
+    'rgba(0,102,204,0.08)',
+    'rgba(41,151,255,0.14)',
+  );
+
+  // Follow-up chips
+  const chipBg = useColorModeValue(
+    'rgba(0,102,204,0.06)',
+    'rgba(41,151,255,0.10)',
+  );
+  const chipBgHover = useColorModeValue(
+    'rgba(0,102,204,0.14)',
+    'rgba(41,151,255,0.22)',
+  );
+  const chipBorder = useColorModeValue(
+    'rgba(0,102,204,0.18)',
+    'rgba(41,151,255,0.22)',
+  );
+
+  const hasSources = sources.length > 0;
+  const hasImages = images.length > 0;
+  const hasFollowUps = followUps.length > 0;
+
+  if (!hasSources && !hasImages && !hasFollowUps) return null;
+
   return (
     <Box mt="20px" width="100%" maxWidth="100%" minWidth={0}>
-      <Flex align="center" gap="6px" mb="10px">
-        <Icon as={LuLink} w="13px" h="13px" color={metaColor} />
-        <Text
-          fontFamily={FONT_APPLE_TEXT}
-          fontSize="11px"
-          fontWeight="600"
-          letterSpacing="0.5px"
-          textTransform="uppercase"
-          color={metaColor}
+      {/* "Ответ с источниками · N источников" badge */}
+      {hasSources && (
+        <Flex align="center" gap="8px" mb="10px" flexWrap="wrap">
+          <Flex
+            align="center"
+            gap="6px"
+            px="10px"
+            py="4px"
+            borderRadius="9999px"
+            bg={badgeBg}
+          >
+            <Icon as={LuLink} w="12px" h="12px" color={accentBlue} />
+            <Text
+              fontFamily={FONT_APPLE_TEXT}
+              fontSize="11px"
+              fontWeight="600"
+              letterSpacing="-0.05px"
+              color={accentBlue}
+            >
+              Ответ с источниками
+            </Text>
+          </Flex>
+          <Text
+            fontFamily={FONT_APPLE_TEXT}
+            fontSize="11px"
+            fontWeight="500"
+            letterSpacing="-0.05px"
+            color={metaColor}
+          >
+            · {sources.length} {ruMaterialNoun(sources.length)}
+          </Text>
+        </Flex>
+      )}
+
+      {/* Sources cards grid */}
+      {hasSources && (
+        <Box
+          display="grid"
+          gridTemplateColumns={{
+            base: '1fr',
+            md: 'repeat(2, minmax(0, 1fr))',
+          }}
+          gap={{ base: '8px', md: '10px' }}
+          width="100%"
+          minWidth={0}
         >
-          Источники
-        </Text>
-      </Flex>
-      <Box
-        display="grid"
-        gridTemplateColumns={{
-          base: '1fr',
-          md: 'repeat(2, minmax(0, 1fr))',
-        }}
-        gap={{ base: '8px', md: '10px' }}
-        width="100%"
-        minWidth={0}
-      >
-        {sources.map((s) => (
-          <Box
-            key={`${s.index ?? 0}-${s.url}`}
-            as="a"
-            href={s.url}
-            target="_blank"
-            rel="noopener noreferrer"
-            display="block"
-            bg={cardBg}
-            backdropFilter="blur(16px) saturate(180%)"
-            sx={{ WebkitBackdropFilter: 'blur(16px) saturate(180%)' }}
-            border="1px solid"
-            borderColor={cardBorder}
-            borderRadius={{ base: '16px', md: '18px' }}
-            p={{ base: '12px', md: '14px' }}
-            textDecoration="none"
-            transition="background 0.16s ease, border-color 0.16s ease, transform 0.14s ease"
-            _hover={{
-              bg: cardBgHover,
-              borderColor: cardBorderHover,
-              transform: 'translateY(-1px)',
-            }}
+          {sources.map((s) => (
+            <Box
+              key={`${s.index ?? 0}-${s.url}`}
+              as="a"
+              href={s.url}
+              target="_blank"
+              rel="noopener noreferrer"
+              display="block"
+              bg={cardBg}
+              backdropFilter="blur(16px) saturate(180%)"
+              sx={{ WebkitBackdropFilter: 'blur(16px) saturate(180%)' }}
+              border="1px solid"
+              borderColor={cardBorder}
+              borderRadius={{ base: '16px', md: '18px' }}
+              p={{ base: '12px', md: '14px' }}
+              textDecoration="none"
+              transition="background 0.16s ease, border-color 0.16s ease, transform 0.14s ease"
+              _hover={{
+                bg: cardBgHover,
+                borderColor: cardBorderHover,
+                transform: 'translateY(-1px)',
+              }}
+              width="100%"
+              maxWidth="100%"
+              minWidth={0}
+            >
+              <Flex align="center" gap="6px" mb="6px" minWidth={0}>
+                {typeof s.index === 'number' && (
+                  <Flex
+                    align="center"
+                    justify="center"
+                    w="18px"
+                    h="18px"
+                    minW="18px"
+                    borderRadius="9999px"
+                    bg={indexPillBg}
+                    flexShrink={0}
+                  >
+                    <Text
+                      fontFamily={FONT_APPLE_TEXT}
+                      fontSize="10px"
+                      fontWeight="600"
+                      color={accentBlue}
+                      letterSpacing="-0.05px"
+                    >
+                      {s.index}
+                    </Text>
+                  </Flex>
+                )}
+                {s.domain && (
+                  <Text
+                    fontFamily={FONT_APPLE_TEXT}
+                    fontSize="11px"
+                    fontWeight="500"
+                    letterSpacing="-0.1px"
+                    color={metaColor}
+                    noOfLines={1}
+                  >
+                    {s.domain}
+                  </Text>
+                )}
+              </Flex>
+              <Text
+                fontFamily={FONT_APPLE_TEXT}
+                fontSize={{ base: '13px', md: '14px' }}
+                fontWeight="600"
+                lineHeight="1.35"
+                letterSpacing="-0.15px"
+                color={titleColor}
+                noOfLines={2}
+                mb={s.snippet ? '4px' : '0'}
+                wordBreak="break-word"
+              >
+                {s.title}
+              </Text>
+              {s.snippet && (
+                <Text
+                  fontFamily={FONT_APPLE_TEXT}
+                  fontSize="12px"
+                  lineHeight="1.45"
+                  letterSpacing="-0.05px"
+                  color={snippetColor}
+                  noOfLines={2}
+                >
+                  {s.snippet}
+                </Text>
+              )}
+            </Box>
+          ))}
+        </Box>
+      )}
+
+      {/* Image strip — Визуальные материалы */}
+      {hasImages && (
+        <Box mt={hasSources ? '16px' : '0'}>
+          <Flex align="center" gap="6px" mb="10px">
+            <Icon as={LuImages} w="13px" h="13px" color={metaColor} />
+            <Text
+              fontFamily={FONT_APPLE_TEXT}
+              fontSize="11px"
+              fontWeight="600"
+              letterSpacing="0.5px"
+              textTransform="uppercase"
+              color={metaColor}
+            >
+              Визуальные материалы
+            </Text>
+          </Flex>
+          <Flex
+            gap={{ base: '8px', md: '10px' }}
+            overflowX="auto"
+            pb="6px"
+            mx={{ base: '-4px', md: '0' }}
+            px={{ base: '4px', md: '0' }}
             width="100%"
             maxWidth="100%"
             minWidth={0}
+            sx={{
+              scrollbarWidth: 'thin',
+              '::-webkit-scrollbar': { height: '6px' },
+              '::-webkit-scrollbar-thumb': {
+                background: 'rgba(127,127,127,0.25)',
+                borderRadius: '999px',
+              },
+              scrollSnapType: 'x proximity',
+            }}
           >
-            <Flex align="center" gap="6px" mb="6px" minWidth={0}>
-              {typeof s.index === 'number' && (
-                <Flex
-                  align="center"
-                  justify="center"
-                  w="18px"
-                  h="18px"
-                  minW="18px"
-                  borderRadius="9999px"
-                  bg={indexPillBg}
-                  flexShrink={0}
-                >
-                  <Text
+            {images.map((img, i) => (
+              <Box
+                key={`${img.imageUrl}-${i}`}
+                as="a"
+                href={img.sourceUrl || img.imageUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                flexShrink={0}
+                w={{ base: '160px', md: '200px' }}
+                h={{ base: '110px', md: '130px' }}
+                borderRadius={{ base: '14px', md: '16px' }}
+                border="1px solid"
+                borderColor={cardBorder}
+                position="relative"
+                overflow="hidden"
+                bg={cardBg}
+                sx={{
+                  scrollSnapAlign: 'start',
+                  textDecoration: 'none',
+                  transition: 'transform 0.14s ease, border-color 0.16s ease',
+                }}
+                _hover={{
+                  transform: 'translateY(-1px)',
+                  borderColor: cardBorderHover,
+                }}
+                display="block"
+              >
+                <Box
+                  as="img"
+                  src={img.imageUrl}
+                  alt={img.title || img.domain || ''}
+                  loading="lazy"
+                  w="100%"
+                  h="100%"
+                  sx={{ objectFit: 'cover', display: 'block' }}
+                  onError={(e: any) => {
+                    const wrapper = e?.currentTarget?.parentElement as
+                      | HTMLElement
+                      | undefined;
+                    if (wrapper) wrapper.style.display = 'none';
+                  }}
+                />
+                {(img.domain || img.title) && (
+                  <Box
+                    position="absolute"
+                    left="8px"
+                    bottom="8px"
+                    px="8px"
+                    py="3px"
+                    borderRadius="9999px"
+                    bg="rgba(0,0,0,0.55)"
+                    color="white"
                     fontFamily={FONT_APPLE_TEXT}
                     fontSize="10px"
                     fontWeight="600"
-                    color={accentBlue}
                     letterSpacing="-0.05px"
+                    maxWidth="calc(100% - 16px)"
+                    overflow="hidden"
+                    textOverflow="ellipsis"
+                    whiteSpace="nowrap"
+                    sx={{
+                      backdropFilter: 'blur(8px)',
+                      WebkitBackdropFilter: 'blur(8px)',
+                    }}
                   >
-                    {s.index}
-                  </Text>
-                </Flex>
-              )}
-              {s.domain && (
-                <Text
-                  fontFamily={FONT_APPLE_TEXT}
-                  fontSize="11px"
-                  fontWeight="500"
-                  letterSpacing="-0.1px"
-                  color={metaColor}
-                  noOfLines={1}
-                >
-                  {s.domain}
-                </Text>
-              )}
-            </Flex>
+                    {img.domain || img.title}
+                  </Box>
+                )}
+              </Box>
+            ))}
+          </Flex>
+        </Box>
+      )}
+
+      {/* Follow-up chips — Можно уточнить */}
+      {hasFollowUps && (
+        <Box mt={hasSources || hasImages ? '16px' : '0'}>
+          <Flex align="center" gap="6px" mb="10px">
+            <Icon as={LuSparkles} w="13px" h="13px" color={metaColor} />
             <Text
               fontFamily={FONT_APPLE_TEXT}
-              fontSize={{ base: '13px', md: '14px' }}
+              fontSize="11px"
               fontWeight="600"
-              lineHeight="1.35"
-              letterSpacing="-0.15px"
-              color={titleColor}
-              noOfLines={2}
-              mb={s.snippet ? '4px' : '0'}
-              wordBreak="break-word"
+              letterSpacing="0.5px"
+              textTransform="uppercase"
+              color={metaColor}
             >
-              {s.title}
+              Можно уточнить
             </Text>
-            {s.snippet && (
-              <Text
+          </Flex>
+          <Flex gap="8px" flexWrap="wrap" minWidth={0}>
+            {followUps.map((q, i) => (
+              <Box
+                key={`${i}-${q}`}
+                as="button"
+                type="button"
+                onClick={() => onFollowUp?.(q)}
+                px="14px"
+                py="8px"
+                borderRadius="9999px"
+                border="1px solid"
+                borderColor={chipBorder}
+                bg={chipBg}
+                color={accentBlue}
                 fontFamily={FONT_APPLE_TEXT}
-                fontSize="12px"
-                lineHeight="1.45"
-                letterSpacing="-0.05px"
-                color={snippetColor}
-                noOfLines={2}
+                fontSize="13px"
+                fontWeight="500"
+                letterSpacing="-0.1px"
+                lineHeight="1.2"
+                textAlign="left"
+                cursor="pointer"
+                maxWidth="100%"
+                whiteSpace="normal"
+                wordBreak="break-word"
+                sx={{
+                  transition:
+                    'background 0.14s ease, border-color 0.14s ease, transform 0.12s ease',
+                }}
+                _hover={{
+                  bg: chipBgHover,
+                  borderColor: 'rgba(0,102,204,0.42)',
+                }}
+                _active={{ transform: 'scale(0.98)' }}
               >
-                {s.snippet}
-              </Text>
-            )}
-          </Box>
-        ))}
-      </Box>
+                {q}
+              </Box>
+            ))}
+          </Flex>
+        </Box>
+      )}
     </Box>
   );
 }

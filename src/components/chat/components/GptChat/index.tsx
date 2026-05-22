@@ -23,7 +23,7 @@ import {
   useColorModeValue,
   useToast,
 } from '@chakra-ui/react';
-import { MdAutoAwesome, MdDelete, MdSend } from 'react-icons/md';
+import { MdAutoAwesome, MdDelete, MdSend, MdSearch } from 'react-icons/md';
 import { trackGoal } from '@/utils/metrics';
 import { FaStopCircle } from 'react-icons/fa';
 import React, { useContext, useEffect, useLayoutEffect, useRef, useState } from 'react';
@@ -994,8 +994,28 @@ const handleSend = async (messageOverride?: string) => {
                 color={webSearch ? accentBlue : textPrimary}
                 borderRadius="9999px"
                 _hover={{ bg: 'transparent' }}
+                leftIcon={
+                  <Icon
+                    as={MdSearch}
+                    width="15px"
+                    height="15px"
+                    color={webSearch ? accentBlue : textPrimary}
+                  />
+                }
               >
-                🌐 Web Поиск
+                Поиск
+                {webSearch && (
+                  <Text
+                    as="span"
+                    ml="6px"
+                    fontSize="11px"
+                    fontWeight="500"
+                    opacity={0.78}
+                    letterSpacing="-0.1px"
+                  >
+                    · с источниками
+                  </Text>
+                )}
               </Button>
             </Flex>
 
@@ -1136,7 +1156,11 @@ const handleSend = async (messageOverride?: string) => {
                 _focusVisible={{ boxShadow: 'none' }}
                 color={textPrimary}
                 _placeholder={placeholderColor}
-                placeholder="Спросите ИИСеть…"
+                placeholder={
+                  webSearch
+                    ? 'Задайте вопрос — найду источники в интернете…'
+                    : 'Спросите ИИСеть…'
+                }
                 ref={ref}
                 minRows={1}
                 value={inputCode}
