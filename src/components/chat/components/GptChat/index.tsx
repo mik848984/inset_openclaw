@@ -45,6 +45,8 @@ const llmMap = {
   'mistral-large-latest': 'Mistral Large',
   'mistral-small': 'Mistral Small',
   'deepseek-ai/DeepSeek-V3': 'Deepseek V3',
+  'deepseek-ai/DeepSeek-V4-Pro': 'DeepSeek V4 Pro',
+  'Qwen/Qwen3.6-35B-A3B': 'Qwen 3.6 35B',
   'google/gemini-2.0-flash-thinking-exp-1219:free': 'Gemini-2 Flash Thinking',
   'google/gemini-2.0-flash-thinking-exp:free': 'Gemini-2 Flash Thinking',
   'gemini-2.5-flash': 'Gemini-2.5 Flash Thinking',
@@ -267,16 +269,94 @@ function GptChat() {
   const [webSearchProMonth, setWebSearchProMonth] = useLocalStorageState<string | null>('webSearchProMonth', {
     defaultValue: null,
   });
-  const mainBg = useColorModeValue('#fdfeff', 'navy.900');
-  const borderColor = useColorModeValue('gray.200', 'whiteAlpha.200');
-  const descriptionColor = useColorModeValue('gray.500', 'gray.400');
-  const inputColor = useColorModeValue('navy.700', 'white');
-  const brandColor = useColorModeValue('#fdfeff', 'navy.900');
-  const quickPromptCardBg = useColorModeValue('white', 'navy.800');
-  const placeholderColor = useColorModeValue(
-    { color: 'gray.500' },
-    { color: 'whiteAlpha.600' },
+  // ── Apple-like unified design system (9 tokens) ─────────────────
+  // pageBg          — единый canvas всей chat-area
+  // surface         — карточки, чипы, input bar (slightly recessed)
+  // surfaceElevated — hover state, subtle elevation
+  // surfaceActive   — active state (subtle blue tint)
+  // surfaceGlass    — translucent panel for composer (Apple frosted glass)
+  // borderSubtle    — единая hairline везде
+  // borderActive    — focus/selected
+  // textPrimary / textSecondary — типографика
+  // accentBlue / accentBlueHover — единственный акцент
+  const pageBg = useColorModeValue('#ffffff', 'navy.900');
+  const surface = useColorModeValue('#f5f5f7', 'whiteAlpha.50');
+  const surfaceElevated = useColorModeValue('#fafafb', 'whiteAlpha.100');
+  const surfaceActive = useColorModeValue(
+    'rgba(0,102,204,0.08)',
+    'rgba(41,151,255,0.14)',
   );
+  // surfaceGlass — anchored composer (denser, обеспечивает occlusion при скролле)
+  const surfaceGlass = useColorModeValue(
+    'rgba(255,255,255,0.74)',
+    'rgba(10,14,28,0.70)',
+  );
+  // cardGlass — лёгче surfaceGlass для tiles, VisionOS material
+  const cardGlass = useColorModeValue(
+    'rgba(255,255,255,0.56)',
+    'rgba(13,18,34,0.58)',
+  );
+  const cardGlassHover = useColorModeValue(
+    'rgba(255,255,255,0.70)',
+    'rgba(13,18,34,0.72)',
+  );
+  const borderSubtle = useColorModeValue(
+    'rgba(0,0,0,0.08)',
+    'rgba(255,255,255,0.10)',
+  );
+  // borderGlass — translucent edge для glass surfaces
+  const borderGlass = useColorModeValue(
+    'rgba(255,255,255,0.55)',
+    'rgba(255,255,255,0.12)',
+  );
+  const borderActive = useColorModeValue(
+    'rgba(0,102,204,0.42)',
+    'rgba(41,151,255,0.50)',
+  );
+  const textPrimary = useColorModeValue('#1d1d1f', '#f5f5f7');
+  const textSecondary = useColorModeValue(
+    '#6e6e73',
+    'rgba(245,245,247,0.68)',
+  );
+  const accentBlue = useColorModeValue('#0066cc', '#2997ff');
+  const accentBlueHover = useColorModeValue('#0071e3', '#5ac8ff');
+
+  // ── Apple-like layered glass shadows ────────────────────────────
+  // Card tier: inset highlight + soft outer
+  const cardShadow = useColorModeValue(
+    'inset 0 1px 0 rgba(255,255,255,0.62), 0 1px 2px rgba(0,0,0,0.03), 0 18px 50px rgba(31,38,70,0.06)',
+    'inset 0 1px 0 rgba(255,255,255,0.10), 0 1px 2px rgba(0,0,0,0.12), 0 18px 50px rgba(0,0,0,0.30)',
+  );
+  const cardShadowHover = useColorModeValue(
+    'inset 0 1px 0 rgba(255,255,255,0.62), 0 6px 16px rgba(0,0,0,0.06), 0 24px 60px rgba(31,38,70,0.10)',
+    'inset 0 1px 0 rgba(255,255,255,0.10), 0 6px 16px rgba(0,0,0,0.20), 0 24px 60px rgba(0,0,0,0.35)',
+  );
+  // Composer tier: anchored, top-light only
+  const composerShadow = useColorModeValue(
+    'inset 0 1px 0 rgba(255,255,255,0.55), 0 -1px 0 rgba(0,0,0,0.04)',
+    'inset 0 1px 0 rgba(255,255,255,0.08), 0 -1px 0 rgba(255,255,255,0.04)',
+  );
+  // Top-shine gradient overlay (used via ::before pseudo)
+  const glassShine = useColorModeValue(
+    'linear-gradient(180deg, rgba(255,255,255,0.55) 0%, rgba(255,255,255,0.08) 55%, rgba(255,255,255,0) 100%)',
+    'linear-gradient(180deg, rgba(255,255,255,0.14) 0%, rgba(255,255,255,0.02) 55%, rgba(255,255,255,0) 100%)',
+  );
+
+  // Brand violet для LogoChat halo
+  const brandPurple = useColorModeValue('#7E59FF', '#9B7CFF');
+
+  // Legacy aliases
+  const border = borderSubtle;
+  const glassHighlight = useColorModeValue(
+    'inset 0 1px 0 rgba(255,255,255,0.55)',
+    'inset 0 1px 0 rgba(255,255,255,0.10)',
+  );
+
+  const placeholderColor = useColorModeValue(
+    { color: '#a0a0a5' },
+    { color: 'rgba(245,245,247,0.45)' },
+  );
+
   const handleChange = (Event: any) => {
     setInputCode(Event.target.value);
   };
@@ -438,7 +518,6 @@ const handleSend = async (messageOverride?: string) => {
     handleSend(promptText);
   };
 
-  console.log(attachmentsService.youTube);
   return (
     <Grid
       className="chat"
@@ -446,153 +525,355 @@ const handleSend = async (messageOverride?: string) => {
       ref={ref}
       height="100%"
       templateRows="1fr auto"
+      bg={pageBg}
+      width="100%"
+      maxWidth="100%"
+      minWidth={0}
+      overflowX="hidden"
     >
+      {/* ── Floating stop button — glass pill ───────────────────── */}
       <Flex
         onClick={abortRequest}
-        borderRadius="16px"
+        borderRadius="9999px"
         position="fixed"
-        background={mainBg}
-        bottom="180px"
+        bg={surfaceGlass}
+        backdropFilter="blur(14px) saturate(160%)"
+        border="1px solid"
+        borderColor={borderSubtle}
+        boxShadow="0 4px 16px rgba(0,0,0,0.06)"
+        bottom={{ base: '140px', md: '180px' }}
         left="50%"
-        zIndex="2"
+        zIndex={30}
         transform={{ base: 'translate(-50%, 0)', xl: 'translate(45%, 0)' }}
-        transition="opacity 1s"
+        transition="opacity 0.2s ease, transform 0.18s ease"
         opacity={loading ? '1' : '0'}
         pointerEvents={loading ? 'all' : 'none'}
+        cursor="pointer"
+        _hover={{
+          transform: {
+            base: 'translate(-50%, -1px)',
+            xl: 'translate(45%, -1px)',
+          },
+        }}
+        px="2px"
+        maxWidth="calc(100% - 24px)"
       >
         <Button
           disabled={!loading}
-          variant="outline"
+          variant="ghost"
           color="red.500"
-          leftIcon={<Icon as={FaStopCircle} width="24px" height="24px" />}
+          borderRadius="9999px"
+          fontSize="14px"
+          fontWeight="500"
+          letterSpacing="-0.2px"
+          h="34px"
+          _hover={{ bg: 'transparent' }}
+          leftIcon={<Icon as={FaStopCircle} width="15px" height="15px" />}
         >
           Остановить
         </Button>
       </Flex>
-      <Flex direction="column" scrollBehavior="smooth" gap="20px">
-        {messages?.length === 0 && (
-          <>
-            <Flex
-              margin="0 auto"
-              maxWidth="400px"
-              marginTop
-              mt={{ base: '0px', md: '5%' }}
-              textAlign="center"
-              alignItems="center"
-              direction="column"
-            >
-              <Icon
-                as={LogoChat}
-                width={{ base: '230px', md: '330px' }}
-                height={{ base: '230px', md: '330px' }}
-                color={brandColor}
-              />
-              <Heading mt="12px" size="md">
-                Начните Диалог
-              </Heading>
-              <Text color={descriptionColor} mt="8px" textStyle="md">
-                Генерируйте идеи, код, изображения в одном диалоге!
-              </Text>
-            </Flex>
 
-            <SimpleGrid
-              mt={{ base: '6', md: '10' }}
-              columns={{ base: 1, md: 2, xl: 3 }}
-              spacing={{ base: 4, md: 5 }}
-              w="100%"
-            >
-              {visibleQuickPrompts.map((prompt) => (
-                <Card
-                  key={prompt.id}
-                  variant="outline"
-                  borderRadius="24px"
-                  borderColor={borderColor}
-                  bg={quickPromptCardBg}
-                  cursor="pointer"
-                  transition="all 0.2s ease"
-                  _hover={{
-                    transform: 'translateY(-4px)',
-                    boxShadow: 'xl',
-                    borderColor: 'purple.400',
-                  }}
-                  onClick={() => handleQuickPromptClick(prompt.prompt)}
-                >
-                  <CardBody>
-                    <Tag
-                      size="sm"
-                      variant="subtle"
-                      colorScheme={prompt.colorScheme as any}
-                      mb="3"
-                    >
-                      {prompt.category}
-                    </Tag>
-                    <Heading size="sm" mb="1">
-                      {prompt.title}
-                    </Heading>
-                    <Text fontSize="sm" color={descriptionColor} noOfLines={3}>
-                      {prompt.description}
-                    </Text>
-                    <Flex mt="4" alignItems="center" justifyContent="space-between">
-                      <Text fontSize="xs" color={descriptionColor}>
-                        Нажмите, чтобы задать вопрос
-                      </Text>
-                      <Icon as={MdAutoAwesome} boxSize={4} color="purple.400" />
-                    </Flex>
-                  </CardBody>
-                </Card>
-              ))}
-            </SimpleGrid>
-          </>
-        )}
-
-        {messages?.map((message, index) => (
-          <Message
-            key={index}
-            message={message}
-            isLast={messages?.length - 1 === index}
-          />
-        ))}
-      </Flex>
-      <Flex
-        marginTop="12px"
-        marginBottom="-30px"
-        position="sticky"
-        bottom="0px"
-        bg={brandColor}
-        borderRadius={'25px'}
-        paddingLeft={{ base: '0px', md: '13px' }}
-        w="100%"
+      {/* ── Content row (1fr) — centered column ────────────────── */}
+      <Box
+        position="relative"
+        zIndex={1}
+        width="100%"
+        maxWidth="100%"
+        minWidth={0}
+        overflowX="hidden"
       >
-        <Grid width="100%" maxWidth={{ base: '100vh', md: '100%' }}>
+        <Box
+          maxWidth="980px"
+          mx="auto"
+          width="100%"
+          minWidth={0}
+          px={{ base: '12px', md: '0px' }}
+          pb={{ base: '210px', md: '200px' }}
+        >
+          <Flex
+            direction="column"
+            scrollBehavior="smooth"
+            gap="20px"
+            minWidth={0}
+            width="100%"
+          >
+            {messages?.length === 0 && (
+              <>
+                {/* Empty state — фирменный LogoChat hero, Apple-minimal */}
+                <Flex
+                  mx="auto"
+                  width="100%"
+                  maxWidth="540px"
+                  mt={{ base: '8px', md: '4%' }}
+                  textAlign="center"
+                  alignItems="center"
+                  justifyContent="center"
+                  direction="column"
+                  px={{ base: '8px', md: '0' }}
+                  position="relative"
+                >
+                  {/* Soft brand halo — almost invisible, дает воздух за лого */}
+                  <Box
+                    position="absolute"
+                    top={{ base: '0px', md: '-12px' }}
+                    left="50%"
+                    transform="translateX(-50%)"
+                    w={{ base: '260px', md: '360px' }}
+                    h={{ base: '260px', md: '360px' }}
+                    borderRadius="50%"
+                    bg="radial-gradient(circle, rgba(126,89,255,0.10) 0%, transparent 70%)"
+                    pointerEvents="none"
+                    zIndex={0}
+                  />
+
+                  {/* LogoChat — фирменное лого, color=pageBg чтобы внешний square слился с canvas, видны только violet gradients */}
+                  <Icon
+                    as={LogoChat}
+                    width={{ base: '160px', sm: '190px', md: '280px' }}
+                    height={{ base: '160px', sm: '190px', md: '280px' }}
+                    color={pageBg}
+                    position="relative"
+                    zIndex={1}
+                    flexShrink={0}
+                    maxWidth="100%"
+                  />
+
+                  <Heading
+                    fontSize={{ base: '24px', md: '32px' }}
+                    fontWeight="600"
+                    lineHeight="1.15"
+                    letterSpacing="-0.5px"
+                    color={textPrimary}
+                    mb="8px"
+                    mt={{ base: '4px', md: '8px' }}
+                    mx="auto"
+                    maxWidth="100%"
+                    wordBreak="break-word"
+                    position="relative"
+                    zIndex={1}
+                  >
+                    Чем могу помочь?
+                  </Heading>
+                  <Text
+                    color={textSecondary}
+                    fontSize={{ base: '14px', md: '15px' }}
+                    lineHeight="1.5"
+                    fontWeight="400"
+                    mx="auto"
+                    maxWidth={{ base: '280px', md: '380px' }}
+                    position="relative"
+                    zIndex={1}
+                  >
+                    Напишите запрос или выберите подсказку ниже.
+                  </Text>
+                </Flex>
+
+                {/* Quick prompts — premium Apple/VisionOS liquid glass tiles */}
+                <SimpleGrid
+                  mt={{ base: '6', md: '10' }}
+                  columns={{ base: 1, md: 2, xl: 3 }}
+                  spacing={{ base: '10px', md: '12px' }}
+                  w="100%"
+                  maxWidth="100%"
+                  minWidth={0}
+                >
+                  {visibleQuickPrompts.map((prompt) => (
+                    <Card
+                      key={prompt.id}
+                      variant="unstyled"
+                      borderRadius="22px"
+                      border="1px solid"
+                      borderColor={borderGlass}
+                      bg={cardGlass}
+                      backdropFilter="blur(20px) saturate(180%)"
+                      cursor="pointer"
+                      transition="background 0.18s ease, border-color 0.18s ease, transform 0.18s ease, box-shadow 0.22s ease"
+                      boxShadow={cardShadow}
+                      w="100%"
+                      maxWidth="100%"
+                      minWidth={0}
+                      sx={{
+                        WebkitBackdropFilter: 'blur(20px) saturate(180%)',
+                        position: 'relative',
+                        // VisionOS top-light highlight overlay
+                        '&::before': {
+                          content: '""',
+                          position: 'absolute',
+                          inset: '0',
+                          borderRadius: 'inherit',
+                          pointerEvents: 'none',
+                          background: glassShine,
+                          opacity: 0.9,
+                          zIndex: 0,
+                        },
+                        // Subtle edge sheen along the top
+                        '&::after': {
+                          content: '""',
+                          position: 'absolute',
+                          top: '0',
+                          left: '14%',
+                          right: '14%',
+                          height: '1px',
+                          borderRadius: 'inherit',
+                          pointerEvents: 'none',
+                          background:
+                            'linear-gradient(90deg, transparent, rgba(255,255,255,0.7), transparent)',
+                          opacity: 0.7,
+                          zIndex: 1,
+                        },
+                        '& > *': { position: 'relative', zIndex: 1 },
+                      }}
+                      _hover={{
+                        bg: cardGlassHover,
+                        borderColor: 'rgba(0,102,204,0.28)',
+                        transform: 'translateY(-1px)',
+                        boxShadow: cardShadowHover,
+                      }}
+                      _active={{ transform: 'translateY(0)' }}
+                      onClick={() => handleQuickPromptClick(prompt.prompt)}
+                    >
+                      <CardBody p={{ base: '16px', md: '18px' }}>
+                        <Text
+                          fontSize="10px"
+                          fontWeight="600"
+                          letterSpacing="0.6px"
+                          textTransform="uppercase"
+                          color={textSecondary}
+                          mb="8px"
+                        >
+                          {prompt.category}
+                        </Text>
+                        <Heading
+                          fontSize={{ base: '14px', md: '15px' }}
+                          fontWeight="600"
+                          lineHeight="1.3"
+                          letterSpacing="-0.2px"
+                          color={textPrimary}
+                          mb="6px"
+                          wordBreak="break-word"
+                        >
+                          {prompt.title}
+                        </Heading>
+                        <Text
+                          fontSize="12px"
+                          color={textSecondary}
+                          noOfLines={2}
+                          lineHeight="1.45"
+                        >
+                          {prompt.description}
+                        </Text>
+                      </CardBody>
+                    </Card>
+                  ))}
+                </SimpleGrid>
+              </>
+            )}
+
+            {messages?.map((message, index) => (
+              <Message
+                key={index}
+                message={message}
+                isLast={messages?.length - 1 === index}
+              />
+            ))}
+          </Flex>
+        </Box>
+      </Box>
+
+      {/* ── Composer (sticky) — Liquid Glass dock ─────────────────── */}
+      <Box
+        position="sticky"
+        bottom="0"
+        zIndex={20}
+        bg={surfaceGlass}
+        backdropFilter="blur(22px) saturate(180%)"
+        borderTop="1px solid"
+        borderColor={borderGlass}
+        boxShadow={composerShadow}
+        marginBottom="-30px"
+        width="100%"
+        maxWidth="100%"
+        minWidth={0}
+        overflowX="hidden"
+        sx={{
+          WebkitBackdropFilter: 'blur(22px) saturate(180%)',
+          position: 'sticky',
+          // Top-light highlight (Apple dock material)
+          '&::before': {
+            content: '""',
+            position: 'absolute',
+            top: '0',
+            left: '0',
+            right: '0',
+            height: '40%',
+            pointerEvents: 'none',
+            background: glassShine,
+            opacity: 0.65,
+            zIndex: 0,
+          },
+          '& > *': { position: 'relative', zIndex: 1 },
+        }}
+      >
+        <Box
+          maxWidth="980px"
+          mx="auto"
+          width="100%"
+          minWidth={0}
+          px={{ base: '12px', md: '16px' }}
+          pt={{ base: '10px', md: '14px' }}
+          pb={{
+            base: 'calc(10px + env(safe-area-inset-bottom))',
+            md: '14px',
+          }}
+        >
+          {/* Attachments accordion (Gemini only) */}
           {model?.includes('gemini') && attachmentsService.hasAttachments() && (
             <Accordion
               defaultIndex={[0]}
               allowToggle
-              maxWidth="calc(100vw - 32px)"
+              width="100%"
+              maxWidth="100%"
+              minWidth={0}
+              mb="4px"
             >
-              <AccordionItem borderBottom="none">
+              <AccordionItem borderBottom="none" borderTop="none">
                 <h2>
-                  <AccordionButton pl={1.5} pb={3} pt={3}>
-                    <Flex w="100%" gap="6px" alignItems="center">
+                  <AccordionButton
+                    pl={1.5}
+                    pb={2}
+                    pt={2}
+                    borderRadius="12px"
+                    _hover={{ bg: 'transparent' }}
+                  >
+                    <Flex w="100%" gap="6px" alignItems="center" minWidth={0}>
                       <Heading
                         as="h6"
-                        size="md"
-                        fontSize="1.1rem"
+                        fontSize="14px"
+                        fontWeight="600"
+                        letterSpacing="-0.2px"
+                        color={textPrimary}
                         textAlign="left"
                       >
-                        Документы диалога{' '}
+                        Документы диалога
                       </Heading>
-                      <Tag size="md" colorScheme="brand" borderRadius="full">
+                      <Tag size="sm" colorScheme="blue" borderRadius="full">
                         {attachmentsService.sizeAttachments()}
                       </Tag>
                     </Flex>
                     <AccordionIcon />
                   </AccordionButton>
                 </h2>
-                <AccordionPanel pb={0} pl={0} pr={0}>
+                <AccordionPanel pb={2} pl={0} pr={0}>
                   <Box
-                    overflowX={{ base: 'auto', lg: 'initial' }}
+                    overflowX="auto"
+                    maxWidth="100%"
+                    minWidth={0}
                     className="models"
+                    sx={{
+                      '::-webkit-scrollbar': { display: 'none' },
+                      scrollbarWidth: 'none',
+                    }}
                   >
                     <Flex gap="6px">
                       {[...attachmentsService.attachments].map((attachment) => {
@@ -624,80 +905,165 @@ const handleSend = async (messageOverride?: string) => {
               </AccordionItem>
             </Accordion>
           )}
-          <Divider mb="20px" width="100%" placeSelf="center" />
+
+          {/* Chips — uniform 32px height, horizontally scrollable on overflow */}
           <Flex
             className="models"
-            overflowX={{ base: 'auto', lg: 'initial' }}
-            gap="12px"
+            overflowX="auto"
+            overflowY="hidden"
+            gap="6px"
+            mb="10px"
+            width="100%"
+            maxWidth="100%"
+            minWidth={0}
+            sx={{
+              '::-webkit-scrollbar': { display: 'none' },
+              scrollbarWidth: 'none',
+              WebkitOverflowScrolling: 'touch',
+            }}
           >
+            {/* Model chip */}
             <Flex
-              gap="2px"
+              gap="6px"
               align="center"
-              border="1px solid var(--chakra-colors-chakra-border-color)"
-              borderRadius="20px"
-              padding="4px"
-              paddingLeft="12px"
+              h="32px"
+              bg={mode === 'chat' ? surfaceActive : surface}
+              border="1px solid"
+              borderColor={mode === 'chat' ? borderActive : border}
+              borderRadius="9999px"
+              pl="10px"
+              pr="4px"
+              transition="background 0.14s ease, border-color 0.14s ease"
+              flexShrink={0}
             >
               <Switch
+                size="sm"
                 isChecked={mode === 'chat'}
                 onChange={() => setMode!('chat')}
               />
               <Button
-                marginLeft="2px"
                 paddingLeft="8px"
-                paddingRight="8px"
+                paddingRight="12px"
                 variant="ghost"
+                size="sm"
+                h="26px"
+                fontSize="13px"
+                fontWeight="500"
+                letterSpacing="-0.2px"
+                color={mode === 'chat' ? accentBlue : textPrimary}
+                borderRadius="9999px"
+                _hover={{ bg: 'transparent' }}
                 onClick={() => setModelsModalOpen!(true)}
               >
                 🤖 {(llmMap as any)[model!]}
               </Button>
             </Flex>
+
+            {/* Web Search chip */}
             <Flex
               onClick={handleToggleWebSearch}
-              gap="2px"
+              gap="6px"
               align="center"
-              border="1px solid var(--chakra-colors-chakra-border-color)"
-              borderRadius="20px"
-              padding="4px"
-              paddingLeft="12px"
+              h="32px"
+              bg={webSearch ? surfaceActive : surface}
+              border="1px solid"
+              borderColor={webSearch ? borderActive : border}
+              borderRadius="9999px"
+              pl="10px"
+              pr="4px"
+              transition="background 0.14s ease, border-color 0.14s ease"
+              cursor="pointer"
+              flexShrink={0}
             >
-              <Switch style={{ pointerEvents: 'none' }} isChecked={webSearch} />
+              <Switch
+                size="sm"
+                style={{ pointerEvents: 'none' }}
+                isChecked={webSearch}
+              />
               <Button
-                marginLeft="2px"
                 paddingLeft="8px"
-                paddingRight="8px"
+                paddingRight="12px"
                 variant="ghost"
+                size="sm"
+                h="26px"
+                fontSize="13px"
+                fontWeight="500"
+                letterSpacing="-0.2px"
+                color={webSearch ? accentBlue : textPrimary}
+                borderRadius="9999px"
+                _hover={{ bg: 'transparent' }}
               >
                 🌐 Web Поиск
               </Button>
             </Flex>
+
+            {/* Image gen chip */}
             <Flex
-              gap="2px"
+              gap="6px"
               align="center"
-              border="1px solid var(--chakra-colors-chakra-border-color)"
-              borderRadius="20px"
-              padding="4px"
-              paddingLeft="12px"
+              h="32px"
+              bg={mode === 'images' ? surfaceActive : surface}
+              border="1px solid"
+              borderColor={mode === 'images' ? borderActive : border}
+              borderRadius="9999px"
+              pl="10px"
+              pr="4px"
+              transition="background 0.14s ease, border-color 0.14s ease"
+              flexShrink={0}
             >
               <Switch
+                size="sm"
                 onChange={() => setMode!('images')}
                 isChecked={mode === 'images'}
               />
               <Button
-                marginLeft="2px"
                 paddingLeft="8px"
-                paddingRight="8px"
+                paddingRight="12px"
                 variant="ghost"
+                size="sm"
+                h="26px"
+                fontSize="13px"
+                fontWeight="500"
+                letterSpacing="-0.2px"
+                color={mode === 'images' ? accentBlue : textPrimary}
+                borderRadius="9999px"
+                _hover={{ bg: 'transparent' }}
               >
                 🖼️ Генерация изображений
               </Button>
             </Flex>
           </Flex>
-          <Flex w="100%" p="16px" pl="0px" pr="0px" alignItems="end">
-            <Flex w="100%" alignItems="center" gap="6px">
-              <Attachment />
+
+          {/* Input + buttons row */}
+          <Flex
+            w="100%"
+            maxWidth="100%"
+            minWidth={0}
+            alignItems="end"
+            gap={{ base: '6px', md: '8px' }}
+          >
+            <Flex
+              flex="1 1 0"
+              minWidth={0}
+              alignItems="center"
+              gap="4px"
+              bg={pageBg}
+              border="1px solid"
+              borderColor={borderSubtle}
+              borderRadius="22px"
+              transition="border-color 0.16s ease, box-shadow 0.16s ease"
+              _focusWithin={{
+                borderColor: borderActive,
+                boxShadow: '0 0 0 3px rgba(0,102,204,0.10)',
+              }}
+              pl="6px"
+            >
+              <Box flexShrink={0}>
+                <Attachment />
+              </Box>
               <Textarea
                 w="100%"
+                minWidth={0}
                 onKeyDown={(event: any) => {
                   if (event.key !== 'Enter') return;
                   if (event.shiftKey) return;
@@ -708,24 +1074,28 @@ const handleSend = async (messageOverride?: string) => {
                 resize="none"
                 rows={1}
                 maxRows={8}
-                minH="54px"
-                border="1px solid"
-                borderColor={borderColor}
+                minH="44px"
+                border="none"
+                bg="transparent"
                 borderRadius="20px"
-                p="15px 20px"
-                me="10px"
-                overflow-y="auto"
+                p={{ base: '11px 10px', md: '12px 16px' }}
+                pl="6px"
+                me="0"
+                overflowY="auto"
                 sx={{
                   '::-webkit-scrollbar': {
                     display: 'none',
                   },
                 }}
-                fontSize="sm"
-                fontWeight="500"
-                _focus={{ borderColor: 'none' }}
-                color={inputColor}
+                fontSize={{ base: '14px', md: '15px' }}
+                fontWeight="400"
+                lineHeight="1.5"
+                letterSpacing="-0.2px"
+                _focus={{ borderColor: 'none', boxShadow: 'none' }}
+                _focusVisible={{ boxShadow: 'none' }}
+                color={textPrimary}
                 _placeholder={placeholderColor}
-                placeholder="Ваш запрос.."
+                placeholder="Спросите ИИСеть…"
                 ref={ref}
                 minRows={1}
                 value={inputCode}
@@ -735,40 +1105,60 @@ const handleSend = async (messageOverride?: string) => {
                 }}
               />
             </Flex>
+
+            {/* Delete button — calm ghost pill */}
             <Button
-              variant="red"
+              variant="ghost"
               border="1px solid"
-              borderColor={borderColor}
+              borderColor={borderSubtle}
+              bg={pageBg}
               fontSize="sm"
-              borderRadius="20px"
-              ms="auto"
-              mr="10px"
-              h="54px"
+              borderRadius="9999px"
+              h={{ base: '40px', md: '44px' }}
+              w={{ base: '40px', md: '44px' }}
+              minW={{ base: '40px', md: '44px' }}
+              flexShrink={0}
+              p="0"
+              transition="border-color 0.16s ease, background 0.16s ease"
+              _hover={{
+                borderColor: 'rgba(239,68,68,0.30)',
+                bg: surfaceElevated,
+              }}
+              _active={{ transform: 'scale(0.94)' }}
               onClick={() => {
                 messagesService.currentDialog = '';
                 setMessages!([]);
               }}
               isDisabled={loading || !messages?.length}
+              aria-label="Очистить диалог"
             >
-              <Icon as={MdDelete} color="red.500" width="25px" height="25px" />
+              <Icon as={MdDelete} color="red.400" width="18px" height="18px" />
             </Button>
+
+            {/* Send button — Apple Action Blue */}
             <Button
-              variant="primary"
-              py="20px"
-              px="16px"
+              py="0"
+              px="0"
               fontSize="sm"
-              borderRadius="20px"
-              ms="auto"
-              w={{ base: '70px' }}
-              h="54px"
+              borderRadius="9999px"
+              w={{ base: '40px', md: '44px' }}
+              h={{ base: '40px', md: '44px' }}
+              minW={{ base: '40px', md: '44px' }}
+              flexShrink={0}
+              bg={accentBlue}
+              color="white"
+              boxShadow="none"
+              transition="background 0.16s ease, transform 0.12s ease"
+              _hover={{ bg: accentBlueHover }}
+              _active={{ transform: 'scale(0.94)' }}
               onClick={() => handleSend()}
               isLoading={loading}
             >
-              <Icon as={MdSend} width="25px" height="25px" color="white" />
+              <Icon as={MdSend} width="18px" height="18px" color="white" />
             </Button>
           </Flex>
-        </Grid>
-      </Flex>
+        </Box>
+      </Box>
     </Grid>
   );
 }

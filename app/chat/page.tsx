@@ -55,7 +55,7 @@ export default function Home() {
             base: 'calc(100dvh - 100px)',
             xl: 'calc(100dvh - 100px)',
           }}
-          maxW="100vw"
+          maxW="100%"
           overflowX="hidden"
         >
           <GptChat />

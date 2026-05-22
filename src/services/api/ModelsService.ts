@@ -67,6 +67,8 @@ const llmMap = {
   'mistral-large-latest': 'mistral-large',
   'mistral-small': 'mistral-small',
   'deepseek-ai/DeepSeek-V3': 'deepseek-v3',
+  'deepseek-ai/DeepSeek-V4-Pro': 'deepseek-v4-pro',
+  'Qwen/Qwen3.6-35B-A3B': 'qwen3.6-35b-a3b',
   'o3-mini': 'o3-mini',
   'gpt-4o': 'gpt-4o',
   'gemini-2.0-flash': 'gemini-2.0-flash',
@@ -235,6 +237,22 @@ class ModelsService {
       options: {},
       percent: 0.4,
     },
+    {
+      url: 'https://api.deepinfra.com',
+      model: 'deepseek-ai/DeepSeek-V4-Pro',
+      key: process.env.DEEPINFRA_API_KEY || '',
+      grade: 'premium',
+      options: {},
+      percent: 0.4,
+    },
+    {
+      url: 'https://api.deepinfra.com',
+      model: 'Qwen/Qwen3.6-35B-A3B',
+      key: process.env.DEEPINFRA_API_KEY || '',
+      grade: 'premium',
+      options: {},
+      percent: 0.4,
+    },
   ];
 
   isNotEnoughBalanceResult({
@@ -282,6 +300,7 @@ class ModelsService {
 
     console.log(freeModel);
     if (!freeModel) {
+      console.log('[CHAT-LLM] llmFreeRequest fallback_to_base (no freeModel)');
       return this.llmBaseRequest({
         model,
         messages,
@@ -294,8 +313,20 @@ class ModelsService {
     }
 
     const abortController = new AbortController();
+    const endpoint = `${process.env.MODELS_URI}/llm`;
+    const host = (() => {
+      try {
+        return new URL(endpoint).host;
+      } catch {
+        return 'unknown';
+      }
+    })();
+    const tStart =
+      typeof performance !== 'undefined' ? performance.now() : Date.now();
 
-    const res = await fetch(`${process.env.MODELS_URI}/llm`, {
+    console.log(`[CHAT-LLM] llmFreeRequest start host=${host} model=${model}`);
+
+    const res = await fetch(endpoint, {
       headers: { 'Content-Type': 'application/json' },
       method: 'POST',
       body: JSON.stringify({
@@ -307,6 +338,14 @@ class ModelsService {
       }),
       signal: abortController.signal,
     });
+
+    const dt = Math.round(
+      (typeof performance !== 'undefined' ? performance.now() : Date.now()) -
+        tStart,
+    );
+    console.log(
+      `[CHAT-LLM] llmFreeRequest response_headers host=${host} status=${res.status} dt=${dt}ms`,
+    );
 
     return await llmStream(res, onClose, textToLast);
   }
@@ -324,6 +363,21 @@ class ModelsService {
     const endpoint = foundModel.url.includes('deepinfra.com')
       ? `${foundModel.url}/v1/openai/chat/completions`
       : `${foundModel.url}/v1/chat/completions`;
+
+    const host = (() => {
+      try {
+        return new URL(endpoint).host;
+      } catch {
+        return 'unknown';
+      }
+    })();
+    const tStart =
+      typeof performance !== 'undefined' ? performance.now() : Date.now();
+
+    console.log(
+      `[CHAT-LLM] llmBaseRequest start host=${host} model=${model} stream=${stream}`,
+    );
+
     const res = await fetch(endpoint, {
       headers: {
         'Content-Type': 'application/json',
@@ -338,6 +392,14 @@ class ModelsService {
       }),
       signal: abortController.signal,
     });
+
+    const dt = Math.round(
+      (typeof performance !== 'undefined' ? performance.now() : Date.now()) -
+        tStart,
+    );
+    console.log(
+      `[CHAT-LLM] llmBaseRequest response_headers host=${host} status=${res.status} dt=${dt}ms`,
+    );
 
     if (!stream) {
       const result = await res.json();
@@ -358,8 +420,16 @@ class ModelsService {
     stream,
   }: ILLMRequest) {
     const abortController = new AbortController();
+    const endpoint = 'https://api.deepinfra.com/v1/openai/chat/completions';
+    const host = 'api.deepinfra.com';
+    const tStart =
+      typeof performance !== 'undefined' ? performance.now() : Date.now();
 
-    const res = await fetch(`https://api.deepinfra.com/v1/openai/chat/completions`, {
+    console.log(
+      `[CHAT-LLM] llmDeepinfraRequest start host=${host} model=${model} stream=${stream}`,
+    );
+
+    const res = await fetch(endpoint, {
       headers: {
         'Content-Type': 'application/json',
         Authorization: `Bearer ${process.env.DEEPINFRA_API_KEY}`,
@@ -372,6 +442,14 @@ class ModelsService {
       }),
       signal: abortController.signal,
     });
+
+    const dt = Math.round(
+      (typeof performance !== 'undefined' ? performance.now() : Date.now()) -
+        tStart,
+    );
+    console.log(
+      `[CHAT-LLM] llmDeepinfraRequest response_headers host=${host} status=${res.status} dt=${dt}ms`,
+    );
 
     if (!stream) {
       const result = await res.json();
@@ -405,6 +483,17 @@ class ModelsService {
       textToLast,
     });
 
+    const tRequest =
+      typeof performance !== 'undefined' ? performance.now() : Date.now();
+    const reqDt = () =>
+      Math.round(
+        (typeof performance !== 'undefined' ? performance.now() : Date.now()) -
+          tRequest,
+      );
+    console.log(
+      `[CHAT-LLM] llmRequest start model=${model} stream=${stream} webSearch=${webSearch}`,
+    );
+
     const foundModel = this.getModel(model)!;
 
     try {
@@ -413,6 +502,7 @@ class ModelsService {
           level: 'info',
           message: 'Запрос на платное API',
         });
+        console.log(`[CHAT-LLM] route_selected route=base model=${model}`);
 
         return await this.llmBaseRequest({
           model,
@@ -429,6 +519,7 @@ class ModelsService {
         level: 'info',
         message: 'Запрос на бесплатное API',
       });
+      console.log(`[CHAT-LLM] route_selected route=free model=${model}`);
 
       return await this.llmFreeRequest({
         model,
@@ -447,6 +538,9 @@ class ModelsService {
         level: 'info',
         message: 'Запрос сломался! Повтор с платным API',
       });
+      console.log(
+        `[CHAT-LLM] fallback_triggered from=free to=base dt_before_fallback=${reqDt()}ms error=${e.message}`,
+      );
 
       try {
         return await this.llmBaseRequest({
@@ -465,6 +559,9 @@ class ModelsService {
           level: 'info',
           message: 'Запрос сломался на платном API! Повтор с DeepInfra',
         });
+        console.log(
+          `[CHAT-LLM] fallback_triggered from=base to=deepinfra dt_before_fallback=${reqDt()}ms error=${e2.message}`,
+        );
 
         return await this.llmDeepinfraRequest({
           model,
@@ -789,11 +886,22 @@ async transformMessagesToQuery({ userMessages, user }: IImagesRequest) {
 
 
   async webSearchRequest({ model, messages, onClose, user }: WebSearchRequest) {
+    const tWs =
+      typeof performance !== 'undefined' ? performance.now() : Date.now();
+    const wsDt = () =>
+      Math.round(
+        (typeof performance !== 'undefined' ? performance.now() : Date.now()) -
+          tWs,
+      );
+    console.log('[CHAT-WS] webSearchRequest start');
+
     try {
       // Превращаем историю сообщений пользователя в аккуратный поисковый запрос.
       // Внутри transformMessagesToQuery дополнительно очищаем вывод от <think> и лишних строк.
       const userMessages = messages.filter((m) => m.role === 'user') as any[];
 
+      const tQuery =
+        typeof performance !== 'undefined' ? performance.now() : Date.now();
       const query =
         (await this.transformMessagesToQuery({
           userMessages,
@@ -802,6 +910,13 @@ async transformMessagesToQuery({ userMessages, user }: IImagesRequest) {
         (userMessages.length
           ? (userMessages[userMessages.length - 1].content as string)
           : '');
+      console.log(
+        `[CHAT-WS] transformMessagesToQuery_done dt=${Math.round(
+          (typeof performance !== 'undefined'
+            ? performance.now()
+            : Date.now()) - tQuery,
+        )}ms`,
+      );
 
       const serperApiKey = process.env.SERPER_API_KEY;
 
@@ -814,6 +929,8 @@ async transformMessagesToQuery({ userMessages, user }: IImagesRequest) {
       }
 
       // 1. Поиск в Serper (google.serper.dev/search)
+      const tSerper =
+        typeof performance !== 'undefined' ? performance.now() : Date.now();
       const searchResponse = await fetch('https://google.serper.dev/search', {
         method: 'POST',
         headers: {
@@ -832,6 +949,13 @@ async transformMessagesToQuery({ userMessages, user }: IImagesRequest) {
 
       const searchJson: any = await searchResponse.json();
       const organic = ((searchJson && searchJson.organic) || []) as any[];
+      console.log(
+        `[CHAT-WS] serper_search_done dt=${Math.round(
+          (typeof performance !== 'undefined'
+            ? performance.now()
+            : Date.now()) - tSerper,
+        )}ms organic_count=${organic.length}`,
+      );
 
       const buildFallbackMessages = () => [
         {
@@ -888,6 +1012,8 @@ async transformMessagesToQuery({ userMessages, user }: IImagesRequest) {
       );
 
       // 2. Переход по ссылкам через Serper Webpages (scrape.serper.dev)
+      const tScrape =
+        typeof performance !== 'undefined' ? performance.now() : Date.now();
       const scrapedPages = await Promise.all(
         topResults.map(async (item: any) => {
           const url = item.link || item.url;
@@ -928,6 +1054,14 @@ async transformMessagesToQuery({ userMessages, user }: IImagesRequest) {
             };
           }
         }),
+      );
+
+      console.log(
+        `[CHAT-WS] serper_scrape_done dt=${Math.round(
+          (typeof performance !== 'undefined'
+            ? performance.now()
+            : Date.now()) - tScrape,
+        )}ms scraped_count=${scrapedPages.filter(Boolean).length}`,
       );
 
       // Если scrape по какой-то причине не дал текста — всё равно используем сниппеты как источники
@@ -1009,6 +1143,9 @@ async transformMessagesToQuery({ userMessages, user }: IImagesRequest) {
       ];
 
       // 4. Финальный ответ через GPT-OSS (Deepinfra)
+      console.log(
+        `[CHAT-WS] final_llm_request_start dt_total_pre_llm=${wsDt()}ms`,
+      );
       return await this.llmBaseRequest({
         model: 'openai/gpt-oss-120b',
         messages: answerMessages as any[],
@@ -1017,7 +1154,7 @@ async transformMessagesToQuery({ userMessages, user }: IImagesRequest) {
         textToLast: '',
       });
     } catch (e: any) {
-      console.error('webSearchRequest error', e);
+      console.error('[CHAT-WS] webSearchRequest error', e);
 
       return 'Во время веб-поиска произошла ошибка. Пожалуйста, попробуйте ещё раз позже.';
     }

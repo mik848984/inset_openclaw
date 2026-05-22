@@ -9,8 +9,13 @@ import {
   useColorModeValue,
 } from '@chakra-ui/react';
 
+// Apple-like font stack
+const FONT_APPLE_TEXT = `'SF Pro Text', -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif`;
+
 export default function Footer() {
-  let textColor = useColorModeValue('gray.500', 'white');
+  const textColor = useColorModeValue('#6e6e73', 'rgba(245,245,247,0.68)');
+  const accentBlue = useColorModeValue('#0066cc', '#2997ff');
+
   return (
     <Flex
       zIndex="3"
@@ -19,68 +24,51 @@ export default function Footer() {
         lg: 'row',
       }}
       alignItems="center"
-      justifyContent="space-between"
-      px={{ base: '30px', md: '0px' }}
-      pb="30px"
+      justifyContent="center"
+      gap={{ base: '10px', lg: '24px' }}
+      px={{ base: '24px', md: '32px' }}
+      pb={{ base: '20px', md: '24px' }}
+      pt={{ base: '12px', md: '0px' }}
+      fontFamily={FONT_APPLE_TEXT}
     >
-      <List display="flex">
-        <ListItem
-          me={{
-            base: '10px',
-            md: '44px',
-          }}
-        >
+      <List
+        display="flex"
+        flexDirection={{ base: 'column', sm: 'row' }}
+        alignItems="center"
+        gap={{ base: '8px', sm: '24px' }}
+      >
+        <ListItem>
           <Link
             fontWeight="500"
-            fontSize={{ base: 'xs', md: 'sm' }}
+            fontSize={{ base: '13px', md: '14px' }}
+            letterSpacing="-0.1px"
             color={textColor}
             isExternal
-            href="https://horizon-ui.notion.site/Terms-Conditions-6e79229d25ed48f48a481962bc6de3ee"
+            target="_blank"
+            rel="noopener noreferrer"
+            href="https://telegra.ph/Polzovatelskoe-soglashenie-03-05-7"
+            textDecoration="none"
+            transition="color 0.16s ease"
+            _hover={{ color: accentBlue, textDecoration: 'none' }}
           >
-            Terms & Conditions
-          </Link>
-        </ListItem>
-        <ListItem
-          me={{
-            base: '10px',
-            md: '44px',
-          }}
-        >
-          <Link
-            fontWeight="500"
-            fontSize={{ base: 'xs', md: 'sm' }}
-            color={textColor}
-            isExternal
-            href="https://horizon-ui.notion.site/Privacy-Policy-8addde50aa8e408ca5c5f5811c38f971"
-          >
-            Privacy Policy
-          </Link>
-        </ListItem>
-        <ListItem
-          me={{
-            base: '10px',
-            md: '44px',
-          }}
-        >
-          <Link
-            fontWeight="500"
-            fontSize={{ base: 'xs', md: 'sm' }}
-            color={textColor}
-            isExternal
-            href="https://horizon-ui.notion.site/End-User-License-Agreement-8fb09441ea8c4c08b60c37996195a6d5"
-          >
-            License
+            Пользовательское соглашение
           </Link>
         </ListItem>
         <ListItem>
           <Link
             fontWeight="500"
-            fontSize={{ base: 'xs', md: 'sm' }}
+            fontSize={{ base: '13px', md: '14px' }}
+            letterSpacing="-0.1px"
             color={textColor}
             isExternal
-            href="https://horizon-ui.notion.site/Refund-Policy-5d5fa25f7fac4978a0be6fcf3036c6ee"
+            target="_blank"
+            rel="noopener noreferrer"
+            href="https://telegra.ph/Politika-konfidencialnosti-03-05-7"
+            textDecoration="none"
+            transition="color 0.16s ease"
+            _hover={{ color: accentBlue, textDecoration: 'none' }}
           >
-            Refund Policy
+            Политика конфиденциальности
           </Link>
         </ListItem>
       </List>

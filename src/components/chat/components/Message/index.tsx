@@ -37,10 +37,68 @@ interface IProps {
   isLast: boolean;
 }
 
+// Apple-like typography stacks
+const FONT_APPLE_TEXT = `'SF Pro Text', -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif`;
+const FONT_APPLE_DISPLAY = `'SF Pro Display', -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif`;
+const FONT_APPLE_MONO = `'SF Mono', ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', monospace`;
+
 function Message({ message, isLast }: IProps) {
   const toast = useToast();
-  const textColor = useColorModeValue('navy.700', 'white');
-  const borderColor = useColorModeValue('gray.200', 'whiteAlpha.200');
+  // Apple-like text colors
+  const textPrimary = useColorModeValue('#1d1d1f', '#f5f5f7');
+  const textBody = useColorModeValue('#2b2b2f', 'rgba(245,245,247,0.88)');
+  const textSecondary = useColorModeValue('#6e6e73', 'rgba(245,245,247,0.62)');
+  const textColor = textBody;
+  const borderColor = useColorModeValue(
+    'rgba(0,0,0,0.08)',
+    'rgba(255,255,255,0.10)',
+  );
+  const borderGlass = useColorModeValue(
+    'rgba(255,255,255,0.55)',
+    'rgba(255,255,255,0.10)',
+  );
+
+  // User bubble — soft glass, Apple Messages-like
+  const userBubbleBg = useColorModeValue(
+    'rgba(255,255,255,0.62)',
+    'rgba(13,18,34,0.62)',
+  );
+  const userBubbleShadow = useColorModeValue(
+    'inset 0 1px 0 rgba(255,255,255,0.62), 0 1px 2px rgba(31,38,70,0.04)',
+    'inset 0 1px 0 rgba(255,255,255,0.10), 0 1px 2px rgba(0,0,0,0.25)',
+  );
+
+  // Assistant — open text, no heavy panel
+  const codeBg = useColorModeValue(
+    'rgba(0,0,0,0.04)',
+    'rgba(255,255,255,0.06)',
+  );
+  const preBg = useColorModeValue('#f5f5f7', 'rgba(255,255,255,0.04)');
+  const linkColor = useColorModeValue('#0066cc', '#2997ff');
+  const blockquoteBorder = useColorModeValue(
+    'rgba(0,102,204,0.30)',
+    'rgba(41,151,255,0.40)',
+  );
+
+  // Avatar gradient — brand purple для assistant
+  const assistantAvatarBg =
+    'linear-gradient(150deg, #4A25E1 18%, #7B5AFF 82%)';
+  const assistantAvatarShadow = useColorModeValue(
+    '0 4px 12px rgba(74,37,225,0.20)',
+    '0 4px 12px rgba(74,37,225,0.40)',
+  );
+
+  // Message menu trigger glass colors — lifted to top to follow rules of hooks
+  // (were previously called inside `{message.content && (...)}` conditional)
+  const menuBtnBg = useColorModeValue(
+    'rgba(255,255,255,0.62)',
+    'rgba(13,18,34,0.62)',
+  );
+  const menuBtnHoverBg = useColorModeValue(
+    'rgba(255,255,255,0.85)',
+    'rgba(13,18,34,0.85)',
+  );
+
   const { data: session } = useSession();
   const { regenerateLastMessage, loading, webSearch, messages, setMessages } =
     useContext(ChatAiContext);
@@ -48,6 +106,146 @@ function Message({ message, isLast }: IProps) {
     useContext(ModalContext);
 
   const { isAnonymous, user, refreshUser } = useUser(false);
+
+  // ── Apple-like markdown styles ──────────────────────────────────
+  const markdownSx = {
+    width: '100%',
+    maxWidth: '100%',
+    overflowX: 'auto' as const,
+    fontFamily: FONT_APPLE_TEXT,
+    // Paragraphs
+    '& p': {
+      marginBottom: '0.75em',
+      lineHeight: 1.7,
+      letterSpacing: '-0.01em',
+      whiteSpace: 'normal',
+      wordBreak: 'break-word' as const,
+    },
+    '& p:last-child': { marginBottom: 0 },
+    // Headings — modest Apple-tight scale
+    '& h1': {
+      fontFamily: FONT_APPLE_DISPLAY,
+      fontSize: { base: '20px', md: '22px' },
+      fontWeight: 600,
+      lineHeight: 1.2,
+      letterSpacing: '-0.4px',
+      margin: '1.1em 0 0.4em',
+    },
+    '& h2': {
+      fontFamily: FONT_APPLE_DISPLAY,
+      fontSize: { base: '18px', md: '19px' },
+      fontWeight: 600,
+      lineHeight: 1.25,
+      letterSpacing: '-0.3px',
+      margin: '1em 0 0.4em',
+    },
+    '& h3': {
+      fontFamily: FONT_APPLE_DISPLAY,
+      fontSize: '17px',
+      fontWeight: 600,
+      lineHeight: 1.3,
+      letterSpacing: '-0.2px',
+      margin: '0.9em 0 0.35em',
+    },
+    '& h4, & h5, & h6': {
+      fontFamily: FONT_APPLE_DISPLAY,
+      fontSize: '15px',
+      fontWeight: 600,
+      lineHeight: 1.35,
+      margin: '0.8em 0 0.3em',
+    },
+    '& h1:first-of-type, & h2:first-of-type, & h3:first-of-type': {
+      marginTop: 0,
+    },
+    // Inline emphasis
+    '& strong, & b': { fontWeight: 600, color: textPrimary },
+    '& em, & i': { fontStyle: 'italic' },
+    // Lists
+    '& ul, & ol': {
+      margin: '0.6em 0 0.9em',
+      paddingLeft: '1.25em',
+    },
+    '& li': { marginBottom: '0.3em', lineHeight: 1.65 },
+    '& li > p': { marginBottom: '0.3em' },
+    // Links
+    '& a': {
+      color: linkColor,
+      textDecoration: 'none',
+      borderBottom: '1px solid',
+      borderColor: 'currentColor',
+      paddingBottom: '1px',
+      transition: 'opacity 0.15s ease',
+    },
+    '& a:hover': { opacity: 0.75 },
+    // Inline code
+    '& code': {
+      fontFamily: FONT_APPLE_MONO,
+      fontSize: '0.88em',
+      padding: '2px 6px',
+      borderRadius: '6px',
+      background: codeBg,
+      letterSpacing: 0,
+    },
+    // Code blocks
+    '& pre': {
+      width: '100%',
+      overflowX: 'auto',
+      margin: '0.8em 0',
+      padding: '14px 16px',
+      borderRadius: '12px',
+      background: preBg,
+      border: '1px solid',
+      borderColor: borderColor,
+      fontFamily: FONT_APPLE_MONO,
+      fontSize: '13px',
+      lineHeight: 1.6,
+    },
+    '& pre code': {
+      padding: 0,
+      background: 'transparent',
+      borderRadius: 0,
+      fontSize: 'inherit',
+    },
+    // Blockquote
+    '& blockquote': {
+      borderLeft: '3px solid',
+      borderColor: blockquoteBorder,
+      paddingLeft: '14px',
+      margin: '0.8em 0',
+      color: textSecondary,
+      fontStyle: 'italic',
+    },
+    // Tables
+    '& table': {
+      borderCollapse: 'collapse',
+      borderSpacing: 0,
+      minWidth: '100%',
+      margin: '0.8em 0',
+    },
+    '& th, & td': {
+      padding: '6px 10px',
+      minWidth: '90px',
+      whiteSpace: 'normal',
+      wordBreak: 'break-word',
+      verticalAlign: 'top',
+      borderBottom: '1px solid',
+      borderColor: borderColor,
+    },
+    '& th': { fontWeight: 600, color: textPrimary, textAlign: 'left' as const },
+    // HR
+    '& hr': {
+      border: 'none',
+      borderTop: '1px solid',
+      borderColor: borderColor,
+      margin: '1em 0',
+    },
+    // Images
+    '& img': {
+      maxWidth: '100%',
+      borderRadius: '12px',
+      margin: '0.5em 0',
+    },
+  };
 
   const handleRegenerate = async () => {
     if (!regenerateLastMessage || loading) return;
@@ -91,9 +289,21 @@ function Message({ message, isLast }: IProps) {
 
   if (message.role === 'assistant') {
     return (
-      <Flex w="100%" align={'start'} mb="10px" position="relative">
+      <Flex
+        w="100%"
+        maxW={{ base: '100%', md: '820px' }}
+        mx="auto"
+        align={'start'}
+        mb={{ base: '16px', md: '20px' }}
+        position="relative"
+      >
         {message.content && (
-          <Box position="absolute" top="-2px" right="0px" zIndex={2}>
+          <Box
+            position="absolute"
+            top="-4px"
+            right="-2px"
+            zIndex={2}
+          >
             <Menu>
               <MenuButton
                 as={IconButton}
@@ -101,15 +311,17 @@ function Message({ message, isLast }: IProps) {
                 variant="ghost"
                 size="sm"
                 icon={<FiMoreVertical />}
-                bg="rgba(255, 255, 255, 0.7)"
-                _dark={{ bg: 'rgba(15, 15, 35, 0.8)' }}
-                _hover={{
-                  bg: 'rgba(255, 255, 255, 0.9)',
-                  _dark: { bg: 'rgba(15, 15, 35, 0.95)' },
-                }}
+                bg={menuBtnBg}
+                _hover={{ bg: menuBtnHoverBg }}
                 borderRadius="full"
-                backdropFilter="blur(6px)"
-                boxShadow="sm"
+                backdropFilter="blur(14px) saturate(180%)"
+                sx={{ WebkitBackdropFilter: 'blur(14px) saturate(180%)' }}
+                border="1px solid"
+                borderColor={borderGlass}
+                boxShadow="0 1px 2px rgba(0,0,0,0.04)"
+                w="28px"
+                h="28px"
+                minW="28px"
               />
               <MenuList>
                 <MenuItem
@@ -205,45 +417,40 @@ function Message({ message, isLast }: IProps) {
           borderRadius="full"
           justify="center"
           align="center"
-          bg={'linear-gradient(15.46deg, #4A25E1 26.3%, #7B5AFF 86.4%)'}
-          me="20px"
-          h="40px"
-          minH="40px"
-          minW="40px"
+          bg={assistantAvatarBg}
+          boxShadow={assistantAvatarShadow}
+          me={{ base: '12px', md: '14px' }}
+          h={{ base: '32px', md: '34px' }}
+          w={{ base: '32px', md: '34px' }}
+          minH={{ base: '32px', md: '34px' }}
+          minW={{ base: '32px', md: '34px' }}
+          mt="2px"
+          flexShrink={0}
         >
-          <Icon as={MdAutoAwesome} width="20px" height="20px" color="white" />
+          <Icon
+            as={MdAutoAwesome}
+            width={{ base: '15px', md: '16px' }}
+            height={{ base: '15px', md: '16px' }}
+            color="white"
+          />
         </Flex>
-        <Flex w="100%">
-          <Grid>
+        <Flex w="100%" minW={0}>
+          <Grid w="100%" minW={0}>
             {message.content && (
-              <Text
-                pt="12px"
+              <Box
                 color={textColor}
-                fontWeight="600"
-                fontSize={{ base: 'sm', md: 'md' }}
-                lineHeight={{ base: '24px', md: '26px' }}
+                fontFamily={FONT_APPLE_TEXT}
+                fontWeight="400"
+                fontSize={{ base: '15px', md: '16px' }}
+                lineHeight="1.7"
+                letterSpacing="-0.01em"
+                pt="3px"
                 minW={0}
               >
                 <Box
                   opacity={message.content ? '1' : '0'}
-                  transition="opacity 1s"
-                  sx={{
-                    width: '100%',
-                    maxWidth: '100%',
-                    overflowX: 'auto',
-                    '& table': {
-                      borderCollapse: 'collapse',
-                      borderSpacing: 0,
-                      minWidth: '100%',
-                    },
-                    '& th, & td': {
-                      padding: '4px 8px',
-                      minWidth: '90px',
-                      whiteSpace: 'normal',
-                      wordBreak: 'break-word',
-                      verticalAlign: 'top',
-                    },
-                  }}
+                  transition="opacity 0.6s ease"
+                  sx={markdownSx}
                   dangerouslySetInnerHTML={{
                     __html: markdown.markdownItWithPlugins.render(
                       message.content === '__WEB_SEARCH_REGISTER__' ||
@@ -254,7 +461,7 @@ function Message({ message, isLast }: IProps) {
                     ),
                   }}
                 />
-              </Text>
+              </Box>
             )}
 
             {message.content &&
@@ -455,48 +662,113 @@ function Message({ message, isLast }: IProps) {
 
   if (message.role === 'user') {
     return (
-      <Flex w="100%">
+      <Flex
+        w="100%"
+        maxW={{ base: '100%', md: '820px' }}
+        mx="auto"
+        align="start"
+        mb={{ base: '16px', md: '20px' }}
+        minW={0}
+      >
+        {/* User avatar — compact, no extra ring */}
         <Flex
           borderRadius="full"
           justify="center"
           align="center"
-          bg={'transparent'}
+          bg="transparent"
           border="1px solid"
-          borderColor={borderColor}
-          me="20px"
-          h="40px"
-          minH="40px"
-          minW="40px"
+          borderColor={borderGlass}
+          me={{ base: '12px', md: '14px' }}
+          h={{ base: '32px', md: '34px' }}
+          w={{ base: '32px', md: '34px' }}
+          minH={{ base: '32px', md: '34px' }}
+          minW={{ base: '32px', md: '34px' }}
+          mt="2px"
+          flexShrink={0}
+          overflow="hidden"
         >
-          <NextAvatar src={session?.user?.image!} w="40px" h="40px" />
+          <NextAvatar
+            src={session?.user?.image!}
+            w={{ base: '32px', md: '34px' }}
+            h={{ base: '32px', md: '34px' }}
+          />
         </Flex>
+
+        {/* User bubble — soft Apple glass */}
         <Box
-          pt="12px"
+          flex="1 1 0"
+          minW={0}
+          maxWidth="100%"
+          bg={userBubbleBg}
+          backdropFilter="blur(18px) saturate(180%)"
+          border="1px solid"
+          borderColor={borderGlass}
+          borderRadius={{ base: '18px 18px 18px 6px', md: '20px 20px 20px 6px' }}
+          boxShadow={userBubbleShadow}
+          px={{ base: '14px', md: '18px' }}
+          py={{ base: '11px', md: '13px' }}
           color={textColor}
-          fontWeight="600"
-          fontSize={{ base: 'sm', md: 'md' }}
-          lineHeight={{ base: '24px', md: '26px' }}
+          fontFamily={FONT_APPLE_TEXT}
+          fontWeight="400"
+          fontSize={{ base: '15px', md: '15.5px' }}
+          lineHeight={{ base: '1.65', md: '1.7' }}
+          letterSpacing="-0.01em"
           sx={{
+            WebkitBackdropFilter: 'blur(18px) saturate(180%)',
             width: '100%',
-            maxWidth: '100%',
             overflowX: 'auto',
+            // Compact paragraph rhythm для user-сообщения
             '& p': {
               whiteSpace: 'normal',
               wordBreak: 'break-word',
-              marginBottom: '0.5em',
+              marginBottom: '0.45em',
+              fontWeight: 'inherit',
+              fontSize: 'inherit',
+              lineHeight: 'inherit',
+            },
+            '& p:last-child': { marginBottom: 0 },
+            '& strong, & b': { fontWeight: 600 },
+            '& em, & i': { fontStyle: 'italic' },
+            '& a': {
+              color: linkColor,
+              textDecoration: 'none',
+              borderBottom: '1px solid currentColor',
+              paddingBottom: '1px',
+            },
+            '& code': {
+              fontFamily: FONT_APPLE_MONO,
+              fontSize: '0.88em',
+              padding: '2px 5px',
+              borderRadius: '5px',
+              background: codeBg,
+              whiteSpace: 'pre',
             },
             '& pre': {
               width: '100%',
               overflowX: 'auto',
+              margin: '0.5em 0',
+              padding: '10px 12px',
+              borderRadius: '10px',
+              background: preBg,
+              fontFamily: FONT_APPLE_MONO,
+              fontSize: '13px',
             },
-            '& code': {
-              whiteSpace: 'pre',
+            '& pre code': {
+              padding: 0,
+              background: 'transparent',
+              borderRadius: 0,
             },
+            '& ul, & ol': {
+              margin: '0.4em 0',
+              paddingLeft: '1.2em',
+            },
+            '& li': { marginBottom: '0.2em' },
             '& table': {
               borderCollapse: 'collapse',
               borderSpacing: 0,
               width: 'max-content',
-              maxWidth: 'none',
+              maxWidth: '100%',
+              margin: '0.5em 0',
             },
             '& th, & td': {
               padding: '4px 8px',
