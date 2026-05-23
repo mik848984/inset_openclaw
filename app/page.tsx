@@ -12,7 +12,11 @@ import {
   VStack,
 } from "@chakra-ui/react";
 import {
+  FiArrowRight,
   FiChevronRight,
+  FiCpu,
+  FiEdit3,
+  FiFileText,
   FiGlobe,
   FiImage,
   FiLayers,
@@ -22,73 +26,34 @@ import {
 } from "react-icons/fi";
 import Link from "next/link";
 
-// ── Design tokens ────────────────────────────────────────────────────
+// ── Design tokens (Apple-like) ───────────────────────────────────────
 const C = {
-  // Apple palette
-  actionBlue: "#0066cc",
-  actionBlueFocus: "#0071e3",
-  actionBlueOnDark: "#2997ff",
+  // Ink + neutrals (one warm gray family, no mixing)
   ink: "#1d1d1f",
-  inkMuted48: "#7a7a7a",
-  hairline: "#e0e0e0",
+  inkSecondary: "#6e6e73",
+  inkTertiary: "#86868b",
+  hairline: "#d2d2d7",
+  hairlineSoft: "#e8e8ed",
+
+  // Canvases (very light, only — dark is a rare accent)
   canvas: "#ffffff",
-  canvasParchment: "#f5f5f7",
-  surfaceTile1: "#272729",
-  surfaceTile2: "#2a2a2c",
-  // Glass / aurora accents
-  violet: "#6366f1",
-  cyan: "#06b6d4",
-  heroBase: "#060612",
+  canvasPearl: "#fbfbfd", // hero + nav
+  canvasFog: "#f5f5f7", // section break
+  canvasMist: "#f2f2f4", // tile contrast
+
+  // Single dark accent surface (used once, for Premium tile + tiny CTA strip)
+  inkDeep: "#0a0a0c",
+
+  // Brand accents — one primary (blue), one secondary identity (violet)
+  actionBlue: "#0066cc",
+  actionBlueHover: "#0071e3",
+  actionBlueOnDark: "#2997ff",
+  violet: "#5e5ce6", // Apple SF "indigo"
+  violetSoft: "rgba(94,92,230,0.10)",
 };
 
 const FD = `system-ui, -apple-system, BlinkMacSystemFont, "SF Pro Display", sans-serif`;
 const FT = `system-ui, -apple-system, BlinkMacSystemFont, "SF Pro Text", sans-serif`;
-
-// ── GlassCard ────────────────────────────────────────────────────────
-interface GlassCardProps {
-  children: React.ReactNode;
-  p?: string | object;
-  borderRadius?: string;
-  glowColor?: string;
-  hover?: boolean;
-  [key: string]: unknown;
-}
-
-function GlassCard({
-  children,
-  p = "28px",
-  borderRadius = "20px",
-  glowColor,
-  hover = true,
-  ...rest
-}: GlassCardProps) {
-  const shadow = `0 4px 32px rgba(0,0,0,0.28)${glowColor ? `, 0 0 28px ${glowColor}` : ""}`;
-  const hoverShadow = `0 14px 48px rgba(0,0,0,0.38)${glowColor ? `, 0 0 40px ${glowColor}` : ""}`;
-
-  return (
-    <Box
-      bg="rgba(255,255,255,0.055)"
-      backdropFilter="blur(20px) saturate(160%)"
-      border="1px solid rgba(255,255,255,0.10)"
-      borderRadius={borderRadius}
-      boxShadow={shadow}
-      p={p}
-      transition="all 0.22s ease"
-      {...(hover
-        ? {
-            _hover: {
-              transform: "translateY(-4px)",
-              border: "1px solid rgba(255,255,255,0.18)",
-              boxShadow: hoverShadow,
-            },
-          }
-        : {})}
-      {...rest}
-    >
-      {children}
-    </Box>
-  );
-}
 
 // ── Buttons ──────────────────────────────────────────────────────────
 function CtaPrimary({
@@ -107,55 +72,25 @@ function CtaPrimary({
       bg={C.actionBlue}
       color="white"
       borderRadius="9999px"
-      px={large ? "32px" : "22px"}
-      py={large ? "14px" : "11px"}
-      fontSize={large ? "18px" : "17px"}
-      fontWeight={large ? "300" : "400"}
+      px={large ? "28px" : "20px"}
+      py={large ? "13px" : "10px"}
+      fontSize={large ? "17px" : "15px"}
+      fontWeight="400"
       lineHeight="1.0"
       fontFamily={FT}
-      _hover={{ bg: C.actionBlueFocus, transform: "scale(1.02)" }}
-      _active={{ transform: "scale(0.96)" }}
-      transition="all 0.15s ease"
+      _hover={{ bg: C.actionBlueHover }}
+      _active={{ transform: "scale(0.98)" }}
+      transition="background-color 0.15s ease, transform 0.15s ease"
       h="auto"
-      boxShadow="0 0 22px rgba(0,102,204,0.42)"
+      boxShadow="none"
     >
       {children}
     </Button>
   );
 }
 
-function CtaOutline({
-  href,
-  children,
-}: {
-  href: string;
-  children: React.ReactNode;
-}) {
-  return (
-    <Button
-      as={Link}
-      href={href}
-      variant="outline"
-      borderColor="rgba(255,255,255,0.22)"
-      color="white"
-      borderRadius="9999px"
-      px="22px"
-      py="11px"
-      fontSize="17px"
-      fontWeight="400"
-      fontFamily={FT}
-      bg="rgba(255,255,255,0.06)"
-      _hover={{ bg: "rgba(255,255,255,0.13)", borderColor: "rgba(255,255,255,0.40)" }}
-      _active={{ transform: "scale(0.96)" }}
-      transition="all 0.15s ease"
-      h="auto"
-    >
-      {children}
-    </Button>
-  );
-}
-
-function CtaLink({
+// Light text-link CTA — replaces heavy outline buttons
+function CtaSecondary({
   href,
   children,
   dark = false,
@@ -171,17 +106,131 @@ function CtaLink({
       display="inline-flex"
       alignItems="center"
       gap="3px"
-      fontSize="17px"
+      fontSize="15px"
       fontWeight="400"
-      letterSpacing="-0.374px"
+      letterSpacing="-0.16px"
       fontFamily={FT}
       color={dark ? C.actionBlueOnDark : C.actionBlue}
       textDecoration="none"
-      _hover={{ color: dark ? "#5ac8ff" : C.actionBlueFocus }}
+      px="6px"
+      py="10px"
+      _hover={{
+        color: dark ? "#5ac8ff" : C.actionBlueHover,
+        textDecoration: "underline",
+      }}
       transition="color 0.15s ease"
     >
       {children}
       <Icon as={FiChevronRight} boxSize="15px" />
+    </Box>
+  );
+}
+
+// Ghost outline — used rarely on light bg as secondary action
+function CtaGhost({
+  href,
+  children,
+  large,
+}: {
+  href: string;
+  children: React.ReactNode;
+  large?: boolean;
+}) {
+  return (
+    <Button
+      as={Link}
+      href={href}
+      variant="outline"
+      bg="transparent"
+      borderColor={C.hairline}
+      color={C.ink}
+      borderRadius="9999px"
+      px={large ? "28px" : "20px"}
+      py={large ? "13px" : "10px"}
+      fontSize={large ? "17px" : "15px"}
+      fontWeight="400"
+      fontFamily={FT}
+      _hover={{ borderColor: C.ink, bg: "transparent" }}
+      _active={{ transform: "scale(0.98)" }}
+      transition="border-color 0.15s ease, transform 0.15s ease"
+      h="auto"
+    >
+      {children}
+    </Button>
+  );
+}
+
+// ── Reusable light tile ──────────────────────────────────────────────
+interface TileProps {
+  children: React.ReactNode;
+  bg?: string;
+  p?: string | object;
+  borderRadius?: string;
+  hover?: boolean;
+  [key: string]: unknown;
+}
+
+function Tile({
+  children,
+  bg = C.canvas,
+  p = "32px",
+  borderRadius = "22px",
+  hover = true,
+  ...rest
+}: TileProps) {
+  return (
+    <Box
+      bg={bg}
+      borderRadius={borderRadius}
+      p={p}
+      boxShadow="0 1px 2px rgba(15,23,42,0.04), 0 8px 24px -12px rgba(15,23,42,0.08)"
+      transition="transform 0.22s ease, box-shadow 0.22s ease"
+      sx={{
+        "@media (prefers-reduced-motion: reduce)": {
+          transition: "none",
+        },
+      }}
+      {...(hover
+        ? {
+            _hover: {
+              transform: "translateY(-3px)",
+              boxShadow:
+                "0 2px 4px rgba(15,23,42,0.05), 0 24px 48px -20px rgba(15,23,42,0.14)",
+            },
+          }
+        : {})}
+      {...rest}
+    >
+      {children}
+    </Box>
+  );
+}
+
+// macOS-style window chrome — replaces tab pills inside product scene
+function MacChrome({ children }: { children: React.ReactNode }) {
+  return (
+    <Box
+      bg={C.canvas}
+      borderRadius="18px"
+      overflow="hidden"
+      boxShadow="0 1px 2px rgba(15,23,42,0.04), 0 30px 80px -20px rgba(15,23,42,0.18)"
+      border="1px solid"
+      borderColor={C.hairlineSoft}
+    >
+      <Flex
+        align="center"
+        gap="6px"
+        px="14px"
+        py="10px"
+        borderBottom="1px solid"
+        borderColor={C.hairlineSoft}
+        bg={C.canvasPearl}
+      >
+        <Box w="11px" h="11px" borderRadius="50%" bg="#ff5f57" />
+        <Box w="11px" h="11px" borderRadius="50%" bg="#febc2e" />
+        <Box w="11px" h="11px" borderRadius="50%" bg="#28c840" />
+      </Flex>
+      {children}
     </Box>
   );
 }
@@ -206,8 +255,8 @@ function Body({
       color={
         muted
           ? dark
-            ? "rgba(255,255,255,0.52)"
-            : C.inkMuted48
+            ? "rgba(255,255,255,0.62)"
+            : C.inkSecondary
           : dark
           ? "white"
           : C.ink
@@ -221,12 +270,28 @@ function Body({
 function Caption({ children, dark }: { children: React.ReactNode; dark?: boolean }) {
   return (
     <Text
-      fontSize="14px"
-      fontWeight="400"
-      lineHeight="1.43"
-      letterSpacing="-0.224px"
+      fontSize="13px"
+      fontWeight="500"
+      lineHeight="1.45"
+      letterSpacing="0.06em"
+      textTransform="uppercase"
       fontFamily={FT}
-      color={dark ? "rgba(255,255,255,0.45)" : C.inkMuted48}
+      color={dark ? "rgba(255,255,255,0.5)" : C.inkTertiary}
+    >
+      {children}
+    </Text>
+  );
+}
+
+function SectionEyebrow({ children, color = C.actionBlue }: { children: React.ReactNode; color?: string }) {
+  return (
+    <Text
+      fontSize="14px"
+      fontWeight="600"
+      letterSpacing="-0.08px"
+      fontFamily={FT}
+      color={color}
+      mb="12px"
     >
       {children}
     </Text>
@@ -253,37 +318,103 @@ const whyCards = [
   {
     icon: FiMessageSquare,
     title: "Практическая польза",
-    text: "КП, письма, посты, пересказы, картинки — реальные задачи каждый день.",
+    text: "КП, письма, посты, пересказы, картинки — задачи каждый день.",
+  },
+];
+
+// Horizontal-scroll product tiles — "Возможности ИИСеть"
+const featureTiles: {
+  icon: typeof FiMessageSquare;
+  eyebrow: string;
+  title: string;
+  text: string;
+  href: string;
+  cta: string;
+  accent: string;
+}[] = [
+  {
+    icon: FiMessageSquare,
+    eyebrow: "Чат",
+    title: "Диалог с моделью",
+    text: "GPT-4o, Claude, Gemini и другие — один интерфейс для любой задачи.",
+    href: "/chat",
+    cta: "Открыть чат",
+    accent: C.actionBlue,
+  },
+  {
+    icon: FiSearch,
+    eyebrow: "Поиск",
+    title: "Веб-поиск со ссылками",
+    text: "ИИ ищет в реальном времени и отвечает со ссылками на источники.",
+    href: "/chat",
+    cta: "Попробовать поиск",
+    accent: C.actionBlue,
+  },
+  {
+    icon: FiImage,
+    eyebrow: "Картинки",
+    title: "Генерация изображений",
+    text: "Опишите идею — получите иллюстрацию или фото за секунды.",
+    href: "/chat",
+    cta: "Сгенерировать",
+    accent: C.violet,
+  },
+  {
+    icon: FiCpu,
+    eyebrow: "Проекты",
+    title: "Умные проекты",
+    text: "Загрузите файлы — ИИ работает в контексте именно ваших документов.",
+    href: "/chat",
+    cta: "Создать проект",
+    accent: C.violet,
+  },
+  {
+    icon: FiFileText,
+    eyebrow: "Шаблоны",
+    title: "AI-шаблоны",
+    text: "Готовые сценарии: переводчик, упрощатель писем, редактор резюме.",
+    href: "/all-templates",
+    cta: "Все шаблоны",
+    accent: C.actionBlue,
+  },
+  {
+    icon: FiEdit3,
+    eyebrow: "Идеи",
+    title: "Блог и подсказки",
+    text: "Реальные кейсы и подборки — как использовать ИИ в работе и жизни.",
+    href: "/blog",
+    cta: "Читать блог",
+    accent: C.violet,
   },
 ];
 
 const pricingPlans = [
   {
+    name: "Pro Text",
+    price: "149 ₽",
+    period: "в месяц",
+    dark: false,
+    badge: null as string | null,
+    desc: "Для активной текстовой работы каждый день.",
+    detail: "1600 страниц текста",
+    cta: { label: "Выбрать", href: "/profile" },
+  },
+  {
     name: "Premium",
     price: "249 ₽",
     period: "в месяц",
-    highlight: true,
+    dark: true, // sole dark accent on the whole page
     badge: "Популярный выбор",
     desc: "Тексты и изображения — всё включено.",
     detail: "2400 стр. текста · 150 изображений",
     cta: { label: "Начать", href: "/others/sign-in" },
   },
   {
-    name: "Pro Text",
-    price: "149 ₽",
-    period: "в месяц",
-    highlight: false,
-    badge: null,
-    desc: "Для активной текстовой работы каждый день.",
-    detail: "1600 страниц текста",
-    cta: { label: "Выбрать", href: "/profile" },
-  },
-  {
     name: "Basic Art",
     price: "99 ₽",
     period: "за пакет",
-    highlight: false,
-    badge: null,
+    dark: false,
+    badge: null as string | null,
     desc: "Генерация изображений без подписки.",
     detail: "100 изображений",
     cta: { label: "Выбрать", href: "/profile" },
@@ -303,59 +434,56 @@ const footerLinks: Record<string, { label: string; href: string }[]> = {
   ],
 };
 
-// ── Page ─────────────────────────────────────────────────────────────
-// ── JSON-LD: Organization + WebSite ────────────────────────────────
-// Намеренно без SearchAction — настоящего поиска по сайту пока нет,
-// а ложный SearchAction вредит SEO.
+// ── JSON-LD: Organization + WebSite (preserved verbatim) ────────────
 const homepageJsonLd = {
-  '@context': 'https://schema.org',
-  '@graph': [
+  "@context": "https://schema.org",
+  "@graph": [
     {
-      '@type': 'Organization',
-      '@id': 'https://iiset.io/#organization',
-      name: 'ИИСеть',
-      url: 'https://iiset.io',
-      logo: 'https://iiset.io/brand.png',
+      "@type": "Organization",
+      "@id": "https://iiset.io/#organization",
+      name: "ИИСеть",
+      url: "https://iiset.io",
+      logo: "https://iiset.io/brand.png",
     },
     {
-      '@type': 'WebSite',
-      '@id': 'https://iiset.io/#website',
-      url: 'https://iiset.io',
-      name: 'ИИСеть',
-      inLanguage: 'ru-RU',
-      publisher: { '@id': 'https://iiset.io/#organization' },
+      "@type": "WebSite",
+      "@id": "https://iiset.io/#website",
+      url: "https://iiset.io",
+      name: "ИИСеть",
+      inLanguage: "ru-RU",
+      publisher: { "@id": "https://iiset.io/#organization" },
     },
   ],
 };
 
+// ── Page ─────────────────────────────────────────────────────────────
 export default function HomePage() {
   return (
-    <Box as="main" bg={C.heroBase}>
-      {/* JSON-LD structured data */}
+    <Box as="main" bg={C.canvasPearl}>
       <script
         type="application/ld+json"
         dangerouslySetInnerHTML={{ __html: JSON.stringify(homepageJsonLd) }}
       />
 
-      {/* ── Sticky nav ─────────────────────────────────────────────── */}
+      {/* ── Sticky nav — light translucent ─────────────────────────── */}
       <Box
         as="nav"
         position="sticky"
         top="0"
         zIndex="100"
-        bg="rgba(6,6,18,0.75)"
+        bg="rgba(251,251,253,0.72)"
         backdropFilter="blur(20px) saturate(180%)"
-        borderBottom="1px solid rgba(255,255,255,0.08)"
+        borderBottom="1px solid"
+        borderColor={C.hairlineSoft}
       >
         <Flex
           mx="auto"
-          maxW="1200px"
-          px={{ base: "20px", md: "48px" }}
-          h="52px"
+          maxW="1180px"
+          px={{ base: "20px", md: "44px" }}
+          h="48px"
           align="center"
           justify="space-between"
         >
-          {/* Logo */}
           <Box
             as={Link}
             href="/"
@@ -368,27 +496,27 @@ export default function HomePage() {
               src="/brand.png"
               alt="ИИСеть"
               style={{
-                width: "30px",
-                height: "30px",
-                borderRadius: "8px",
+                width: "26px",
+                height: "26px",
+                borderRadius: "7px",
                 objectFit: "cover",
               }}
             />
             <Text
-              fontSize="17px"
+              fontSize="16px"
               fontWeight="600"
-              letterSpacing="-0.374px"
+              letterSpacing="-0.32px"
               fontFamily={FT}
-              color="white"
+              color={C.ink}
             >
               ИИСеть
             </Text>
           </Box>
 
-          {/* Nav links — desktop */}
-          <HStack spacing="32px" display={{ base: "none", md: "flex" }}>
+          <HStack spacing="28px" display={{ base: "none", md: "flex" }}>
             {[
               { label: "Возможности", href: "#features" },
+              { label: "Что внутри", href: "#explore" },
               { label: "Тарифы", href: "#pricing" },
               { label: "Как начать", href: "#start" },
             ].map((l) => (
@@ -396,14 +524,15 @@ export default function HomePage() {
                 key={l.href}
                 as={Link}
                 href={l.href}
-                fontSize="14px"
+                fontSize="13px"
                 fontWeight="400"
-                letterSpacing="-0.12px"
+                letterSpacing="-0.08px"
                 fontFamily={FT}
-                color="rgba(255,255,255,0.68)"
+                color={C.ink}
+                opacity={0.82}
                 textDecoration="none"
-                _hover={{ color: "white" }}
-                transition="color 0.15s ease"
+                _hover={{ opacity: 1 }}
+                transition="opacity 0.15s ease"
               >
                 {l.label}
               </Box>
@@ -414,83 +543,44 @@ export default function HomePage() {
         </Flex>
       </Box>
 
-      {/* ── Hero ───────────────────────────────────────────────────── */}
+      {/* ── Hero — light, airy, single product scene ───────────────── */}
       <Box
         as="section"
         position="relative"
         overflow="hidden"
-        bg={C.heroBase}
-        pt={{ base: "80px", md: "104px" }}
+        bg={C.canvasPearl}
+        pt={{ base: "72px", md: "108px" }}
         pb={{ base: "80px", md: "120px" }}
         px={{ base: "24px", md: "48px" }}
       >
-        {/* Aurora blobs */}
+        {/* Single soft accent blob, very low opacity */}
         <Box
           position="absolute"
-          top="-180px"
-          left="-120px"
-          w="700px"
-          h="700px"
-          borderRadius="50%"
-          bg="radial-gradient(circle, rgba(0,102,204,0.36) 0%, transparent 65%)"
-          filter="blur(80px)"
-          pointerEvents="none"
-        />
-        <Box
-          position="absolute"
-          top="-60px"
-          right="-160px"
-          w="540px"
+          top="-220px"
+          left="50%"
+          transform="translateX(-50%)"
+          w="1100px"
           h="540px"
           borderRadius="50%"
-          bg="radial-gradient(circle, rgba(99,102,241,0.28) 0%, transparent 65%)"
-          filter="blur(72px)"
-          pointerEvents="none"
-        />
-        <Box
-          position="absolute"
-          bottom="-80px"
-          left="38%"
-          w="380px"
-          h="380px"
-          borderRadius="50%"
-          bg="radial-gradient(circle, rgba(6,182,212,0.18) 0%, transparent 65%)"
+          bg="radial-gradient(ellipse, rgba(0,102,204,0.08) 0%, transparent 70%)"
           filter="blur(60px)"
           pointerEvents="none"
         />
 
-        <Box mx="auto" maxW="980px" textAlign="center" position="relative">
-          {/* Eyebrow pill */}
-          <Box
-            display="inline-flex"
-            alignItems="center"
-            px="14px"
-            py="6px"
-            borderRadius="9999px"
-            bg="rgba(0,102,204,0.18)"
-            border="1px solid rgba(0,102,204,0.38)"
-            mb="24px"
-          >
-            <Text
-              fontSize="14px"
-              fontWeight="600"
-              letterSpacing="0.2px"
-              fontFamily={FT}
-              color={C.actionBlueOnDark}
-            >
-              ИИ-платформа нового поколения
-            </Text>
-          </Box>
+        <Box mx="auto" maxW="1040px" textAlign="center" position="relative">
+          <SectionEyebrow color={C.violet}>ИИ-платформа для работы и жизни</SectionEyebrow>
 
           <Heading
             as="h1"
-            fontSize={{ base: "38px", sm: "50px", md: "66px" }}
+            fontSize={{ base: "44px", sm: "60px", md: "80px" }}
             fontWeight="600"
             lineHeight="1.04"
-            letterSpacing="-0.5px"
+            letterSpacing="-0.025em"
             fontFamily={FD}
-            color="white"
-            mb="24px"
+            color={C.ink}
+            mb="20px"
+            maxW="900px"
+            mx="auto"
           >
             Один сервис для всего,
             <br />
@@ -498,716 +588,764 @@ export default function HomePage() {
           </Heading>
 
           <Text
-            fontSize={{ base: "19px", md: "24px" }}
-            fontWeight="300"
-            lineHeight="1.5"
+            fontSize={{ base: "19px", md: "22px" }}
+            fontWeight="400"
+            lineHeight="1.45"
+            letterSpacing="-0.012em"
             fontFamily={FD}
-            color="rgba(255,255,255,0.68)"
-            mb="40px"
-            maxW="620px"
+            color={C.inkSecondary}
+            mb="36px"
+            maxW="640px"
             mx="auto"
           >
-            Диалог с лучшими моделями, поиск в интернете со ссылками на источники
-            и генерация изображений — всё на русском языке, в одном окне.
+            Диалог с лучшими моделями, веб-поиск со ссылками на источники и генерация
+            изображений — на русском, в одном окне.
           </Text>
 
           <HStack
-            spacing="12px"
+            spacing="6px"
             justify="center"
             flexWrap="wrap"
             mb={{ base: "56px", md: "72px" }}
           >
-            <CtaPrimary href="/chat" large>Начать бесплатно</CtaPrimary>
-            <CtaOutline href="#features">Смотреть возможности</CtaOutline>
+            <CtaPrimary href="/chat" large>
+              Начать бесплатно
+            </CtaPrimary>
+            <CtaSecondary href="#features">Смотреть возможности</CtaSecondary>
           </HStack>
 
-          {/* Glass product preview */}
-          <GlassCard
-            p={{ base: "20px", md: "28px" }}
-            borderRadius="24px"
-            hover={false}
-            mx="auto"
-            maxW="720px"
-            textAlign="left"
-          >
-            {/* Capability tabs */}
-            <HStack spacing="8px" mb="20px" flexWrap="wrap">
-              {[
-                { icon: FiMessageSquare, label: "ИИ-чат", active: true, color: C.actionBlueOnDark },
-                { icon: FiSearch, label: "Веб-поиск", active: false, color: "rgba(255,255,255,0.45)" },
-                { icon: FiImage, label: "Изображения", active: false, color: "rgba(255,255,255,0.45)" },
-              ].map((tab) => (
-                <HStack
-                  key={tab.label}
-                  spacing="6px"
-                  px="14px"
-                  py="6px"
-                  borderRadius="9999px"
-                  bg={tab.active ? "rgba(0,102,204,0.28)" : "rgba(255,255,255,0.06)"}
-                  border={
-                    tab.active
-                      ? "1px solid rgba(0,102,204,0.50)"
-                      : "1px solid rgba(255,255,255,0.08)"
-                  }
-                >
-                  <Icon as={tab.icon} color={tab.color} boxSize="13px" />
-                  <Text
-                    fontSize="13px"
-                    fontWeight={tab.active ? "600" : "400"}
-                    fontFamily={FT}
-                    color={tab.active ? "white" : "rgba(255,255,255,0.52)"}
-                  >
-                    {tab.label}
-                  </Text>
-                </HStack>
-              ))}
-            </HStack>
-
-            {/* Chat bubbles */}
-            <VStack align="stretch" spacing="10px">
-              <Box
-                alignSelf="flex-start"
-                bg="rgba(255,255,255,0.08)"
-                border="1px solid rgba(255,255,255,0.10)"
-                px="16px"
-                py="12px"
-                borderRadius="14px 14px 14px 4px"
-                maxW="82%"
-              >
-                <Text
-                  fontSize="15px"
-                  fontFamily={FT}
-                  color="rgba(255,255,255,0.88)"
-                  lineHeight="1.5"
-                >
-                  Напиши коммерческое предложение для небольшой бухгалтерской компании
-                </Text>
-              </Box>
-              <Box
-                alignSelf="flex-end"
-                bg="linear-gradient(135deg, #0066cc 0%, #0071e3 100%)"
-                px="16px"
-                py="12px"
-                borderRadius="14px 14px 4px 14px"
-                maxW="82%"
-                boxShadow="0 4px 20px rgba(0,102,204,0.40)"
-              >
-                <Text fontSize="15px" fontFamily={FT} color="white" lineHeight="1.5">
-                  Готово! Вот профессиональное КП с акцентом на доверие, конкретные
-                  выгоды и чёткий призыв к действию…
-                </Text>
-              </Box>
-              {/* Model chips */}
-              <HStack spacing="8px" mt="4px" flexWrap="wrap">
-                {["GPT-4o", "Claude 3.5", "Gemini Pro"].map((m) => (
+          {/* Large floating product scene — replaces nested chat card */}
+          <Box mx="auto" maxW="940px">
+            <MacChrome>
+              <Box p={{ base: "20px", md: "32px" }} bg={C.canvas}>
+                <HStack spacing="8px" mb="20px">
                   <Box
-                    key={m}
                     px="10px"
                     py="4px"
                     borderRadius="9999px"
-                    bg="rgba(255,255,255,0.06)"
-                    border="1px solid rgba(255,255,255,0.10)"
+                    bg={C.actionBlue}
+                    color="white"
+                    fontSize="12px"
+                    fontWeight="600"
+                    fontFamily={FT}
                   >
-                    <Text fontSize="12px" fontFamily={FT} color="rgba(255,255,255,0.45)">
-                      {m}
+                    ИИ-чат
+                  </Box>
+                  <Box
+                    px="10px"
+                    py="4px"
+                    borderRadius="9999px"
+                    bg={C.canvasFog}
+                    color={C.inkSecondary}
+                    fontSize="12px"
+                    fontFamily={FT}
+                  >
+                    Веб-поиск
+                  </Box>
+                  <Box
+                    px="10px"
+                    py="4px"
+                    borderRadius="9999px"
+                    bg={C.canvasFog}
+                    color={C.inkSecondary}
+                    fontSize="12px"
+                    fontFamily={FT}
+                  >
+                    Изображения
+                  </Box>
+                </HStack>
+
+                <VStack align="stretch" spacing="12px" textAlign="left">
+                  <Box
+                    alignSelf="flex-start"
+                    bg={C.canvasFog}
+                    px="18px"
+                    py="14px"
+                    borderRadius="16px 16px 16px 4px"
+                    maxW={{ base: "90%", md: "70%" }}
+                  >
+                    <Text
+                      fontSize={{ base: "15px", md: "16px" }}
+                      fontFamily={FT}
+                      color={C.ink}
+                      lineHeight="1.5"
+                    >
+                      Напиши коммерческое предложение для небольшой бухгалтерской компании
                     </Text>
                   </Box>
-                ))}
-                <Text fontSize="12px" fontFamily={FT} color="rgba(255,255,255,0.28)">
-                  и другие
-                </Text>
-              </HStack>
-            </VStack>
-          </GlassCard>
+                  <Box
+                    alignSelf="flex-end"
+                    bg={C.actionBlue}
+                    px="18px"
+                    py="14px"
+                    borderRadius="16px 16px 4px 16px"
+                    maxW={{ base: "90%", md: "70%" }}
+                  >
+                    <Text
+                      fontSize={{ base: "15px", md: "16px" }}
+                      fontFamily={FT}
+                      color="white"
+                      lineHeight="1.5"
+                    >
+                      Готово. Вот вариант КП с фокусом на доверие, конкретные выгоды и
+                      чёткий следующий шаг.
+                    </Text>
+                  </Box>
+
+                  <HStack spacing="6px" mt="6px" flexWrap="wrap">
+                    {["GPT-4o", "Claude 3.5", "Gemini Pro"].map((m) => (
+                      <Box
+                        key={m}
+                        px="9px"
+                        py="3px"
+                        borderRadius="9999px"
+                        bg={C.canvasFog}
+                      >
+                        <Text fontSize="11px" fontFamily={FT} color={C.inkSecondary}>
+                          {m}
+                        </Text>
+                      </Box>
+                    ))}
+                    <Text fontSize="11px" fontFamily={FT} color={C.inkTertiary}>
+                      и другие
+                    </Text>
+                  </HStack>
+                </VStack>
+              </Box>
+            </MacChrome>
+          </Box>
         </Box>
       </Box>
 
-      {/* ── Bento capabilities ─────────────────────────────────────── */}
+      {/* ── Capabilities (3 hero tiles, light) ─────────────────────── */}
       <Box
         as="section"
         id="features"
-        bg={C.surfaceTile1}
-        py={{ base: "64px", md: "80px" }}
+        bg={C.canvasFog}
+        py={{ base: "72px", md: "104px" }}
         px={{ base: "24px", md: "48px" }}
       >
-        <Box mx="auto" maxW="1200px">
-          <Box textAlign="center" mb="48px">
+        <Box mx="auto" maxW="1180px">
+          <Box mb={{ base: "40px", md: "56px" }} maxW="720px">
+            <SectionEyebrow>Возможности</SectionEyebrow>
             <Heading
               as="h2"
-              fontSize={{ base: "28px", md: "40px" }}
+              fontSize={{ base: "32px", md: "52px" }}
               fontWeight="600"
-              lineHeight="1.1"
+              lineHeight="1.06"
+              letterSpacing="-0.022em"
               fontFamily={FD}
-              color="white"
+              color={C.ink}
               mb="16px"
             >
-              Три мощных инструмента в одном.
+              Три инструмента,
+              <br />
+              одно окно.
             </Heading>
             <Text
-              fontSize={{ base: "19px", md: "22px" }}
-              fontWeight="300"
+              fontSize={{ base: "18px", md: "20px" }}
+              fontWeight="400"
               lineHeight="1.5"
               fontFamily={FD}
-              color="rgba(255,255,255,0.58)"
-              maxW="500px"
-              mx="auto"
+              color={C.inkSecondary}
+              maxW="540px"
             >
               Больше не нужно держать пять сервисов открытыми одновременно.
             </Text>
           </Box>
 
-          {/* Bento grid */}
+          {/* 2x1 bento: lead tile (2 cols) + 2 stacked tiles */}
           <Box
             display="grid"
-            gridTemplateColumns={{ base: "1fr", md: "repeat(3, 1fr)" }}
-            gap="16px"
+            gridTemplateColumns={{ base: "1fr", lg: "1.4fr 1fr" }}
+            gap="20px"
           >
-            {/* ── AI Chat (spans 2 cols) */}
-            <GlassCard
-              gridColumn={{ base: "1", md: "1 / 3" }}
-              p={{ base: "28px", md: "36px" }}
-              glowColor="rgba(0,102,204,0.12)"
-            >
-              <HStack spacing="12px" mb="20px">
-                <Box
-                  boxSize="42px"
-                  borderRadius="12px"
-                  bg="rgba(0,102,204,0.20)"
-                  border="1px solid rgba(0,102,204,0.35)"
-                  display="flex"
-                  alignItems="center"
-                  justifyContent="center"
-                  flexShrink={0}
-                >
-                  <Icon as={FiMessageSquare} color={C.actionBlueOnDark} boxSize="18px" />
-                </Box>
-                <Box>
-                  <Caption dark>ИИ-чат</Caption>
-                  <Text
-                    fontSize="17px"
-                    fontWeight="600"
-                    letterSpacing="-0.374px"
-                    fontFamily={FT}
-                    color="white"
-                  >
-                    Диалог с любой моделью
-                  </Text>
-                </Box>
-              </HStack>
+            {/* Lead tile — ИИ-чат */}
+            <Tile p={{ base: "32px", md: "48px" }} borderRadius="28px">
+              <Caption>ИИ-чат</Caption>
+              <Heading
+                as="h3"
+                fontSize={{ base: "26px", md: "34px" }}
+                fontWeight="600"
+                lineHeight="1.12"
+                letterSpacing="-0.018em"
+                fontFamily={FD}
+                color={C.ink}
+                mt="10px"
+                mb="14px"
+              >
+                Диалог с любой моделью.
+              </Heading>
               <Text
-                fontSize="15px"
-                fontFamily={FT}
-                color="rgba(255,255,255,0.58)"
+                fontSize="17px"
                 lineHeight="1.5"
-                mb="24px"
+                fontFamily={FT}
+                color={C.inkSecondary}
+                mb="28px"
+                maxW="480px"
               >
                 GPT-4o, Claude 3.5, Gemini и другие — один интерфейс для всех задач.
-                Пишите письма, анализируйте документы, получайте советы и решайте
-                рабочие вопросы.
+                Пишите письма, анализируйте документы, получайте советы.
               </Text>
 
-              {/* Mini chat */}
-              <VStack align="stretch" spacing="8px" mb="20px">
-                {[
-                  { user: true, text: "Переведи этот абзац на английский и сделай формальнее" },
-                  { user: false, text: "Here is a formal English translation of the paragraph, maintaining professional tone throughout…" },
-                  { user: true, text: "Добавь заключительный абзац с призывом к действию" },
-                ].map((msg, i) => (
-                  <Box
-                    key={i}
-                    alignSelf={msg.user ? "flex-start" : "flex-end"}
-                    bg={
-                      msg.user
-                        ? "rgba(255,255,255,0.07)"
-                        : "rgba(0,102,204,0.24)"
-                    }
-                    border={
-                      msg.user
-                        ? "1px solid rgba(255,255,255,0.08)"
-                        : "1px solid rgba(0,102,204,0.35)"
-                    }
-                    px="14px"
-                    py="10px"
-                    borderRadius="11px"
-                    maxW="76%"
-                  >
-                    <Text
-                      fontSize="13px"
-                      fontFamily={FT}
-                      color={msg.user ? "rgba(255,255,255,0.78)" : "rgba(255,255,255,0.90)"}
-                      lineHeight="1.5"
+              <Box bg={C.canvasFog} borderRadius="16px" p="20px">
+                <VStack align="stretch" spacing="10px">
+                  {[
+                    { user: true, text: "Переведи этот абзац на английский и сделай формальнее" },
+                    { user: false, text: "Here is a formal English translation, maintaining professional tone throughout." },
+                    { user: true, text: "Добавь заключительный абзац с призывом к действию" },
+                  ].map((msg, i) => (
+                    <Box
+                      key={i}
+                      alignSelf={msg.user ? "flex-start" : "flex-end"}
+                      bg={msg.user ? C.canvas : C.actionBlue}
+                      px="14px"
+                      py="10px"
+                      borderRadius="12px"
+                      maxW="86%"
+                      boxShadow={msg.user ? "0 1px 2px rgba(15,23,42,0.04)" : "none"}
                     >
-                      {msg.text}
-                    </Text>
-                  </Box>
-                ))}
-              </VStack>
-              <CtaLink href="/chat" dark>
-                Открыть чат
-              </CtaLink>
-            </GlassCard>
+                      <Text
+                        fontSize="14px"
+                        fontFamily={FT}
+                        color={msg.user ? C.ink : "white"}
+                        lineHeight="1.5"
+                      >
+                        {msg.text}
+                      </Text>
+                    </Box>
+                  ))}
+                </VStack>
+              </Box>
 
-            {/* ── Web Search */}
-            <GlassCard
-              gridColumn={{ base: "1", md: "3" }}
-              p={{ base: "28px", md: "32px" }}
-              glowColor="rgba(6,182,212,0.10)"
-            >
-              <HStack spacing="12px" mb="20px">
-                <Box
-                  boxSize="42px"
-                  borderRadius="12px"
-                  bg="rgba(6,182,212,0.16)"
-                  border="1px solid rgba(6,182,212,0.30)"
-                  display="flex"
-                  alignItems="center"
-                  justifyContent="center"
-                  flexShrink={0}
+              <Box mt="20px">
+                <CtaSecondary href="/chat">Открыть чат</CtaSecondary>
+              </Box>
+            </Tile>
+
+            {/* Right column: 2 stacked tiles */}
+            <VStack spacing="20px" align="stretch">
+              <Tile p={{ base: "28px", md: "36px" }} borderRadius="28px">
+                <Caption>Веб-поиск</Caption>
+                <Heading
+                  as="h3"
+                  fontSize={{ base: "22px", md: "26px" }}
+                  fontWeight="600"
+                  lineHeight="1.14"
+                  letterSpacing="-0.016em"
+                  fontFamily={FD}
+                  color={C.ink}
+                  mt="8px"
+                  mb="10px"
                 >
-                  <Icon as={FiSearch} color="#67e8f9" boxSize="18px" />
-                </Box>
-                <Box>
-                  <Caption dark>Веб-поиск</Caption>
-                  <Text
-                    fontSize="17px"
-                    fontWeight="600"
-                    letterSpacing="-0.374px"
-                    fontFamily={FT}
-                    color="white"
-                  >
-                    Актуальные данные
-                  </Text>
-                </Box>
-              </HStack>
-              <Text
-                fontSize="15px"
-                fontFamily={FT}
-                color="rgba(255,255,255,0.58)"
-                lineHeight="1.5"
-                mb="20px"
-              >
-                ИИ ищет в реальном времени и отвечает со ссылками на источники.
-                Больше не нужно гадать, свежие ли данные.
-              </Text>
+                  Свежие данные со ссылками.
+                </Heading>
+                <Text
+                  fontSize="15px"
+                  lineHeight="1.5"
+                  fontFamily={FT}
+                  color={C.inkSecondary}
+                  mb="20px"
+                >
+                  ИИ ищет в реальном времени и показывает источники.
+                </Text>
 
-              {/* Source result chips */}
-              <VStack spacing="8px" align="stretch">
-                {[
-                  { src: "РБК", text: "Курс доллара на сегодня составляет…" },
-                  { src: "Forbes", text: "Топ-10 ИИ-инструментов для бизнеса 2025…" },
-                  { src: "VC.ru", text: "Как ChatGPT изменил рынок контента…" },
-                ].map((r) => (
-                  <Box
-                    key={r.src}
-                    p="12px"
-                    bg="rgba(255,255,255,0.04)"
-                    border="1px solid rgba(255,255,255,0.07)"
-                    borderRadius="11px"
-                  >
-                    <HStack spacing="8px" mb="5px">
+                <VStack spacing="8px" align="stretch">
+                  {[
+                    { src: "РБК", text: "Курс доллара на сегодня…" },
+                    { src: "Forbes", text: "Топ-10 ИИ-инструментов 2025…" },
+                  ].map((r) => (
+                    <Flex
+                      key={r.src}
+                      gap="10px"
+                      p="10px 12px"
+                      bg={C.canvasFog}
+                      borderRadius="10px"
+                      align="center"
+                    >
                       <Box
-                        px="8px"
+                        px="7px"
                         py="2px"
-                        borderRadius="9999px"
-                        bg="rgba(6,182,212,0.18)"
-                        border="1px solid rgba(6,182,212,0.28)"
+                        borderRadius="6px"
+                        bg={C.canvas}
+                        border="1px solid"
+                        borderColor={C.hairlineSoft}
                       >
                         <Text
                           fontSize="11px"
                           fontWeight="600"
                           fontFamily={FT}
-                          color="#67e8f9"
+                          color={C.ink}
                         >
                           {r.src}
                         </Text>
                       </Box>
-                    </HStack>
-                    <Text
-                      fontSize="13px"
-                      fontFamily={FT}
-                      color="rgba(255,255,255,0.58)"
-                      lineHeight="1.4"
-                    >
-                      {r.text}
-                    </Text>
-                  </Box>
-                ))}
-              </VStack>
-              <Box mt="16px">
-                <CtaLink href="/chat" dark>
-                  Попробовать поиск
-                </CtaLink>
-              </Box>
-            </GlassCard>
+                      <Text
+                        fontSize="13px"
+                        fontFamily={FT}
+                        color={C.inkSecondary}
+                        noOfLines={1}
+                      >
+                        {r.text}
+                      </Text>
+                    </Flex>
+                  ))}
+                </VStack>
 
-            {/* ── Image generation */}
-            <GlassCard
-              gridColumn={{ base: "1", md: "1" }}
-              p={{ base: "28px", md: "32px" }}
-              glowColor="rgba(99,102,241,0.10)"
-            >
-              <HStack spacing="12px" mb="20px">
-                <Box
-                  boxSize="42px"
-                  borderRadius="12px"
-                  bg="rgba(99,102,241,0.20)"
-                  border="1px solid rgba(99,102,241,0.35)"
-                  display="flex"
-                  alignItems="center"
-                  justifyContent="center"
-                  flexShrink={0}
+                <Box mt="16px">
+                  <CtaSecondary href="/chat">Попробовать поиск</CtaSecondary>
+                </Box>
+              </Tile>
+
+              <Tile p={{ base: "28px", md: "36px" }} borderRadius="28px">
+                <Caption>Генерация</Caption>
+                <Heading
+                  as="h3"
+                  fontSize={{ base: "22px", md: "26px" }}
+                  fontWeight="600"
+                  lineHeight="1.14"
+                  letterSpacing="-0.016em"
+                  fontFamily={FD}
+                  color={C.ink}
+                  mt="8px"
+                  mb="10px"
                 >
-                  <Icon as={FiImage} color="#a5b4fc" boxSize="18px" />
-                </Box>
-                <Box>
-                  <Caption dark>Генерация</Caption>
-                  <Text
-                    fontSize="17px"
-                    fontWeight="600"
-                    letterSpacing="-0.374px"
-                    fontFamily={FT}
-                    color="white"
-                  >
-                    Изображения по тексту
-                  </Text>
-                </Box>
-              </HStack>
-              <Text
-                fontSize="15px"
-                fontFamily={FT}
-                color="rgba(255,255,255,0.58)"
-                lineHeight="1.5"
-                mb="20px"
-              >
-                Flux, Stable Diffusion и другие. Опишите — получите иллюстрацию за
-                секунды.
-              </Text>
+                  Изображения по тексту.
+                </Heading>
+                <Text
+                  fontSize="15px"
+                  lineHeight="1.5"
+                  fontFamily={FT}
+                  color={C.inkSecondary}
+                  mb="20px"
+                >
+                  Опишите идею — получите иллюстрацию за секунды.
+                </Text>
 
-              <SimpleGrid columns={2} spacing="8px" mb="16px">
-                {[
-                  { label: "Фотореализм", color: "rgba(0,102,204,0.28)" },
-                  { label: "Иллюстрация", color: "rgba(99,102,241,0.28)" },
-                  { label: "Концепт-арт", color: "rgba(6,182,212,0.22)" },
-                  { label: "Абстракция", color: "rgba(139,92,246,0.22)" },
-                ].map((s) => (
-                  <Box
-                    key={s.label}
-                    bg={s.color}
-                    border="1px solid rgba(255,255,255,0.10)"
-                    borderRadius="12px"
-                    h="60px"
-                    display="flex"
-                    alignItems="flex-end"
-                    p="8px"
-                  >
-                    <Text
-                      fontSize="11px"
-                      fontFamily={FT}
-                      color="rgba(255,255,255,0.75)"
-                      fontWeight="600"
-                    >
-                      {s.label}
-                    </Text>
-                  </Box>
-                ))}
-              </SimpleGrid>
-              <CtaLink href="/chat" dark>
-                Сгенерировать изображение
-              </CtaLink>
-            </GlassCard>
-
-            {/* ── Quick tasks (spans 2 cols) */}
-            <GlassCard
-              gridColumn={{ base: "1", md: "2 / 4" }}
-              p={{ base: "28px", md: "32px" }}
-            >
-              <Caption dark>Быстрые задачи</Caption>
-              <Text
-                fontSize="21px"
-                fontWeight="600"
-                letterSpacing="0.231px"
-                fontFamily={FD}
-                color="white"
-                mt="4px"
-                mb="20px"
-              >
-                Что можно сделать за 5 минут
-              </Text>
-              <SimpleGrid columns={{ base: 1, sm: 2, md: 3 }} spacing="10px">
-                {[
-                  "Написать деловое письмо",
-                  "Узнать актуальный курс валют",
-                  "Сгенерировать аватар для соцсетей",
-                  "Кратко пересказать документ",
-                  "Придумать 10 идей для поста",
-                  "Перевести текст с любого языка",
-                ].map((task) => (
-                  <HStack
-                    key={task}
-                    spacing="10px"
-                    p="12px"
-                    bg="rgba(255,255,255,0.04)"
-                    border="1px solid rgba(255,255,255,0.07)"
-                    borderRadius="11px"
-                  >
+                <SimpleGrid columns={4} spacing="6px" mb="18px">
+                  {[C.actionBlue, C.violet, "#a5b4fc", "#0b3b8c"].map((bg, i) => (
                     <Box
-                      w="5px"
-                      h="5px"
-                      borderRadius="50%"
-                      bg={C.actionBlueOnDark}
-                      flexShrink={0}
+                      key={i}
+                      bg={bg}
+                      borderRadius="8px"
+                      h="46px"
+                      opacity={0.85}
                     />
-                    <Text
-                      fontSize="14px"
-                      fontFamily={FT}
-                      color="rgba(255,255,255,0.72)"
-                      lineHeight="1.4"
-                    >
-                      {task}
-                    </Text>
-                  </HStack>
-                ))}
-              </SimpleGrid>
-            </GlassCard>
+                  ))}
+                </SimpleGrid>
+
+                <CtaSecondary href="/chat">Сгенерировать изображение</CtaSecondary>
+              </Tile>
+            </VStack>
           </Box>
         </Box>
       </Box>
 
-      {/* ── Why ИИСеть (parchment) ─────────────────────────────────── */}
+      {/* ── Horizontal scroll: Возможности ИИСеть (product tiles) ── */}
       <Box
         as="section"
-        bg={C.canvasParchment}
-        py={{ base: "64px", md: "80px" }}
-        px={{ base: "24px", md: "48px" }}
+        id="explore"
+        bg={C.canvasPearl}
+        py={{ base: "72px", md: "104px" }}
       >
-        <Box mx="auto" maxW="980px">
-          <Box textAlign="center" mb="48px">
+        <Box mx="auto" maxW="1180px" px={{ base: "24px", md: "48px" }} mb="40px">
+          <SectionEyebrow>Что можно сделать</SectionEyebrow>
+          <Flex
+            direction={{ base: "column", md: "row" }}
+            justify="space-between"
+            align={{ base: "flex-start", md: "flex-end" }}
+            gap="16px"
+          >
             <Heading
               as="h2"
-              fontSize={{ base: "28px", md: "40px" }}
+              fontSize={{ base: "32px", md: "52px" }}
               fontWeight="600"
-              lineHeight="1.1"
+              lineHeight="1.06"
+              letterSpacing="-0.022em"
+              fontFamily={FD}
+              color={C.ink}
+              maxW="720px"
+            >
+              Возможности ИИСеть.
+            </Heading>
+            <CtaSecondary href="/chat">Открыть всё в чате</CtaSecondary>
+          </Flex>
+        </Box>
+
+        {/* Edge-faded horizontal scroller, no JS, scroll-snap, swipe-friendly */}
+        <Box
+          sx={{
+            overflowX: "auto",
+            overflowY: "hidden",
+            scrollSnapType: "x mandatory",
+            scrollPaddingLeft: "48px",
+            scrollbarWidth: "none",
+            "&::-webkit-scrollbar": { display: "none" },
+            WebkitOverflowScrolling: "touch",
+            maskImage:
+              "linear-gradient(to right, transparent 0, black 56px, black calc(100% - 56px), transparent 100%)",
+            WebkitMaskImage:
+              "linear-gradient(to right, transparent 0, black 56px, black calc(100% - 56px), transparent 100%)",
+            "@media (prefers-reduced-motion: reduce)": {
+              scrollBehavior: "auto",
+            },
+          }}
+        >
+          <Flex
+            as="ul"
+            listStyleType="none"
+            gap="20px"
+            px={{ base: "24px", md: "48px" }}
+            py="8px"
+            mx="auto"
+            maxW="1180px"
+            w="max-content"
+          >
+            {featureTiles.map((t) => (
+              <Box
+                as="li"
+                key={t.title}
+                sx={{ scrollSnapAlign: "start" }}
+                w={{ base: "78vw", sm: "360px", md: "380px" }}
+                minW={{ base: "78vw", sm: "360px", md: "380px" }}
+              >
+                <Tile
+                  p={{ base: "26px", md: "30px" }}
+                  borderRadius="24px"
+                  h="100%"
+                  display="flex"
+                  flexDirection="column"
+                  justifyContent="space-between"
+                  minH="280px"
+                >
+                  <Box>
+                    <Flex
+                      align="center"
+                      justify="center"
+                      boxSize="40px"
+                      borderRadius="12px"
+                      bg={C.canvasFog}
+                      mb="20px"
+                    >
+                      <Icon as={t.icon} color={t.accent} boxSize="18px" />
+                    </Flex>
+                    <Caption>{t.eyebrow}</Caption>
+                    <Heading
+                      as="h3"
+                      fontSize="22px"
+                      fontWeight="600"
+                      lineHeight="1.18"
+                      letterSpacing="-0.014em"
+                      fontFamily={FD}
+                      color={C.ink}
+                      mt="8px"
+                      mb="10px"
+                    >
+                      {t.title}
+                    </Heading>
+                    <Text
+                      fontSize="15px"
+                      fontFamily={FT}
+                      color={C.inkSecondary}
+                      lineHeight="1.5"
+                    >
+                      {t.text}
+                    </Text>
+                  </Box>
+                  <Box mt="20px">
+                    <Box
+                      as={Link}
+                      href={t.href}
+                      display="inline-flex"
+                      alignItems="center"
+                      gap="3px"
+                      fontSize="15px"
+                      fontWeight="400"
+                      letterSpacing="-0.16px"
+                      fontFamily={FT}
+                      color={t.accent}
+                      textDecoration="none"
+                      _hover={{ textDecoration: "underline" }}
+                      transition="color 0.15s ease"
+                    >
+                      {t.cta}
+                      <Icon as={FiArrowRight} boxSize="14px" />
+                    </Box>
+                  </Box>
+                </Tile>
+              </Box>
+            ))}
+          </Flex>
+        </Box>
+      </Box>
+
+      {/* ── Why ИИСеть (light, asymmetric) ─────────────────────────── */}
+      <Box
+        as="section"
+        bg={C.canvasFog}
+        py={{ base: "72px", md: "104px" }}
+        px={{ base: "24px", md: "48px" }}
+      >
+        <Box mx="auto" maxW="1180px">
+          <Box mb={{ base: "40px", md: "56px" }} maxW="720px">
+            <SectionEyebrow>Почему ИИСеть</SectionEyebrow>
+            <Heading
+              as="h2"
+              fontSize={{ base: "32px", md: "52px" }}
+              fontWeight="600"
+              lineHeight="1.06"
+              letterSpacing="-0.022em"
               fontFamily={FD}
               color={C.ink}
               mb="16px"
             >
-              Почему выбирают ИИСеть
+              Не «ИИ-сервис».
+              <br />
+              Конкретная польза.
             </Heading>
             <Text
-              fontSize={{ base: "19px", md: "22px" }}
-              fontWeight="300"
+              fontSize={{ base: "18px", md: "20px" }}
+              fontWeight="400"
               lineHeight="1.5"
               fontFamily={FD}
-              color="#555"
-              maxW="480px"
-              mx="auto"
+              color={C.inkSecondary}
+              maxW="540px"
             >
-              Не абстрактный «ИИ-сервис» — а конкретная польза каждый день.
+              Четыре причины, почему люди возвращаются каждый день.
             </Text>
           </Box>
 
           <SimpleGrid columns={{ base: 1, md: 2, lg: 4 }} spacing="20px">
             {whyCards.map((w) => (
-              <Box
-                key={w.title}
-                bg={C.canvas}
-                borderRadius="18px"
-                p={{ base: "24px", md: "28px" }}
-                border="1px solid"
-                borderColor={C.hairline}
-                transition="all 0.22s ease"
-                _hover={{
-                  transform: "translateY(-4px)",
-                  boxShadow: "0 12px 32px rgba(0,0,0,0.08)",
-                  borderColor: "rgba(0,102,204,0.30)",
-                }}
-              >
-                <Box
+              <Tile key={w.title} p={{ base: "28px", md: "30px" }} borderRadius="22px">
+                <Flex
                   boxSize="44px"
                   borderRadius="12px"
-                  bg={C.canvasParchment}
-                  display="flex"
-                  alignItems="center"
-                  justifyContent="center"
-                  mb="16px"
+                  bg={C.canvasFog}
+                  align="center"
+                  justify="center"
+                  mb="18px"
                 >
                   <Icon as={w.icon} color={C.actionBlue} boxSize="20px" />
-                </Box>
+                </Flex>
                 <Text
-                  fontSize="17px"
+                  fontSize="18px"
                   fontWeight="600"
-                  letterSpacing="-0.374px"
-                  lineHeight="1.24"
-                  fontFamily={FT}
+                  letterSpacing="-0.014em"
+                  lineHeight="1.22"
+                  fontFamily={FD}
                   color={C.ink}
                   mb="8px"
                 >
                   {w.title}
                 </Text>
                 <Body muted>{w.text}</Body>
-              </Box>
+              </Tile>
             ))}
           </SimpleGrid>
         </Box>
       </Box>
 
-      {/* ── Pricing (dark + aurora) ────────────────────────────────── */}
+      {/* ── Pricing (light, one dark accent tile) ──────────────────── */}
       <Box
         as="section"
         id="pricing"
-        position="relative"
-        overflow="hidden"
-        bg={C.heroBase}
-        py={{ base: "64px", md: "80px" }}
+        bg={C.canvasPearl}
+        py={{ base: "72px", md: "104px" }}
         px={{ base: "24px", md: "48px" }}
       >
-        <Box
-          position="absolute"
-          top="0"
-          left="50%"
-          transform="translateX(-50%)"
-          w="900px"
-          h="400px"
-          borderRadius="50%"
-          bg="radial-gradient(circle, rgba(0,102,204,0.14) 0%, transparent 70%)"
-          filter="blur(80px)"
-          pointerEvents="none"
-        />
-
-        <Box mx="auto" maxW="1000px" position="relative">
-          <Box textAlign="center" mb="48px">
+        <Box mx="auto" maxW="1080px">
+          <Box mb={{ base: "40px", md: "56px" }} textAlign="center">
+            <SectionEyebrow>Тарифы</SectionEyebrow>
             <Heading
               as="h2"
-              fontSize={{ base: "28px", md: "40px" }}
+              fontSize={{ base: "32px", md: "52px" }}
               fontWeight="600"
-              lineHeight="1.1"
+              lineHeight="1.06"
+              letterSpacing="-0.022em"
               fontFamily={FD}
-              color="white"
+              color={C.ink}
               mb="16px"
             >
-              Тарифы
+              Платите только за то,
+              <br />
+              что используете.
             </Heading>
             <Text
-              fontSize={{ base: "19px", md: "22px" }}
-              fontWeight="300"
+              fontSize={{ base: "18px", md: "20px" }}
+              fontWeight="400"
               lineHeight="1.5"
               fontFamily={FD}
-              color="rgba(255,255,255,0.58)"
+              color={C.inkSecondary}
+              maxW="520px"
+              mx="auto"
             >
-              Регистрация бесплатна. Платите только за то, что используете.
+              Регистрация бесплатна. Тариф можно менять в любой момент.
             </Text>
           </Box>
 
-          <SimpleGrid columns={{ base: 1, md: 3 }} spacing="16px">
-            {pricingPlans.map((plan) => (
-              <GlassCard
-                key={plan.name}
-                p={{ base: "28px", md: "32px" }}
-                borderRadius="20px"
-                position="relative"
-                border={
-                  plan.highlight
-                    ? "1px solid rgba(0,102,204,0.42)"
-                    : "1px solid rgba(255,255,255,0.10)"
-                }
-                glowColor={plan.highlight ? "rgba(0,102,204,0.20)" : undefined}
-              >
-                {plan.badge && (
-                  <Box
-                    position="absolute"
-                    top="-13px"
-                    left="50%"
-                    transform="translateX(-50%)"
-                    bg={C.actionBlue}
-                    color="white"
-                    fontSize="12px"
-                    fontWeight="600"
-                    lineHeight="1.29"
-                    fontFamily={FT}
-                    borderRadius="9999px"
-                    px="14px"
-                    py="4px"
-                    whiteSpace="nowrap"
-                    boxShadow="0 0 18px rgba(0,102,204,0.55)"
-                  >
-                    {plan.badge}
-                  </Box>
-                )}
-
-                <Text
-                  fontSize="21px"
-                  fontWeight="600"
-                  letterSpacing="0.231px"
-                  fontFamily={FD}
-                  color="white"
-                  mb="12px"
+          <SimpleGrid columns={{ base: 1, md: 3 }} spacing="20px" alignItems="stretch">
+            {pricingPlans.map((plan) => {
+              const isDark = plan.dark;
+              return (
+                <Tile
+                  key={plan.name}
+                  bg={isDark ? C.inkDeep : C.canvas}
+                  p={{ base: "30px", md: "36px" }}
+                  borderRadius="26px"
+                  position="relative"
+                  display="flex"
+                  flexDirection="column"
+                  sx={
+                    isDark
+                      ? {
+                          boxShadow:
+                            "0 1px 2px rgba(10,10,12,0.10), 0 24px 48px -16px rgba(10,10,12,0.30)",
+                        }
+                      : undefined
+                  }
                 >
-                  {plan.name}
-                </Text>
-                <HStack align="baseline" spacing="6px" mb="8px">
+                  {plan.badge && (
+                    <Box
+                      position="absolute"
+                      top="-12px"
+                      left="50%"
+                      transform="translateX(-50%)"
+                      bg={C.actionBlue}
+                      color="white"
+                      fontSize="11px"
+                      fontWeight="600"
+                      letterSpacing="0.04em"
+                      textTransform="uppercase"
+                      fontFamily={FT}
+                      borderRadius="9999px"
+                      px="12px"
+                      py="4px"
+                      whiteSpace="nowrap"
+                    >
+                      {plan.badge}
+                    </Box>
+                  )}
+
                   <Text
-                    fontSize="40px"
+                    fontSize="14px"
                     fontWeight="600"
-                    lineHeight="1.1"
-                    fontFamily={FD}
-                    color="white"
+                    letterSpacing="0.04em"
+                    textTransform="uppercase"
+                    fontFamily={FT}
+                    color={isDark ? "rgba(255,255,255,0.55)" : C.inkTertiary}
+                    mb="14px"
                   >
-                    {plan.price}
+                    {plan.name}
                   </Text>
-                  <Caption dark>{plan.period}</Caption>
-                </HStack>
-                <Body dark muted>
-                  {plan.desc}
-                </Body>
-                <Box mt="8px" mb="20px">
-                  <Caption dark>{plan.detail}</Caption>
-                </Box>
-                <CtaPrimary href={plan.cta.href}>{plan.cta.label}</CtaPrimary>
-              </GlassCard>
-            ))}
+
+                  <HStack align="baseline" spacing="6px" mb="10px">
+                    <Text
+                      fontSize="44px"
+                      fontWeight="600"
+                      lineHeight="1.05"
+                      letterSpacing="-0.022em"
+                      fontFamily={FD}
+                      color={isDark ? "white" : C.ink}
+                      sx={{ fontVariantNumeric: "tabular-nums" }}
+                    >
+                      {plan.price}
+                    </Text>
+                    <Text
+                      fontSize="14px"
+                      fontFamily={FT}
+                      color={isDark ? "rgba(255,255,255,0.55)" : C.inkTertiary}
+                    >
+                      {plan.period}
+                    </Text>
+                  </HStack>
+
+                  <Body dark={isDark} muted={isDark}>
+                    {plan.desc}
+                  </Body>
+                  <Box mt="10px" mb="24px">
+                    <Text
+                      fontSize="14px"
+                      fontFamily={FT}
+                      color={isDark ? "rgba(255,255,255,0.62)" : C.inkSecondary}
+                      lineHeight="1.45"
+                    >
+                      {plan.detail}
+                    </Text>
+                  </Box>
+
+                  <Box mt="auto">
+                    {isDark ? (
+                      <Button
+                        as={Link}
+                        href={plan.cta.href}
+                        bg="white"
+                        color={C.ink}
+                        borderRadius="9999px"
+                        px="20px"
+                        py="10px"
+                        fontSize="15px"
+                        fontWeight="500"
+                        fontFamily={FT}
+                        _hover={{ bg: "#f5f5f7" }}
+                        _active={{ transform: "scale(0.98)" }}
+                        transition="background-color 0.15s ease, transform 0.15s ease"
+                        h="auto"
+                        w={{ base: "100%", md: "auto" }}
+                      >
+                        {plan.cta.label}
+                      </Button>
+                    ) : (
+                      <CtaPrimary href={plan.cta.href}>{plan.cta.label}</CtaPrimary>
+                    )}
+                  </Box>
+                </Tile>
+              );
+            })}
           </SimpleGrid>
 
-          <Box textAlign="center" mt="28px">
-            <CtaLink href="/profile" dark>
-              Все тарифы и сравнение
-            </CtaLink>
+          <Box textAlign="center" mt="36px">
+            <CtaSecondary href="/profile">Все тарифы и сравнение</CtaSecondary>
           </Box>
         </Box>
       </Box>
 
-      {/* ── How to start ───────────────────────────────────────────── */}
+      {/* ── How to start (light editorial timeline) ────────────────── */}
       <Box
         as="section"
         id="start"
-        bg={C.surfaceTile2}
-        py={{ base: "64px", md: "80px" }}
+        bg={C.canvasFog}
+        py={{ base: "72px", md: "104px" }}
         px={{ base: "24px", md: "48px" }}
       >
-        <Box mx="auto" maxW="980px">
-          <Box textAlign="center" mb="48px">
+        <Box mx="auto" maxW="1080px">
+          <Box mb={{ base: "40px", md: "56px" }} maxW="720px">
+            <SectionEyebrow>Как начать</SectionEyebrow>
             <Heading
               as="h2"
-              fontSize={{ base: "28px", md: "40px" }}
+              fontSize={{ base: "32px", md: "52px" }}
               fontWeight="600"
-              lineHeight="1.1"
+              lineHeight="1.06"
+              letterSpacing="-0.022em"
               fontFamily={FD}
-              color="white"
+              color={C.ink}
               mb="16px"
             >
-              Как начать за 3 шага
+              Три шага. Без настроек.
             </Heading>
             <Text
-              fontSize={{ base: "19px", md: "22px" }}
-              fontWeight="300"
+              fontSize={{ base: "18px", md: "20px" }}
+              fontWeight="400"
               lineHeight="1.5"
               fontFamily={FD}
-              color="rgba(255,255,255,0.55)"
+              color={C.inkSecondary}
+              maxW="520px"
             >
-              Никаких настроек. Никаких API-ключей. Просто чат.
+              Никаких API-ключей. Никаких сложных интерфейсов. Просто чат.
             </Text>
           </Box>
 
-          <SimpleGrid columns={{ base: 1, md: 3 }} spacing="16px">
+          <SimpleGrid columns={{ base: 1, md: 3 }} spacing={{ base: "32px", md: "20px" }}>
             {[
               {
                 n: "01",
@@ -1225,83 +1363,89 @@ export default function HomePage() {
                 d: "Скопируйте, отредактируйте, скачайте. Готово к работе.",
               },
             ].map((s) => (
-              <GlassCard key={s.n} p={{ base: "28px", md: "32px" }} borderRadius="20px">
+              <Box key={s.n} position="relative">
                 <Text
-                  fontSize="34px"
+                  fontSize={{ base: "88px", md: "120px" }}
                   fontWeight="600"
-                  lineHeight="1.1"
+                  lineHeight="1"
+                  letterSpacing="-0.04em"
                   fontFamily={FD}
-                  color={C.actionBlueOnDark}
+                  color={C.hairline}
                   mb="12px"
+                  sx={{ fontVariantNumeric: "tabular-nums" }}
                 >
                   {s.n}
                 </Text>
-                <Text
-                  fontSize="17px"
+                <Heading
+                  as="h3"
+                  fontSize="22px"
                   fontWeight="600"
-                  letterSpacing="-0.374px"
-                  fontFamily={FT}
-                  color="white"
+                  letterSpacing="-0.014em"
+                  fontFamily={FD}
+                  color={C.ink}
                   mb="8px"
                 >
                   {s.t}
-                </Text>
-                <Body dark muted>
-                  {s.d}
-                </Body>
-              </GlassCard>
+                </Heading>
+                <Body muted>{s.d}</Body>
+              </Box>
             ))}
           </SimpleGrid>
         </Box>
       </Box>
 
-      {/* ── Final CTA ──────────────────────────────────────────────── */}
+      {/* ── Final CTA — soft and contained ─────────────────────────── */}
       <Box
         as="section"
         position="relative"
         overflow="hidden"
-        bg={C.heroBase}
-        py={{ base: "80px", md: "120px" }}
+        bg={C.canvasPearl}
+        py={{ base: "88px", md: "128px" }}
         px={{ base: "24px", md: "48px" }}
         textAlign="center"
       >
         <Box
           position="absolute"
-          top="0"
-          left="0"
-          right="0"
-          bottom="0"
-          bg="radial-gradient(ellipse at 50% 60%, rgba(0,102,204,0.20) 0%, transparent 68%)"
+          top="50%"
+          left="50%"
+          transform="translate(-50%, -50%)"
+          w="900px"
+          h="380px"
+          borderRadius="50%"
+          bg="radial-gradient(ellipse, rgba(0,102,204,0.07) 0%, transparent 70%)"
+          filter="blur(60px)"
           pointerEvents="none"
         />
-        <Box mx="auto" maxW="680px" position="relative">
+        <Box mx="auto" maxW="720px" position="relative">
           <Heading
             as="h2"
-            fontSize={{ base: "32px", md: "52px" }}
+            fontSize={{ base: "36px", md: "60px" }}
             fontWeight="600"
-            lineHeight="1.06"
-            letterSpacing="-0.28px"
+            lineHeight="1.04"
+            letterSpacing="-0.024em"
             fontFamily={FD}
-            color="white"
+            color={C.ink}
             mb="20px"
           >
             Попробуйте прямо сейчас.
           </Heading>
           <Text
-            fontSize={{ base: "19px", md: "22px" }}
-            fontWeight="300"
-            lineHeight="1.5"
+            fontSize={{ base: "18px", md: "22px" }}
+            fontWeight="400"
+            lineHeight="1.45"
             fontFamily={FD}
-            color="rgba(255,255,255,0.62)"
-            mb="40px"
+            color={C.inkSecondary}
+            mb="36px"
           >
             Первый запрос — бесплатно. Результат — за секунды.
           </Text>
-          <HStack spacing="12px" justify="center" flexWrap="wrap">
+          <HStack spacing="6px" justify="center" flexWrap="wrap">
             <CtaPrimary href="/chat" large>
               Открыть чат
             </CtaPrimary>
-            <CtaOutline href="/others/sign-in">Зарегистрироваться</CtaOutline>
+            <CtaGhost href="/others/sign-in" large>
+              Зарегистрироваться
+            </CtaGhost>
           </HStack>
         </Box>
       </Box>
@@ -1309,34 +1453,33 @@ export default function HomePage() {
       {/* ── Footer ─────────────────────────────────────────────────── */}
       <Box
         as="footer"
-        bg={C.canvasParchment}
-        py={{ base: "40px", md: "48px" }}
+        bg={C.canvasFog}
+        py={{ base: "44px", md: "56px" }}
         px={{ base: "24px", md: "48px" }}
       >
-        <Box mx="auto" maxW="980px">
+        <Box mx="auto" maxW="1180px">
           <Flex
             direction={{ base: "column", md: "row" }}
             justify="space-between"
             align={{ base: "flex-start", md: "flex-end" }}
             gap="32px"
           >
-            {/* Logo */}
             <VStack align="flex-start" spacing="8px">
               <HStack spacing="10px">
                 <img
                   src="/brand.png"
                   alt="ИИСеть"
                   style={{
-                    width: "28px",
-                    height: "28px",
+                    width: "26px",
+                    height: "26px",
                     borderRadius: "7px",
                     objectFit: "cover",
                   }}
                 />
                 <Text
-                  fontSize="17px"
+                  fontSize="16px"
                   fontWeight="600"
-                  letterSpacing="-0.374px"
+                  letterSpacing="-0.32px"
                   fontFamily={FT}
                   color={C.ink}
                 >
@@ -1346,26 +1489,25 @@ export default function HomePage() {
               <Text
                 fontSize="14px"
                 fontFamily={FT}
-                color={C.inkMuted48}
+                color={C.inkSecondary}
                 lineHeight="1.43"
-                letterSpacing="-0.224px"
+                letterSpacing="-0.16px"
               >
                 ИИ-чат, веб-поиск и генерация изображений
               </Text>
             </VStack>
 
-            {/* Links */}
             <Flex direction={{ base: "column", sm: "row" }} gap={{ base: "24px", md: "48px" }}>
               {Object.entries(footerLinks).map(([section, links]) => (
-                <VStack key={section} align="flex-start" spacing="0">
+                <VStack key={section} align="flex-start" spacing="2px">
                   <Text
-                    fontSize="14px"
+                    fontSize="13px"
                     fontWeight="600"
-                    lineHeight="1.29"
-                    letterSpacing="-0.224px"
+                    letterSpacing="0.04em"
+                    textTransform="uppercase"
                     fontFamily={FT}
-                    color={C.ink}
-                    mb="4px"
+                    color={C.inkTertiary}
+                    mb="6px"
                   >
                     {section}
                   </Text>
@@ -1375,13 +1517,13 @@ export default function HomePage() {
                       as={Link}
                       href={link.href}
                       display="block"
-                      fontSize="17px"
+                      fontSize="15px"
                       fontWeight="400"
-                      lineHeight="2.41"
+                      lineHeight="2"
                       fontFamily={FT}
-                      color={C.actionBlue}
+                      color={C.ink}
                       textDecoration="none"
-                      _hover={{ color: C.actionBlueFocus }}
+                      _hover={{ color: C.actionBlue }}
                       transition="color 0.15s ease"
                     >
                       {link.label}
@@ -1392,14 +1534,14 @@ export default function HomePage() {
             </Flex>
           </Flex>
 
-          <Box mt="32px" pt="20px" borderTop="1px solid" borderColor={C.hairline}>
+          <Box mt="36px" pt="20px" borderTop="1px solid" borderColor={C.hairlineSoft}>
             <Text
               fontSize="12px"
               fontWeight="400"
               lineHeight="1.0"
-              letterSpacing="-0.12px"
+              letterSpacing="-0.06px"
               fontFamily={FT}
-              color={C.inkMuted48}
+              color={C.inkTertiary}
             >
               © {new Date().getFullYear()} ИИСеть. Все права защищены.
             </Text>

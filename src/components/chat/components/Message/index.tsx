@@ -678,7 +678,7 @@ function Message({ message, isLast }: IProps) {
                           throw new Error('save failed');
                         }
                         toast({
-                          title: 'Сохранено в проект',
+                          title: 'Добавлено в память проекта',
                           description:
                             'ИИСеть учтёт это в следующих ответах.',
                           status: 'success',
@@ -698,7 +698,7 @@ function Message({ message, isLast }: IProps) {
                       }
                     }}
                   >
-                    Сохранить в проект
+                    Сохранить в память проекта
                   </MenuItem>
                 )}
               </MenuList>

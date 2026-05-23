@@ -14,6 +14,10 @@ import React, { useContext } from 'react';
 import { useRouter } from 'next/navigation';
 import { ChatAiContext } from '@/contexts/ChatAiContext';
 import { messagesService } from '@/services/ui/MessagesService';
+import {
+  stripSourcesMarker,
+  stripThinkBlocks,
+} from '@/utils/normalizeModelOutput';
 
 // ── Apple typography ──────────────────────────────────────────────
 const FONT_APPLE_TEXT = `'SF Pro Text', -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif`;
@@ -28,6 +32,15 @@ interface IProps {
 function DialogCard({ id, lastMessage, updatedAt }: IProps) {
   const router = useRouter();
   const { setMessages } = useContext(ChatAiContext);
+
+  // CRITICAL: lastMessage в БД может содержать сырой `__IISET_SOURCES__=…`
+  // маркер из web-search ответа. На карточке он не должен светиться.
+  // Чистим markers + think-блоки перед рендером.
+  const safeLastMessage = stripThinkBlocks(
+    stripSourcesMarker(lastMessage || ''),
+  )
+    .replace(/^\s+/, '')
+    .slice(0, 320);
 
   // ── Apple Liquid Glass tokens ───────────────────────────────────
   const cardBg = useColorModeValue(
@@ -165,7 +178,7 @@ function DialogCard({ id, lastMessage, updatedAt }: IProps) {
         wordBreak="break-word"
         flex="1 1 auto"
       >
-        {lastMessage}
+        {safeLastMessage}
       </Heading>
 
       {/* Bottom row: clock + date + Apple blue link */}

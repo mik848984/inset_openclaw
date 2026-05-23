@@ -1246,156 +1246,16 @@ async transformMessagesToQuery({ userMessages, user }: IImagesRequest) {
 
       const baseList = withoutSocial.length ? withoutSocial : organic;
 
-      const topResults = baseList.slice(
-        0,
-        Math.max(3, Math.min(5, baseList.length)),
-      );
-
-      // 2. Переход по ссылкам через Serper Webpages (scrape.serper.dev).
-      //    Используем allSettled + timeout, чтобы один зависший таргет не
-      //    блокировал ответ. Если scrape выдал пусто — берём сниппет.
-      const tScrape =
-        typeof performance !== 'undefined' ? performance.now() : Date.now();
-      const scrapeSettled = await Promise.allSettled(
-        topResults.map(async (item: any) => {
-          const url = item.link || item.url;
-
-          if (!url) {
-            return null;
-          }
-
-          try {
-            const scrapeResponse = await fetchWithTimeout(
-              'https://scrape.serper.dev',
-              {
-                method: 'POST',
-                headers: serperHeaders,
-                body: JSON.stringify({ url }),
-              },
-              6000,
-            );
-
-            const scrapeJson: any = await scrapeResponse.json();
-
-            return {
-              title: item.title,
-              url,
-              snippet: item.snippet,
-              content:
-                (scrapeJson && (scrapeJson.text || scrapeJson.content)) || '',
-            };
-          } catch (e) {
-            console.error('Serper scrape error', e);
-
-            return {
-              title: item.title,
-              url,
-              snippet: item.snippet,
-              content: '',
-            };
-          }
-        }),
-      );
-      const scrapedPages = scrapeSettled.map((r, idx) => {
-        if (r.status === 'fulfilled') return r.value;
-        const item = topResults[idx];
-        return item
-          ? {
-              title: item.title,
-              url: item.link || item.url,
-              snippet: item.snippet,
-              content: '',
-            }
-          : null;
-      });
-
-      console.log(
-        `[CHAT-WS] serper_scrape_done dt=${Math.round(
-          (typeof performance !== 'undefined'
-            ? performance.now()
-            : Date.now()) - tScrape,
-        )}ms scraped_count=${scrapedPages.filter(Boolean).length}`,
-      );
-
-      // Если scrape по какой-то причине не дал текста — всё равно используем сниппеты как источники
-      const pagesFromScrape = scrapedPages.filter(Boolean) as {
-        title: string;
-        url: string;
-        snippet?: string;
-        content: string;
-      }[];
-
-      const docsToUse =
-        pagesFromScrape.length > 0
-          ? pagesFromScrape
-          : topResults.map((item: any) => ({
-              title: item.title,
-              url: item.link || item.url,
-              snippet: item.snippet,
-              content: item.snippet || '',
-            }));
-
-      // 3. Формируем контекст для GPT-OSS
-      const contextText = docsToUse
-        .map((doc, index) => {
-          const shortContent =
-            (doc.content && doc.content.slice(0, 4000)) ||
-            doc.snippet ||
-            'Контент не удалось загрузить.';
-
-          return [
-            `Источник [${index + 1}]`,
-            `URL: ${doc.url}`,
-            doc.title ? `Заголовок: ${doc.title}` : '',
-            doc.snippet ? `Сниппет: ${doc.snippet}` : '',
-            '',
-            shortContent,
-          ]
-            .filter(Boolean)
-            .join('\n');
-        })
-        .join('\n\n-----------------------------\n\n');
-
+      // 2. Lightweight prep: lastUserMessage + сейчас даты нужны для intent
+      //    detection и summary.generatedAt. Тяжёлый scrape + LLM вызов
+      //    перенесены ВНУТРЬ ReadableStream.start(), чтобы клиент получил
+      //    metadata marker сразу после Serper fan-out, а не после scrape.
       const lastUserMessage =
         messages.filter((m) => m.role === 'user').slice(-1)[0]?.content ||
         query;
 
       const now = new Date();
       const currentDate = now.toISOString().split('T')[0];
-
-      const systemPrompt = [
-        'Ты — ИИСеть, умный ассистент с доступом к интернету.',
-        `Текущая дата сервера: ${currentDate}.`,
-        'Отвечай на вопросы пользователя только на русском языке.',
-        'Опирайся только на факты из переданных ниже источников и не придумывай данные.',
-        'Никогда не придумывай дату, температуру, скорость ветра, цены и другие численные значения, если они явно не указаны в источниках.',
-        'Если источники относятся к прошлым датам, отметь это в ответе.',
-        'Если информации не хватает — честно скажи об этом и предложи свериться с профильным сервисом.',
-        'В тексте ставь короткие маркеры цитирования [1], [2], [3] сразу после утверждения, опирающегося на источник.',
-        'Никогда не выводи голые URL и не вставляй markdown-ссылки с полными URL — UI сам покажет карточки источников.',
-        'Никогда не добавляй в конец ответа раздел «Источники», список ссылок или JSON.',
-        'Никогда не выводи теги <think> и не описывай свои размышления.',
-        'Интерфейс может уже показывать виджеты: Knowledge Graph, картинки, новости, места, товары, видео, follow-up вопросы. Не дублируй их полное содержимое — давай краткий вывод и ссылайся на источники.',
-        'Используй таблицу только если пользователь прямо просит таблицу. Для перечислений — обычные маркированные/нумерованные списки.',
-        'Структура: короткий вывод (1–2 предложения), затем детали, при необходимости — «Что важно учесть».',
-      ].join(' ');
-
-      const answerMessages = [
-        {
-          role: 'system',
-          content: systemPrompt,
-        },
-        {
-          role: 'user',
-          content: [
-            `Запрос пользователя: "${lastUserMessage}"`,
-            '',
-            'Ниже приведены выдержки из найденных в интернете страниц. Используй их, чтобы ответить на запрос.',
-            '',
-            contextText,
-          ].join('\n'),
-        },
-      ];
 
       // ── Build structured search metadata for Perplexity-like UI ──
       //   * sources       — карточки источников
@@ -1409,22 +1269,26 @@ async transformMessagesToQuery({ userMessages, user }: IImagesRequest) {
         }
       };
 
-      const sourcesPayload = docsToUse
+      // Sources собираем из dedupedOrganic (до scrape), потому что для
+      // UI-карточек нам достаточно title/url/snippet/domain. Это позволяет
+      // отдать metadata marker клиенту до того, как scrape завершится.
+      const sourcesPayload = (dedupedOrganic as any[])
         .slice(0, 6)
-        .map((doc: any, i: number) => {
-          const url = doc.url;
+        .map((item: any, i: number) => {
+          const url = item.link || item.url || '';
+          if (!url) return null;
           return {
-            title: doc.title || safeDomain(url) || url,
+            title: item.title || safeDomain(url) || url,
             url,
             domain: safeDomain(url),
             snippet:
-              typeof doc.snippet === 'string' && doc.snippet.length > 0
-                ? doc.snippet.slice(0, 240)
+              typeof item.snippet === 'string' && item.snippet.length > 0
+                ? item.snippet.slice(0, 240)
                 : '',
             index: i + 1,
           };
         })
-        .filter((s: any) => s.url);
+        .filter((s: any): s is any => !!s);
 
       // Дедупликация по imageUrl, фильтр пустых картинок, ограничение 6.
       const seenImageUrls = new Set<string>();
@@ -1611,40 +1475,39 @@ async transformMessagesToQuery({ userMessages, user }: IImagesRequest) {
 
       const intent = detectIntent(intentSources);
 
-      // followUps: приоритет
-      //   1) relatedSearches от Serper
-      //   2) peopleAlsoAsk вопросы
-      //   3) fallback — три нейтральных follow-up по intent
-      const fallbackByIntent: Record<string, string[]> = {
-        general: [
-          'Дай краткое резюме',
-          'Сравни ключевые варианты',
-          'Покажи свежие данные',
-        ],
+      // ── Follow-ups: интеллектуальное слияние, не просто fallback ───
+      //   Источники в порядке предпочтения:
+      //     1) PAA вопросы (живой пользовательский язык)
+      //     2) relatedSearches (узкие уточнения)
+      //     3) action chips из intent (для прямого действия)
+      //   Затем — фильтры: dedupe (caseless), длина ≤72 символов,
+      //   пропускаем слишком общие фразы вроде «расскажи подробнее».
+      const intentActionChips: Record<string, string[]> = {
+        general: ['Сделать таблицу', 'Сравнить варианты', 'Дать краткий вывод'],
         news: [
-          'Что важно знать одним абзацем?',
-          'Какие источники самые свежие?',
-          'Каковы возможные последствия?',
+          'Что изменилось за последние 24 часа?',
+          'Какие источники подтверждают это?',
+          'Что это значит на практике?',
         ],
         comparison: [
+          'Сделать таблицу сравнения',
           'Кому что подойдёт?',
-          'Сравни по цене',
           'Какие есть альтернативы?',
         ],
         code: [
-          'Как воспроизвести проблему?',
-          'Покажи безопасное решение',
-          'Какие команды нужно выполнить?',
+          'Покажи пример кода',
+          'Какие частые ошибки?',
+          'Дай пошаговую инструкцию',
         ],
         shopping: [
-          'Какие варианты до бюджета?',
-          'Где сейчас лучше цена?',
-          'На что обратить внимание перед покупкой?',
+          'Сравни варианты',
+          'На что смотреть перед покупкой?',
+          'Найди дешевле',
         ],
         places: [
-          'Покажи рядом',
-          'Какие отзывы у этих мест?',
-          'Лучшее время для посещения?',
+          'Покажи лучшие по рейтингу',
+          'Что открыто сейчас?',
+          'Построй маршрут',
         ],
         scholar: [
           'Какие ключевые выводы?',
@@ -1667,31 +1530,48 @@ async transformMessagesToQuery({ userMessages, user }: IImagesRequest) {
           'Прогноз на неделю?',
         ],
       };
-      const fallbackFollowUps =
-        fallbackByIntent[intent] || fallbackByIntent.general;
-      const followUpsFromSerper = (relatedSearches as any[])
-        .map((r: any) => (typeof r === 'string' ? r : r?.query))
-        .filter((q: any) => typeof q === 'string' && q.trim().length > 0)
-        .map((q: string) => q.trim().slice(0, 120));
-      const followUpsFromPAA = (peopleAlsoAskRaw as any[])
+
+      const GENERIC_BAD_FOLLOWUPS = new Set(
+        [
+          'расскажи подробнее',
+          'подробнее',
+          'tell me more',
+          'еще',
+          'ещё',
+        ].map((s) => s.toLowerCase()),
+      );
+
+      const fromPAA = (peopleAlsoAskRaw as any[])
         .map((p: any) => (typeof p?.question === 'string' ? p.question : ''))
         .filter((q: any) => typeof q === 'string' && q.trim().length > 0)
-        .map((q: string) => q.trim().slice(0, 120));
-      const followUpsCandidates =
-        followUpsFromSerper.length > 0
-          ? followUpsFromSerper
-          : followUpsFromPAA.length > 0
-            ? followUpsFromPAA
-            : fallbackFollowUps;
+        .map((q: string) => q.trim());
+      const fromRelated = (relatedSearches as any[])
+        .map((r: any) => (typeof r === 'string' ? r : r?.query))
+        .filter((q: any) => typeof q === 'string' && q.trim().length > 0)
+        .map((q: string) => q.trim());
+      const fromIntent =
+        intentActionChips[intent] || intentActionChips.general;
+
+      // Сначала пара PAA, потом related, потом intent action chips —
+      // получаем разнообразие.
+      const candidatePool: string[] = [
+        ...fromPAA.slice(0, 2),
+        ...fromRelated.slice(0, 3),
+        ...fromIntent,
+      ];
+
       const followUpsSeen = new Set<string>();
-      const followUpsPayload = followUpsCandidates
-        .filter((q: string) => {
+      const followUpsPayload = candidatePool
+        .map((q) => q.slice(0, 72).trim())
+        .filter((q) => q.length > 4)
+        .filter((q) => !GENERIC_BAD_FOLLOWUPS.has(q.toLowerCase()))
+        .filter((q) => {
           const k = q.toLowerCase();
           if (followUpsSeen.has(k)) return false;
           followUpsSeen.add(k);
           return true;
         })
-        .slice(0, 5);
+        .slice(0, 4);
 
       const summaryDomains = Array.from(
         new Set(
@@ -1703,7 +1583,10 @@ async transformMessagesToQuery({ userMessages, user }: IImagesRequest) {
 
       const summaryPayload = {
         totalSources: sourcesPayload.length,
-        readSources: pagesFromScrape.length,
+        // readSources проставится при scrape ниже; в первичном marker
+        // оставляем 0 — UI просто не покажет строку «Прочитано N» пока
+        // scrape не завершится.
+        readSources: 0,
         domains: summaryDomains,
         intent,
         generatedAt: now.toISOString(),
@@ -2036,31 +1919,225 @@ async transformMessagesToQuery({ userMessages, user }: IImagesRequest) {
         searchMetaPayload,
       )}\n`;
 
-      // 4. Финальный ответ через GPT-OSS (Deepinfra)
       console.log(
-        `[CHAT-WS] final_llm_request_start dt_total_pre_llm=${wsDt()}ms intent=${intent} sources=${sourcesPayload.length} images=${imagesPayload.length} followUps=${followUpsPayload.length} news=${newsPayload.length} places=${placesPayload.length} shopping=${shoppingPayload.length} scholar=${scholarPayload.length} videos=${videosPayload.length} kg=${!!knowledgeGraphPayload} paa=${peopleAlsoAskPayload.length} comparison=${!!comparisonPayload} codeFix=${!!codeFixPayload}`,
+        `[CHAT-WS] meta_ready dt_total_pre_meta=${wsDt()}ms intent=${intent} sources=${sourcesPayload.length} images=${imagesPayload.length} followUps=${followUpsPayload.length} news=${newsPayload.length} places=${placesPayload.length} shopping=${shoppingPayload.length} scholar=${scholarPayload.length} videos=${videosPayload.length} kg=${!!knowledgeGraphPayload} paa=${peopleAlsoAskPayload.length} comparison=${!!comparisonPayload} codeFix=${!!codeFixPayload}`,
       );
-      const llmStreamResult = (await this.llmBaseRequest({
-        model: 'openai/gpt-oss-120b',
-        messages: answerMessages as any[],
-        stream: true,
-        onClose,
-        textToLast: '',
-      })) as ReadableStream<Uint8Array>;
 
-      // Prepend the sources marker to the stream so the client receives it
-      // as the very first chunk, before any LLM text.
+      // 4. Stream: yield metadata FIRST, then perform scrape + LLM inside
+      //    the stream's start() so the client sees Serper data immediately
+      //    while we keep working on a fully-cited answer in the background.
+      //
+      //    Раньше scrape (≈3–6s) + LLM setup происходили до возврата стрима —
+      //    клиент видел сырой "Думаю…" вместо реальных карточек. Теперь:
+      //      • marker — сразу;
+      //      • scrape — top 3 с жёстким 3500 ms таймаутом;
+      //      • LLM — с краткой инструкцией опираться на снижет, если scrape
+      //        не успел дать контент.
+      const topResultsForScrape = (dedupedOrganic as any[]).slice(0, 3);
+      const llmBaseRequest = this.llmBaseRequest.bind(this);
+
       return new ReadableStream<Uint8Array>({
         async start(controller) {
           const encoder = new TextEncoder();
+          // ── Step A: yield metadata marker immediately ────────────
           controller.enqueue(encoder.encode(sourcesMarker));
-          const reader = llmStreamResult.getReader();
-          while (true) {
-            const { done, value } = await reader.read();
-            if (done) break;
-            if (value) controller.enqueue(value);
+          console.log(
+            `[CHAT-WS] meta_yielded dt_total=${wsDt()}ms — UI now showing sources`,
+          );
+
+          try {
+            // ── Step B: scrape top-3 sources with bounded timeout ──
+            const tScrape =
+              typeof performance !== 'undefined'
+                ? performance.now()
+                : Date.now();
+            const scrapeSettled = await Promise.allSettled(
+              topResultsForScrape.map(async (item: any) => {
+                const url = item.link || item.url;
+                if (!url) return null;
+                try {
+                  const scrapeResponse = await fetchWithTimeout(
+                    'https://scrape.serper.dev',
+                    {
+                      method: 'POST',
+                      headers: serperHeaders,
+                      body: JSON.stringify({ url }),
+                    },
+                    3500,
+                  );
+                  const scrapeJson: any = await scrapeResponse.json();
+                  return {
+                    title: item.title,
+                    url,
+                    snippet: item.snippet,
+                    content:
+                      (scrapeJson &&
+                        (scrapeJson.text || scrapeJson.content)) ||
+                      '',
+                  };
+                } catch (e) {
+                  console.error('Serper scrape error', e);
+                  return {
+                    title: item.title,
+                    url,
+                    snippet: item.snippet,
+                    content: '',
+                  };
+                }
+              }),
+            );
+            const scrapedPages = scrapeSettled
+              .map((r, idx) =>
+                r.status === 'fulfilled'
+                  ? r.value
+                  : topResultsForScrape[idx]
+                    ? {
+                        title: topResultsForScrape[idx].title,
+                        url:
+                          topResultsForScrape[idx].link ||
+                          topResultsForScrape[idx].url,
+                        snippet: topResultsForScrape[idx].snippet,
+                        content: '',
+                      }
+                    : null,
+              )
+              .filter(Boolean) as Array<{
+              title: string;
+              url: string;
+              snippet?: string;
+              content: string;
+            }>;
+            const scrapeDt = Math.round(
+              (typeof performance !== 'undefined'
+                ? performance.now()
+                : Date.now()) - tScrape,
+            );
+            console.log(
+              `[CHAT-WS] scrape_done dt=${scrapeDt}ms scraped=${scrapedPages.length}`,
+            );
+
+            // ── Step C: build LLM context from whatever we have ────
+            const docsToUse =
+              scrapedPages.length > 0
+                ? scrapedPages
+                : topResultsForScrape.map((item: any) => ({
+                    title: item.title,
+                    url: item.link || item.url,
+                    snippet: item.snippet,
+                    content: item.snippet || '',
+                  }));
+
+            const contextText = docsToUse
+              .map((doc, index) => {
+                const shortContent =
+                  (doc.content && doc.content.slice(0, 4000)) ||
+                  doc.snippet ||
+                  'Контент не удалось загрузить.';
+                return [
+                  `Источник [${index + 1}]`,
+                  `URL: ${doc.url}`,
+                  doc.title ? `Заголовок: ${doc.title}` : '',
+                  doc.snippet ? `Сниппет: ${doc.snippet}` : '',
+                  '',
+                  shortContent,
+                ]
+                  .filter(Boolean)
+                  .join('\n');
+              })
+              .join('\n\n-----------------------------\n\n');
+
+            const systemPrompt = [
+              'Ты — ИИСеть, умный ассистент с доступом к интернету.',
+              `Текущая дата сервера: ${currentDate}.`,
+              'Отвечай на русском.',
+              'Опирайся на факты из переданных ниже источников и не выдумывай данные.',
+              'Никогда не придумывай дату, температуру, скорость ветра, цены и другие численные значения, если они явно не указаны в источниках.',
+              'Если источники относятся к прошлым датам, явно отметь это.',
+              'Если данных не хватает или источники противоречат — честно скажи об этом.',
+              'В тексте ставь короткие маркеры цитирования [1], [2], [3] сразу после утверждения, опирающегося на источник.',
+              'Никогда не выводи голые URL и не вставляй markdown-ссылки с полными URL — UI сам покажет карточки источников.',
+              'Никогда не добавляй в конец ответа раздел «Источники», список ссылок или JSON.',
+              'Никогда не выводи теги <think>.',
+              'UI уже показывает виджеты: Knowledge Graph, картинки, новости, места, товары, видео, follow-up вопросы. Не дублируй их полное содержимое — давай вывод и ссылайся на источники.',
+              'Используй таблицу только если пользователь явно просит таблицу.',
+              'Структура ответа: 1) короткий вывод (1–2 предложения), 2) детали, 3) что важно учесть, 4) что можно сделать дальше.',
+              intent === 'news'
+                ? 'Это новостной запрос: явно указывай дату/период и подчёркивай неопределённость.'
+                : '',
+              intent === 'code'
+                ? 'Это код/документация: приоритезируй официальные источники и давай практичные шаги.'
+                : '',
+              intent === 'shopping' || intent === 'places'
+                ? 'Это покупка/локальный запрос: предупреди, что цены и наличие меняются.'
+                : '',
+            ]
+              .filter(Boolean)
+              .join(' ');
+
+            const answerMessages = [
+              { role: 'system', content: systemPrompt },
+              {
+                role: 'user',
+                content: [
+                  `Запрос пользователя: "${lastUserMessage}"`,
+                  '',
+                  'Ниже приведены выдержки из найденных в интернете страниц. Используй их, чтобы ответить на запрос.',
+                  '',
+                  contextText,
+                ].join('\n'),
+              },
+            ];
+
+            // ── Step D: invoke LLM and pipe ──────────────────────
+            console.log(
+              `[CHAT-WS] llm_request_start dt_total=${wsDt()}ms scraped=${scrapedPages.length}`,
+            );
+            const tLLM =
+              typeof performance !== 'undefined'
+                ? performance.now()
+                : Date.now();
+            const llmStreamResult = (await llmBaseRequest({
+              model: 'openai/gpt-oss-120b',
+              messages: answerMessages as any[],
+              stream: true,
+              onClose,
+              textToLast: '',
+            })) as ReadableStream<Uint8Array>;
+
+            const reader = llmStreamResult.getReader();
+            let firstChunk = true;
+            while (true) {
+              const { done, value } = await reader.read();
+              if (done) break;
+              if (firstChunk) {
+                const firstChunkDt = Math.round(
+                  (typeof performance !== 'undefined'
+                    ? performance.now()
+                    : Date.now()) - tLLM,
+                );
+                console.log(
+                  `[CHAT-WS] llm_first_chunk dt=${firstChunkDt}ms dt_total=${wsDt()}ms`,
+                );
+                firstChunk = false;
+              }
+              if (value) controller.enqueue(value);
+            }
+            console.log(`[CHAT-WS] llm_stream_done dt_total=${wsDt()}ms`);
+          } catch (err) {
+            console.error('[CHAT-WS] stream_inner_error', err);
+            // Не оставляем клиента подвешенным: отдаём короткий fallback.
+            try {
+              controller.enqueue(
+                encoder.encode(
+                  '\n\nНе удалось собрать развёрнутый ответ. Источники найдены — посмотрите карточки выше.',
+                ),
+              );
+            } catch {
+              // ignore
+            }
+          } finally {
+            controller.close();
           }
-          controller.close();
         },
       });
     } catch (e: any) {

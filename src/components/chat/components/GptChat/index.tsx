@@ -39,6 +39,7 @@ import {
   projectsService,
   IProjectUI,
 } from '@/services/ui/ProjectsService';
+import ProjectSourcesDrawer from '@/components/chat/components/ProjectSourcesDrawer';
 import { useMessengerScroll } from '../hooks/useMessengerScroll';
 import { ModalContext } from '@/contexts/ModalContext';
 import ResizeTextareaApp from '@/components/fields/ResizeTextarea';
@@ -514,6 +515,42 @@ const handleSend = async (messageOverride?: string) => {
     QUICK_PROMPTS.slice(0, 6),
   );
 
+  // ── Project workspace UI state ──────────────────────────────────
+  const [sourcesDrawerOpen, setSourcesDrawerOpen] = useState(false);
+  const [projectSourceCount, setProjectSourceCount] = useState<number>(0);
+  const [projectMemoryCount, setProjectMemoryCount] = useState<number>(0);
+
+  // Когда меняется активный проект — подгружаем число источников
+  // и память (для лейбла «Источники: N · Память: M»).
+  useEffect(() => {
+    if (!activeProjectId) {
+      setProjectSourceCount(0);
+      setProjectMemoryCount(0);
+      return;
+    }
+    let cancelled = false;
+    void (async () => {
+      try {
+        const [list, project] = await Promise.all([
+          projectsService.listSources(activeProjectId),
+          projectsService.get(activeProjectId),
+        ]);
+        if (cancelled) return;
+        setProjectSourceCount(list.length);
+        setProjectMemoryCount(
+          Array.isArray(project?.memoryItems)
+            ? project!.memoryItems.length
+            : 0,
+        );
+      } catch {
+        /* ignore */
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [activeProjectId]);
+
   useEffect(() => {
     if (!messages?.length) {
       const shuffled = [...QUICK_PROMPTS].sort(() => Math.random() - 0.5);
@@ -643,6 +680,22 @@ const handleSend = async (messageOverride?: string) => {
                 activeProjectId={activeProjectId}
                 chip={activeProjectChip}
                 setChip={setActiveProjectChip}
+                sourceCount={projectSourceCount}
+                memoryCount={projectMemoryCount}
+                onSendAction={(actionText) => {
+                  if (!sendMessage || loading) return;
+                  void sendMessage(actionText);
+                }}
+                onOpenSources={() => setSourcesDrawerOpen(true)}
+                onCompareWithWeb={() => {
+                  if (!sendMessage || loading) return;
+                  // Enable webSearch so backend distinguishes [P*] (project)
+                  // vs [N*] (internet) citations per the chatAPI prompt.
+                  if (!webSearch) setWebSearch?.(true);
+                  void sendMessage(
+                    'Сравни мои источники в этом проекте с тем, что есть в интернете: где совпадает, где расходится, что важно проверить.',
+                  );
+                }}
                 onDisable={() => {
                   setActiveProjectId?.(null);
                   // Чистим query, чтобы не возвращаться в проект при reload.
@@ -655,6 +708,25 @@ const handleSend = async (messageOverride?: string) => {
                       url.pathname + (url.search || ''),
                     );
                   }
+                }}
+              />
+            )}
+            {activeProjectId && (
+              <ProjectSourcesDrawer
+                projectId={activeProjectId}
+                open={sourcesDrawerOpen}
+                onClose={() => {
+                  setSourcesDrawerOpen(false);
+                  // refresh counts after drawer closes
+                  void (async () => {
+                    try {
+                      const list =
+                        await projectsService.listSources(activeProjectId);
+                      setProjectSourceCount(list.length);
+                    } catch {
+                      /* ignore */
+                    }
+                  })();
                 }}
               />
             )}
@@ -1319,11 +1391,21 @@ function ProjectChatBanner({
   activeProjectId,
   chip,
   setChip,
+  onSendAction,
+  onOpenSources,
+  onCompareWithWeb,
+  sourceCount,
+  memoryCount,
   onDisable,
 }: {
   activeProjectId: string;
   chip: IProjectChip | null | undefined;
   setChip?: (chip: IProjectChip | null) => void;
+  onSendAction?: (actionText: string) => void;
+  onOpenSources?: () => void;
+  onCompareWithWeb?: () => void;
+  sourceCount?: number;
+  memoryCount?: number;
   onDisable: () => void;
 }) {
   const [project, setProject] = useState<IProjectUI | null>(null);
@@ -1385,10 +1467,26 @@ function ProjectChatBanner({
     return null;
   }
 
+  // ── Quick actions для project banner ────────────────────────────
+  // Берём suggestedActions из проекта; если их нет — fallback на три
+  // универсальных. «Отключить» обрабатывается отдельной кнопкой.
+  const projectSuggested =
+    (project?.suggestedActions && project.suggestedActions.length > 0
+      ? project.suggestedActions
+      : ['Составить план', 'Найти риски', 'Следующий шаг']
+    ).slice(0, 4);
+
+  const sendForAction = (action: string) => {
+    if (!onSendAction) return;
+    const titleForPrompt = title || 'этого проекта';
+    onSendAction(
+      `Помоги: ${action} в рамках проекта «${titleForPrompt}».`,
+    );
+  };
+
   return (
     <Flex
-      align="center"
-      justify="space-between"
+      direction="column"
       gap="10px"
       px={{ base: '14px', md: '16px' }}
       py={{ base: '10px', md: '12px' }}
@@ -1401,76 +1499,227 @@ function ProjectChatBanner({
       width="100%"
       maxW="100%"
       minW={0}
-      flexWrap="wrap"
     >
-      <Box minW={0} flex="1 1 0">
-        <Flex align="center" gap="8px" minW={0} flexWrap="wrap">
-          <Box
-            px="8px"
-            py="2px"
-            borderRadius="9999px"
-            bg="rgba(0,102,204,0.10)"
-            color={accentBlue}
-          >
-            <Text
-              fontFamily="'SF Pro Text', -apple-system, system-ui, sans-serif"
-              fontSize="10px"
-              fontWeight="700"
-              letterSpacing="0.4px"
-              textTransform="uppercase"
-            >
-              Проект
-            </Text>
-          </Box>
-          <Text
-            fontFamily="'SF Pro Display', -apple-system, system-ui, sans-serif"
-            fontSize={{ base: '13px', md: '14px' }}
-            fontWeight="600"
-            color={textPrimary}
-            letterSpacing="-0.15px"
-            noOfLines={1}
-            wordBreak="break-word"
-            minW={0}
-          >
-            {title || (isLoading ? 'Загрузка…' : '')}
-          </Text>
-        </Flex>
-        {nextStep && (
-          <Text
-            mt="2px"
-            fontFamily="'SF Pro Text', -apple-system, system-ui, sans-serif"
-            fontSize="12px"
-            color={textSecondary}
-            lineHeight="1.4"
-            noOfLines={1}
-            wordBreak="break-word"
-          >
-            Следующий шаг: {nextStep}
-          </Text>
-        )}
-      </Box>
-      <Button
-        onClick={onDisable}
-        size="xs"
-        h="28px"
-        px="12px"
-        borderRadius="9999px"
-        bg="transparent"
-        color={textPrimary}
-        border="1px solid"
-        borderColor={border}
-        fontFamily="'SF Pro Text', -apple-system, system-ui, sans-serif"
-        fontWeight="500"
-        fontSize="11px"
-        _hover={{
-          borderColor: accentBlue,
-          bg: 'rgba(0,102,204,0.06)',
-          color: accentBlue,
-        }}
-        flexShrink={0}
+      {/* Top row: label + title + Отключить */}
+      <Flex
+        align="center"
+        justify="space-between"
+        gap="10px"
+        minW={0}
+        flexWrap="wrap"
       >
-        Отключить
-      </Button>
+        <Box minW={0} flex="1 1 0">
+          <Flex align="center" gap="8px" minW={0} flexWrap="wrap">
+            <Box
+              px="8px"
+              py="2px"
+              borderRadius="9999px"
+              bg="rgba(0,102,204,0.10)"
+              color={accentBlue}
+            >
+              <Text
+                fontFamily="'SF Pro Text', -apple-system, system-ui, sans-serif"
+                fontSize="10px"
+                fontWeight="700"
+                letterSpacing="0.4px"
+                textTransform="uppercase"
+              >
+                Рабочая комната
+              </Text>
+            </Box>
+            <Text
+              fontFamily="'SF Pro Display', -apple-system, system-ui, sans-serif"
+              fontSize={{ base: '13px', md: '14px' }}
+              fontWeight="600"
+              color={textPrimary}
+              letterSpacing="-0.15px"
+              noOfLines={1}
+              wordBreak="break-word"
+              minW={0}
+            >
+              {title || (isLoading ? 'Загрузка…' : '')}
+            </Text>
+          </Flex>
+          {nextStep && (
+            <Text
+              mt="2px"
+              fontFamily="'SF Pro Text', -apple-system, system-ui, sans-serif"
+              fontSize="12px"
+              color={textSecondary}
+              lineHeight="1.4"
+              noOfLines={2}
+              wordBreak="break-word"
+            >
+              Следующий шаг: {nextStep}
+            </Text>
+          )}
+          {(typeof sourceCount === 'number' ||
+            typeof memoryCount === 'number') && (
+            <Text
+              mt="2px"
+              fontSize="11px"
+              color={textSecondary}
+              letterSpacing="-0.05px"
+            >
+              Источники: {sourceCount ?? 0} · Память: {memoryCount ?? 0}
+            </Text>
+          )}
+        </Box>
+        <Button
+          onClick={onDisable}
+          size="xs"
+          h="28px"
+          px="12px"
+          borderRadius="9999px"
+          bg="transparent"
+          color={textPrimary}
+          border="1px solid"
+          borderColor={border}
+          fontFamily="'SF Pro Text', -apple-system, system-ui, sans-serif"
+          fontWeight="500"
+          fontSize="11px"
+          _hover={{
+            borderColor: accentBlue,
+            bg: 'rgba(0,102,204,0.06)',
+            color: accentBlue,
+          }}
+          flexShrink={0}
+        >
+          Отключить
+        </Button>
+      </Flex>
+
+      {/* Project tool buttons row — открыть источники / сравнить с веб */}
+      {(onOpenSources || onCompareWithWeb) && (
+        <Flex
+          gap="6px"
+          flexWrap="wrap"
+          minW={0}
+          maxW="100%"
+        >
+          {onOpenSources && (
+            <Button
+              onClick={onOpenSources}
+              size="xs"
+              h="28px"
+              px="12px"
+              borderRadius="9999px"
+              bg="rgba(0,102,204,0.10)"
+              border="1px solid"
+              borderColor="rgba(0,102,204,0.32)"
+              color={accentBlue}
+              fontFamily="'SF Pro Text', -apple-system, system-ui, sans-serif"
+              fontWeight="600"
+              fontSize="11px"
+              _hover={{
+                bg: 'rgba(0,102,204,0.18)',
+                borderColor: accentBlue,
+              }}
+            >
+              Источники{typeof sourceCount === 'number' ? ` · ${sourceCount}` : ''}
+            </Button>
+          )}
+          {onCompareWithWeb && (
+            <Button
+              onClick={onCompareWithWeb}
+              size="xs"
+              h="28px"
+              px="12px"
+              borderRadius="9999px"
+              bg="transparent"
+              border="1px solid"
+              borderColor={border}
+              color={textPrimary}
+              fontFamily="'SF Pro Text', -apple-system, system-ui, sans-serif"
+              fontWeight="500"
+              fontSize="11px"
+              _hover={{
+                borderColor: accentBlue,
+                color: accentBlue,
+                bg: 'rgba(0,102,204,0.06)',
+              }}
+            >
+              Сравнить с интернетом
+            </Button>
+          )}
+        </Flex>
+      )}
+
+      {/* Quick-action chips row */}
+      {onSendAction && projectSuggested.length > 0 && (
+        <Flex
+          gap="6px"
+          flexWrap="wrap"
+          overflowX="auto"
+          minW={0}
+          maxW="100%"
+          sx={{
+            '::-webkit-scrollbar': { display: 'none' },
+            scrollbarWidth: 'none',
+          }}
+        >
+          {projectSuggested.map((act) => (
+            <Box
+              key={act}
+              as="button"
+              type="button"
+              onClick={() => sendForAction(act)}
+              px="10px"
+              py="5px"
+              borderRadius="9999px"
+              bg="rgba(0,102,204,0.06)"
+              border="1px solid"
+              borderColor={border}
+              color={accentBlue}
+              fontFamily="'SF Pro Text', -apple-system, system-ui, sans-serif"
+              fontSize="11px"
+              fontWeight="600"
+              letterSpacing="-0.1px"
+              lineHeight="1.3"
+              cursor="pointer"
+              sx={{ WebkitTapHighlightColor: 'transparent' }}
+              _hover={{
+                bg: 'rgba(0,102,204,0.14)',
+                borderColor: accentBlue,
+              }}
+              flexShrink={0}
+              maxW="100%"
+              whiteSpace="nowrap"
+            >
+              {act}
+            </Box>
+          ))}
+          {/* «Следующий шаг» — отдельный chip, который прямо просит ИИ
+              сделать nextStep. Если nextStep пустой, скрываем. */}
+          {nextStep && (
+            <Box
+              as="button"
+              type="button"
+              onClick={() => sendForAction(nextStep)}
+              px="10px"
+              py="5px"
+              borderRadius="9999px"
+              bg={accentBlue}
+              border="1px solid"
+              borderColor={accentBlue}
+              color="white"
+              fontFamily="'SF Pro Text', -apple-system, system-ui, sans-serif"
+              fontSize="11px"
+              fontWeight="600"
+              letterSpacing="-0.1px"
+              lineHeight="1.3"
+              cursor="pointer"
+              sx={{ WebkitTapHighlightColor: 'transparent' }}
+              _hover={{ bg: accentBlueHover, borderColor: accentBlueHover }}
+              flexShrink={0}
+              maxW="100%"
+              whiteSpace="nowrap"
+            >
+              Следующий шаг
+            </Box>
+          )}
+        </Flex>
+      )}
     </Flex>
   );
 }

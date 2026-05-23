@@ -6,7 +6,14 @@ import {
   Flex,
   Icon,
   IconButton,
-  Input,
+  Modal,
+  ModalBody,
+  ModalCloseButton,
+  ModalContent,
+  ModalFooter,
+  ModalHeader,
+  ModalOverlay,
+  Portal,
   Spinner,
   Text,
   Textarea,
@@ -21,14 +28,19 @@ import React, {
   useState,
 } from 'react';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
-import { MdAdd, MdAutoAwesome, MdClose } from 'react-icons/md';
+import { MdAdd, MdAutoAwesome } from 'react-icons/md';
 import {
   projectsService,
   IProjectUI,
 } from '@/services/ui/ProjectsService';
 import { ModalContext } from '@/contexts/ModalContext';
-import Modal from '@/components/modals/Modal/Modal';
 import { useUser } from '@/utils/hooks/useUser';
+
+const PROJECT_EXAMPLES = [
+  'Развить сайт ИИСеть до 100 тыс. ₽/мес',
+  'Подготовиться к собеседованию',
+  'Запустить небольшой бизнес',
+];
 
 const FONT_APPLE_TEXT = `'SF Pro Text', -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif`;
 const FONT_APPLE_DISPLAY = `'SF Pro Display', -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif`;
@@ -230,6 +242,9 @@ function ProjectSidebarSection() {
         <Flex direction="column" gap="2px" minW={0}>
           {visibleProjects.map((p) => {
             const isActive = p._id === activeProjectId && isOnChat;
+            const memoryCount = Array.isArray(p.memoryItems)
+              ? p.memoryItems.length
+              : 0;
             return (
               <Box
                 key={p._id}
@@ -268,11 +283,43 @@ function ProjectSidebarSection() {
                     fontFamily={FONT_APPLE_TEXT}
                     fontSize="11px"
                     color={hintColor}
-                    noOfLines={1}
+                    noOfLines={2}
                     wordBreak="break-word"
+                    lineHeight="1.35"
                   >
                     → {p.nextStep}
                   </Text>
+                )}
+                {memoryCount > 0 && (
+                  <Flex
+                    mt="6px"
+                    gap="4px"
+                    align="center"
+                    minW={0}
+                    overflow="hidden"
+                  >
+                    <Box
+                      px="6px"
+                      py="1px"
+                      borderRadius="9999px"
+                      bg="rgba(0,102,204,0.10)"
+                      color={ACCENT_BLUE}
+                    >
+                      <Text
+                        fontFamily={FONT_APPLE_TEXT}
+                        fontSize="10px"
+                        fontWeight="600"
+                        letterSpacing="0.2px"
+                      >
+                        {memoryCount}{' '}
+                        {memoryCount === 1
+                          ? 'заметка'
+                          : memoryCount < 5
+                            ? 'заметки'
+                            : 'заметок'}
+                      </Text>
+                    </Box>
+                  </Flex>
                 )}
               </Box>
             );
@@ -280,87 +327,182 @@ function ProjectSidebarSection() {
         </Flex>
       )}
 
-      {/* ── Create modal ─────────────────────────────────────────── */}
-      <Modal
-        open={open}
-        onClose={() => setOpen(false)}
-        headerProps={
-          <Flex
-            justify="space-between"
-            align="center"
-            px={{ base: '18px', md: '24px' }}
-            py={{ base: '14px', md: '18px' }}
-            gap="12px"
-            minW={0}
+      {/* ── Create modal ────────────────────────────────────────────
+          Chakra Modal сам портится в document.body через Portal, поэтому
+          корректно появляется поверх контента страницы. Раньше использо-
+          вался самодельный Modal (Salute Sheet) — он сидел в DOM-дереве
+          сайдбара и на desktop оказывался под основным контентом из-за
+          собственного stacking-context. Теперь — без layering-багов. */}
+      <Portal>
+        <Modal
+          isOpen={open}
+          onClose={() => setOpen(false)}
+          isCentered
+          size={{ base: 'full', md: 'lg' } as any}
+          motionPreset="slideInBottom"
+          autoFocus
+        >
+          <ModalOverlay
+            bg="rgba(0,0,0,0.45)"
+            sx={{
+              backdropFilter: 'blur(8px) saturate(140%)',
+              WebkitBackdropFilter: 'blur(8px) saturate(140%)',
+            }}
+            zIndex={3000}
+          />
+          <ModalContent
+            zIndex={3001}
+            mx={{ base: '16px', md: 'auto' }}
+            my={{ base: '16px', md: 'auto' }}
+            maxW={{ base: 'calc(100vw - 32px)', md: '640px' }}
+            maxH={{
+              base: 'calc(100dvh - 32px)',
+              md: 'calc(100dvh - 80px)',
+            }}
+            borderRadius={{ base: '22px', md: '24px' }}
+            border="1px solid"
+            borderColor={modalBorder}
+            bg={modalSurface}
+            sx={{
+              backdropFilter: 'blur(22px) saturate(180%)',
+              WebkitBackdropFilter: 'blur(22px) saturate(180%)',
+            }}
+            boxShadow="0 24px 60px rgba(0,0,0,0.20)"
+            overflow="hidden"
+            display="flex"
+            flexDirection="column"
           >
-            <Box minW={0}>
+            <ModalHeader
+              px={{ base: '18px', md: '24px' }}
+              pt={{ base: '18px', md: '22px' }}
+              pb={{ base: '6px', md: '8px' }}
+              fontFamily={FONT_APPLE_DISPLAY}
+              fontSize={{ base: '18px', md: '22px' }}
+              fontWeight="600"
+              letterSpacing="-0.35px"
+              color={modalText}
+            >
+              Новый проект
+            </ModalHeader>
+            <ModalCloseButton
+              top={{ base: '12px', md: '16px' }}
+              right={{ base: '12px', md: '16px' }}
+              borderRadius="9999px"
+            />
+            <ModalBody
+              px={{ base: '18px', md: '24px' }}
+              pt="0"
+              pb={{ base: '6px', md: '6px' }}
+              overflowY="auto"
+              minW={0}
+            >
               <Text
-                fontFamily={FONT_APPLE_DISPLAY}
-                fontSize={{ base: '18px', md: '22px' }}
-                fontWeight="600"
-                letterSpacing="-0.35px"
-                color={modalText}
-                noOfLines={1}
-              >
-                Новый проект
-              </Text>
-              <Text
-                mt="2px"
                 fontFamily={FONT_APPLE_TEXT}
                 fontSize="13px"
                 color={modalMuted}
-                lineHeight="1.4"
+                lineHeight="1.45"
+                mb="16px"
               >
-                ИИСеть запомнит цель и подскажет, что делать дальше.
+                Опишите задачу одной фразой — ИИСеть соберёт цель, контекст
+                и следующий шаг.
               </Text>
-            </Box>
-            <IconButton
-              aria-label="Закрыть"
-              size="sm"
-              variant="ghost"
-              icon={<Icon as={MdClose} />}
-              borderRadius="9999px"
-              onClick={() => setOpen(false)}
-            />
-          </Flex>
-        }
-        contentProps={
-          <Box
-            px={{ base: '18px', md: '24px' }}
-            pb={{ base: '20px', md: '24px' }}
-            pt="6px"
-            bg={modalSurface}
-            sx={{ backdropFilter: 'blur(22px) saturate(180%)' }}
-            minW={0}
-          >
-            <Text
-              fontFamily={FONT_APPLE_TEXT}
-              fontSize="12px"
-              fontWeight="600"
-              color={modalMuted}
-              mb="8px"
+
+              <Text
+                fontFamily={FONT_APPLE_TEXT}
+                fontSize="12px"
+                fontWeight="600"
+                color={modalMuted}
+                mb="6px"
+                letterSpacing="0.2px"
+              >
+                Что хотите сделать?
+              </Text>
+              <Textarea
+                value={rawText}
+                onChange={(e) => setRawText(e.target.value)}
+                placeholder="Например: открыть кофейню в Екатеринбурге и понять, окупится ли она"
+                rows={4}
+                minH="120px"
+                bg={inputBg}
+                border="1px solid"
+                borderColor={inputBorder}
+                borderRadius="14px"
+                fontFamily={FONT_APPLE_TEXT}
+                fontSize="14px"
+                color={modalText}
+                _focus={{
+                  borderColor: ACCENT_BLUE,
+                  boxShadow: '0 0 0 3px rgba(0,102,204,0.15)',
+                }}
+              />
+
+              <Text
+                mt="14px"
+                mb="8px"
+                fontFamily={FONT_APPLE_TEXT}
+                fontSize="11px"
+                fontWeight="600"
+                letterSpacing="0.4px"
+                textTransform="uppercase"
+                color={modalMuted}
+              >
+                Быстрые примеры
+              </Text>
+              <Flex gap="6px" flexWrap="wrap" minW={0}>
+                {PROJECT_EXAMPLES.map((ex) => (
+                  <Box
+                    key={ex}
+                    as="button"
+                    type="button"
+                    onClick={() => setRawText(ex)}
+                    px="12px"
+                    py="6px"
+                    borderRadius="9999px"
+                    border="1px solid"
+                    borderColor={modalBorder}
+                    bg="transparent"
+                    color={modalText}
+                    fontFamily={FONT_APPLE_TEXT}
+                    fontSize="12px"
+                    fontWeight="500"
+                    _hover={{
+                      borderColor: ACCENT_BLUE,
+                      bg: 'rgba(0,102,204,0.06)',
+                      color: ACCENT_BLUE,
+                    }}
+                    cursor="pointer"
+                    sx={{ WebkitTapHighlightColor: 'transparent' }}
+                    maxW="100%"
+                    whiteSpace="normal"
+                    textAlign="left"
+                    lineHeight="1.3"
+                  >
+                    {ex}
+                  </Box>
+                ))}
+              </Flex>
+
+              <Text
+                mt="16px"
+                fontFamily={FONT_APPLE_TEXT}
+                fontSize="11px"
+                color={modalMuted}
+                lineHeight="1.5"
+              >
+                Проект появится в левой шторке. В чате ИИСеть будет
+                учитывать цель, решения и следующий шаг.
+              </Text>
+            </ModalBody>
+            <ModalFooter
+              px={{ base: '18px', md: '24px' }}
+              pt="14px"
+              pb={{ base: 'calc(18px + env(safe-area-inset-bottom))', md: '22px' }}
+              gap="8px"
+              flexWrap="wrap"
+              borderTop="1px solid"
+              borderColor={modalBorder}
+              bg="transparent"
             >
-              Что хотите сделать?
-            </Text>
-            <Textarea
-              value={rawText}
-              onChange={(e) => setRawText(e.target.value)}
-              placeholder="Например: развить сайт ИИСеть до 100 тысяч рублей в месяц"
-              rows={4}
-              minH="120px"
-              bg={inputBg}
-              border="1px solid"
-              borderColor={inputBorder}
-              borderRadius="14px"
-              fontFamily={FONT_APPLE_TEXT}
-              fontSize="14px"
-              color={modalText}
-              _focus={{
-                borderColor: ACCENT_BLUE,
-                boxShadow: '0 0 0 3px rgba(0,102,204,0.15)',
-              }}
-            />
-            <Flex gap="8px" mt="14px" justify="flex-end" flexWrap="wrap">
               <Button
                 onClick={() => setOpen(false)}
                 bg="transparent"
@@ -368,8 +510,8 @@ function ProjectSidebarSection() {
                 border="1px solid"
                 borderColor={modalBorder}
                 borderRadius="9999px"
-                h="38px"
-                px="16px"
+                h="40px"
+                px="18px"
                 fontWeight="500"
                 fontSize="13px"
                 _hover={{ bg: 'rgba(0,0,0,0.04)' }}
@@ -382,29 +524,19 @@ function ProjectSidebarSection() {
                 bg={ACCENT_BLUE}
                 color="white"
                 borderRadius="9999px"
-                h="38px"
-                px="18px"
+                h="40px"
+                px="20px"
                 fontWeight="600"
                 fontSize="13px"
                 _hover={{ bg: ACCENT_BLUE_HOVER }}
                 leftIcon={<Icon as={MdAutoAwesome} />}
               >
-                Создать проект
+                Создать рабочую комнату
               </Button>
-            </Flex>
-            <Text
-              mt="10px"
-              fontFamily={FONT_APPLE_TEXT}
-              fontSize="11px"
-              color={modalMuted}
-              lineHeight="1.5"
-            >
-              ИИСеть сформулирует цель, инструкции и предложит первый шаг.
-              Память проекта пополнится по мере работы.
-            </Text>
-          </Box>
-        }
-      />
+            </ModalFooter>
+          </ModalContent>
+        </Modal>
+      </Portal>
     </Box>
   );
 }
