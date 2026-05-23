@@ -3,7 +3,10 @@ import { auth } from '@/auth';
 import User from '@/models/user';
 import Project from '@/models/project';
 import dbConnect from '@/lib/db';
-import { buildBriefFromRawText } from '@/services/api/ProjectService';
+import {
+  buildBriefFromRawText,
+  buildBlueprintFromRawText,
+} from '@/services/api/ProjectService';
 
 export const dynamic = 'force-dynamic';
 
@@ -62,9 +65,20 @@ export async function POST(req: NextRequest): Promise<Response> {
 
     const body = (await req.json().catch(() => ({}))) as any;
 
-    const brief = buildBriefFromRawText(
-      typeof body.rawText === 'string' ? body.rawText : '',
-    );
+    const rawText = typeof body.rawText === 'string' ? body.rawText : '';
+    const brief = buildBriefFromRawText(rawText);
+
+    // Agent blueprint — двухуровневая классификация (domain + mechanics)
+    // плюс готовый firstStep, план и список будущих артефактов. Rule-
+    // based, без LLM-вызова — детерминированно и мгновенно.
+    let blueprint: ReturnType<typeof buildBlueprintFromRawText> | undefined;
+    try {
+      blueprint = buildBlueprintFromRawText(rawText, brief);
+    } catch (e) {
+      // Blueprint опциональный — если что-то пошло не так, проект
+      // всё равно создастся, просто без расширенного workspace UX.
+      console.error('[PROJECT_BLUEPRINT] failed', e);
+    }
 
     const project = await Project.create({
       user: user.id,
@@ -96,6 +110,7 @@ export async function POST(req: NextRequest): Promise<Response> {
             .slice(0, 8)
         : brief.suggestedActions,
       memoryItems: [],
+      blueprint,
     });
 
     return NextResponse.json(project);

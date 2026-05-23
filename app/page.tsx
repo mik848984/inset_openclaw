@@ -11,74 +11,61 @@ import {
   Text,
   VStack,
 } from "@chakra-ui/react";
-import {
-  FiArrowRight,
-  FiChevronRight,
-  FiCpu,
-  FiEdit3,
-  FiFileText,
-  FiGlobe,
-  FiImage,
-  FiLayers,
-  FiMessageSquare,
-  FiSearch,
-  FiZap,
-} from "react-icons/fi";
+import { FiArrowRight, FiChevronRight } from "react-icons/fi";
 import Link from "next/link";
+import Image from "next/image";
 
-// ── Design tokens (Apple-like) ───────────────────────────────────────
+// ── Design tokens ────────────────────────────────────────────────────
 const C = {
-  // Ink + neutrals (one warm gray family, no mixing)
   ink: "#1d1d1f",
   inkSecondary: "#6e6e73",
   inkTertiary: "#86868b",
   hairline: "#d2d2d7",
   hairlineSoft: "#e8e8ed",
-
-  // Canvases (very light, only — dark is a rare accent)
   canvas: "#ffffff",
-  canvasPearl: "#fbfbfd", // hero + nav
-  canvasFog: "#f5f5f7", // section break
-  canvasMist: "#f2f2f4", // tile contrast
-
-  // Single dark accent surface (used once, for Premium tile + tiny CTA strip)
+  canvasPearl: "#fbfbfd",
+  canvasFog: "#f5f5f7",
+  canvasMist: "#f2f2f4",
   inkDeep: "#0a0a0c",
-
-  // Brand accents — one primary (blue), one secondary identity (violet)
+  inkDeepText: "#f5f5f7",
+  inkDeepSecondary: "rgba(245,245,247,0.66)",
+  inkDeepTertiary: "rgba(245,245,247,0.42)",
+  inkDeepHairline: "rgba(255,255,255,0.10)",
   actionBlue: "#0066cc",
   actionBlueHover: "#0071e3",
   actionBlueOnDark: "#2997ff",
-  violet: "#5e5ce6", // Apple SF "indigo"
-  violetSoft: "rgba(94,92,230,0.10)",
+  violet: "#5e5ce6",
 };
 
 const FD = `system-ui, -apple-system, BlinkMacSystemFont, "SF Pro Display", sans-serif`;
 const FT = `system-ui, -apple-system, BlinkMacSystemFont, "SF Pro Text", sans-serif`;
 
-// ── Buttons ──────────────────────────────────────────────────────────
+// ── CTAs ────────────────────────────────────────────────────────────
 function CtaPrimary({
   href,
   children,
   large,
+  dark,
 }: {
   href: string;
   children: React.ReactNode;
   large?: boolean;
+  dark?: boolean;
 }) {
   return (
     <Button
       as={Link}
       href={href}
-      bg={C.actionBlue}
-      color="white"
+      bg={dark ? "white" : C.actionBlue}
+      color={dark ? C.ink : "white"}
       borderRadius="9999px"
-      px={large ? "28px" : "20px"}
-      py={large ? "13px" : "10px"}
+      px={large ? "30px" : "22px"}
+      py={large ? "14px" : "11px"}
       fontSize={large ? "17px" : "15px"}
-      fontWeight="400"
+      fontWeight={dark ? "500" : "500"}
       lineHeight="1.0"
       fontFamily={FT}
-      _hover={{ bg: C.actionBlueHover }}
+      _hover={{ bg: dark ? C.canvasFog : C.actionBlueHover }}
       _active={{ transform: "scale(0.98)" }}
       transition="background-color 0.15s ease, transform 0.15s ease"
       h="auto"
@@ -89,7 +76,6 @@ function CtaPrimary({
   );
 }
 
-// Light text-link CTA — replaces heavy outline buttons
 function CtaSecondary({
   href,
   children,
@@ -105,15 +91,15 @@ function CtaSecondary({
       href={href}
       display="inline-flex"
       alignItems="center"
-      gap="3px"
+      gap="4px"
       fontSize="15px"
-      fontWeight="400"
+      fontWeight="500"
       letterSpacing="-0.16px"
       fontFamily={FT}
       color={dark ? C.actionBlueOnDark : C.actionBlue}
       textDecoration="none"
-      px="6px"
-      py="10px"
+      px="8px"
+      py="11px"
       _hover={{
         color: dark ? "#5ac8ff" : C.actionBlueHover,
         textDecoration: "underline",
@@ -126,7 +112,6 @@ function CtaSecondary({
   );
 }
 
-// Ghost outline — used rarely on light bg as secondary action
 function CtaGhost({
   href,
   children,
@@ -145,10 +130,10 @@ function CtaGhost({
       borderColor={C.hairline}
       color={C.ink}
       borderRadius="9999px"
-      px={large ? "28px" : "20px"}
-      py={large ? "13px" : "10px"}
+      px={large ? "30px" : "22px"}
+      py={large ? "14px" : "11px"}
       fontSize={large ? "17px" : "15px"}
-      fontWeight="400"
+      fontWeight="500"
       fontFamily={FT}
       _hover={{ borderColor: C.ink, bg: "transparent" }}
       _active={{ transform: "scale(0.98)" }}
@@ -160,281 +145,236 @@ function CtaGhost({
   );
 }
 
-// ── Reusable light tile ──────────────────────────────────────────────
-interface TileProps {
-  children: React.ReactNode;
-  bg?: string;
-  p?: string | object;
-  borderRadius?: string;
-  hover?: boolean;
-  [key: string]: unknown;
-}
-
-function Tile({
+// ── Section primitives ──────────────────────────────────────────────
+function SectionEyebrow({
   children,
-  bg = C.canvas,
-  p = "32px",
-  borderRadius = "22px",
-  hover = true,
-  ...rest
-}: TileProps) {
-  return (
-    <Box
-      bg={bg}
-      borderRadius={borderRadius}
-      p={p}
-      boxShadow="0 1px 2px rgba(15,23,42,0.04), 0 8px 24px -12px rgba(15,23,42,0.08)"
-      transition="transform 0.22s ease, box-shadow 0.22s ease"
-      sx={{
-        "@media (prefers-reduced-motion: reduce)": {
-          transition: "none",
-        },
-      }}
-      {...(hover
-        ? {
-            _hover: {
-              transform: "translateY(-3px)",
-              boxShadow:
-                "0 2px 4px rgba(15,23,42,0.05), 0 24px 48px -20px rgba(15,23,42,0.14)",
-            },
-          }
-        : {})}
-      {...rest}
-    >
-      {children}
-    </Box>
-  );
-}
-
-// macOS-style window chrome — replaces tab pills inside product scene
-function MacChrome({ children }: { children: React.ReactNode }) {
-  return (
-    <Box
-      bg={C.canvas}
-      borderRadius="18px"
-      overflow="hidden"
-      boxShadow="0 1px 2px rgba(15,23,42,0.04), 0 30px 80px -20px rgba(15,23,42,0.18)"
-      border="1px solid"
-      borderColor={C.hairlineSoft}
-    >
-      <Flex
-        align="center"
-        gap="6px"
-        px="14px"
-        py="10px"
-        borderBottom="1px solid"
-        borderColor={C.hairlineSoft}
-        bg={C.canvasPearl}
-      >
-        <Box w="11px" h="11px" borderRadius="50%" bg="#ff5f57" />
-        <Box w="11px" h="11px" borderRadius="50%" bg="#febc2e" />
-        <Box w="11px" h="11px" borderRadius="50%" bg="#28c840" />
-      </Flex>
-      {children}
-    </Box>
-  );
-}
-
-// ── Typography helpers ───────────────────────────────────────────────
-function Body({
-  children,
-  dark,
-  muted,
+  color,
 }: {
   children: React.ReactNode;
-  dark?: boolean;
-  muted?: boolean;
+  color?: string;
 }) {
   return (
     <Text
-      fontSize="17px"
-      fontWeight="400"
-      lineHeight="1.47"
-      letterSpacing="-0.374px"
       fontFamily={FT}
-      color={
-        muted
-          ? dark
-            ? "rgba(255,255,255,0.62)"
-            : C.inkSecondary
-          : dark
-          ? "white"
-          : C.ink
+      fontSize="13px"
+      fontWeight="600"
+      letterSpacing="0.18em"
+      textTransform="uppercase"
+      color={color || C.actionBlue}
+      mb="14px"
+    >
+      {children}
+    </Text>
+  );
+}
+
+function SectionHeading({
+  children,
+  dark,
+  size = "lg",
+}: {
+  children: React.ReactNode;
+  dark?: boolean;
+  size?: "lg" | "xl";
+}) {
+  const fs =
+    size === "xl"
+      ? { base: "36px", md: "60px", lg: "72px" }
+      : { base: "32px", md: "44px", lg: "56px" };
+  return (
+    <Heading
+      as="h2"
+      fontFamily={FD}
+      fontSize={fs}
+      fontWeight="600"
+      lineHeight="1.04"
+      letterSpacing="-0.022em"
+      color={dark ? C.inkDeepText : C.ink}
+      mb="16px"
+    >
+      {children}
+    </Heading>
+  );
+}
+
+function SectionLead({
+  children,
+  dark,
+  maxW = "560px",
+}: {
+  children: React.ReactNode;
+  dark?: boolean;
+  maxW?: string;
+}) {
+  return (
+    <Text
+      fontFamily={FD}
+      fontSize={{ base: "18px", md: "22px" }}
+      fontWeight="400"
+      lineHeight="1.45"
+      letterSpacing="-0.012em"
+      color={dark ? C.inkDeepSecondary : C.inkSecondary}
+      maxW={maxW}
+    >
+      {children}
+    </Text>
+  );
+}
+
+// ── PosterFrame ───── wraps next/image with soft shadow + radius
+function PosterFrame({
+  src,
+  alt,
+  width,
+  height,
+  priority,
+  sizes,
+  borderRadius,
+  shadow = "soft",
+  ...rest
+}: {
+  src: string;
+  alt: string;
+  width: number;
+  height: number;
+  priority?: boolean;
+  sizes?: string;
+  borderRadius?: string | object;
+  shadow?: "soft" | "deep" | "none";
+  [k: string]: any;
+}) {
+  const shadowMap: Record<string, string> = {
+    soft: "0 1px 2px rgba(15,23,42,0.04), 0 30px 80px -20px rgba(15,23,42,0.16)",
+    deep: "0 1px 2px rgba(0,0,0,0.20), 0 40px 100px -20px rgba(0,0,0,0.55)",
+    none: "none",
+  };
+  return (
+    <Box
+      borderRadius={borderRadius || { base: "20px", md: "28px" }}
+      overflow="hidden"
+      boxShadow={shadowMap[shadow]}
+      width="100%"
+      lineHeight={0}
+      {...rest}
+    >
+      <Image
+        src={src}
+        alt={alt}
+        width={width}
+        height={height}
+        priority={priority}
+        sizes={sizes || "(max-width: 768px) 100vw, (max-width: 1280px) 90vw, 1200px"}
+        style={{ width: "100%", height: "auto", display: "block" }}
+      />
+    </Box>
+  );
+}
+
+// ── DemoCard ─── "Запрос → Результат" мини-демонстрация
+function DemoCard({
+  query,
+  result,
+  resultLabel = "Результат",
+  dark,
+}: {
+  query: string;
+  result: string;
+  resultLabel?: string;
+  dark?: boolean;
+}) {
+  const surface = dark ? "rgba(255,255,255,0.06)" : C.canvas;
+  const surfaceQ = dark ? "rgba(255,255,255,0.04)" : C.canvasFog;
+  const border = dark ? C.inkDeepHairline : C.hairlineSoft;
+  const textPrimary = dark ? C.inkDeepText : C.ink;
+  const textSecondary = dark ? C.inkDeepSecondary : C.inkSecondary;
+  const textTertiary = dark ? C.inkDeepTertiary : C.inkTertiary;
+  const accent = dark ? C.actionBlueOnDark : C.actionBlue;
+
+  return (
+    <Box
+      bg={surface}
+      border="1px solid"
+      borderColor={border}
+      borderRadius="20px"
+      p={{ base: "16px", md: "20px" }}
+      maxW="540px"
+      width="100%"
+      boxShadow={
+        dark
+          ? "0 1px 2px rgba(0,0,0,0.30)"
+          : "0 1px 2px rgba(15,23,42,0.04), 0 12px 32px -16px rgba(15,23,42,0.10)"
       }
     >
-      {children}
-    </Text>
+      <Box mb="10px">
+        <Text
+          fontFamily={FT}
+          fontSize="11px"
+          fontWeight="700"
+          letterSpacing="0.4px"
+          textTransform="uppercase"
+          color={textTertiary}
+          mb="6px"
+        >
+          Запрос
+        </Text>
+        <Box
+          bg={surfaceQ}
+          border="1px solid"
+          borderColor={border}
+          borderRadius="12px"
+          px="12px"
+          py="10px"
+        >
+          <Text
+            fontFamily={FT}
+            fontSize="14px"
+            color={textPrimary}
+            lineHeight="1.45"
+          >
+            {query}
+          </Text>
+        </Box>
+      </Box>
+      <Flex align="center" gap="6px" mb="8px" color={accent}>
+        <Icon as={FiArrowRight} boxSize="14px" />
+        <Text
+          fontFamily={FT}
+          fontSize="11px"
+          fontWeight="700"
+          letterSpacing="0.4px"
+          textTransform="uppercase"
+        >
+          {resultLabel}
+        </Text>
+      </Flex>
+      <Text
+        fontFamily={FT}
+        fontSize="14px"
+        color={textSecondary}
+        lineHeight="1.5"
+      >
+        {result}
+      </Text>
+    </Box>
   );
 }
 
-function Caption({ children, dark }: { children: React.ReactNode; dark?: boolean }) {
-  return (
-    <Text
-      fontSize="13px"
-      fontWeight="500"
-      lineHeight="1.45"
-      letterSpacing="0.06em"
-      textTransform="uppercase"
-      fontFamily={FT}
-      color={dark ? "rgba(255,255,255,0.5)" : C.inkTertiary}
-    >
-      {children}
-    </Text>
-  );
-}
-
-function SectionEyebrow({ children, color = C.actionBlue }: { children: React.ReactNode; color?: string }) {
-  return (
-    <Text
-      fontSize="14px"
-      fontWeight="600"
-      letterSpacing="-0.08px"
-      fontFamily={FT}
-      color={color}
-      mb="12px"
-    >
-      {children}
-    </Text>
-  );
-}
-
-// ── Data ─────────────────────────────────────────────────────────────
-const whyCards = [
-  {
-    icon: FiLayers,
-    title: "Всё в одном месте",
-    text: "Чат, поиск и генерация — без переключения между сервисами.",
-  },
-  {
-    icon: FiGlobe,
-    title: "Русский интерфейс",
-    text: "Пишите на родном языке. Модели понимают русский полностью.",
-  },
-  {
-    icon: FiZap,
-    title: "Быстрый старт",
-    text: "Регистрация за минуту. Первый результат — ещё быстрее.",
-  },
-  {
-    icon: FiMessageSquare,
-    title: "Практическая польза",
-    text: "КП, письма, посты, пересказы, картинки — задачи каждый день.",
-  },
-];
-
-// Horizontal-scroll product tiles — "Возможности ИИСеть"
-const featureTiles: {
-  icon: typeof FiMessageSquare;
-  eyebrow: string;
-  title: string;
-  text: string;
-  href: string;
-  cta: string;
-  accent: string;
-}[] = [
-  {
-    icon: FiMessageSquare,
-    eyebrow: "Чат",
-    title: "Диалог с моделью",
-    text: "GPT-4o, Claude, Gemini и другие — один интерфейс для любой задачи.",
-    href: "/chat",
-    cta: "Открыть чат",
-    accent: C.actionBlue,
-  },
-  {
-    icon: FiSearch,
-    eyebrow: "Поиск",
-    title: "Веб-поиск со ссылками",
-    text: "ИИ ищет в реальном времени и отвечает со ссылками на источники.",
-    href: "/chat",
-    cta: "Попробовать поиск",
-    accent: C.actionBlue,
-  },
-  {
-    icon: FiImage,
-    eyebrow: "Картинки",
-    title: "Генерация изображений",
-    text: "Опишите идею — получите иллюстрацию или фото за секунды.",
-    href: "/chat",
-    cta: "Сгенерировать",
-    accent: C.violet,
-  },
-  {
-    icon: FiCpu,
-    eyebrow: "Проекты",
-    title: "Умные проекты",
-    text: "Загрузите файлы — ИИ работает в контексте именно ваших документов.",
-    href: "/chat",
-    cta: "Создать проект",
-    accent: C.violet,
-  },
-  {
-    icon: FiFileText,
-    eyebrow: "Шаблоны",
-    title: "AI-шаблоны",
-    text: "Готовые сценарии: переводчик, упрощатель писем, редактор резюме.",
-    href: "/all-templates",
-    cta: "Все шаблоны",
-    accent: C.actionBlue,
-  },
-  {
-    icon: FiEdit3,
-    eyebrow: "Идеи",
-    title: "Блог и подсказки",
-    text: "Реальные кейсы и подборки — как использовать ИИ в работе и жизни.",
-    href: "/blog",
-    cta: "Читать блог",
-    accent: C.violet,
-  },
-];
-
-const pricingPlans = [
-  {
-    name: "Pro Text",
-    price: "149 ₽",
-    period: "в месяц",
-    dark: false,
-    badge: null as string | null,
-    desc: "Для активной текстовой работы каждый день.",
-    detail: "1600 страниц текста",
-    cta: { label: "Выбрать", href: "/profile" },
-  },
-  {
-    name: "Premium",
-    price: "249 ₽",
-    period: "в месяц",
-    dark: true, // sole dark accent on the whole page
-    badge: "Популярный выбор",
-    desc: "Тексты и изображения — всё включено.",
-    detail: "2400 стр. текста · 150 изображений",
-    cta: { label: "Начать", href: "/others/sign-in" },
-  },
-  {
-    name: "Basic Art",
-    price: "99 ₽",
-    period: "за пакет",
-    dark: false,
-    badge: null as string | null,
-    desc: "Генерация изображений без подписки.",
-    detail: "100 изображений",
-    cta: { label: "Выбрать", href: "/profile" },
-  },
-];
-
+// ── Footer ──────────────────────────────────────────────────────────
 const footerLinks: Record<string, { label: string; href: string }[]> = {
   Продукт: [
     { label: "Чат", href: "/chat" },
     { label: "Тарифы", href: "/profile" },
     { label: "Агенты", href: "/life-agents" },
+    { label: "Шаблоны", href: "/all-templates" },
   ],
   Компания: [
     { label: "Блог", href: "/blog" },
-    { label: "Контакты", href: "https://telegra.ph/Polzovatelskoe-soglashenie-03-05-7" },
+    { label: "Соглашение", href: "https://telegra.ph/Polzovatelskoe-soglashenie-03-05-7" },
     { label: "Политика", href: "https://telegra.ph/Politika-konfidencialnosti-03-05-7" },
   ],
 };
 
-// ── JSON-LD: Organization + WebSite (preserved verbatim) ────────────
+// ── JSON-LD: Organization + WebSite + WebApplication (verbatim) ────
 const homepageJsonLd = {
   "@context": "https://schema.org",
   "@graph": [
@@ -462,10 +402,7 @@ const homepageJsonLd = {
       operatingSystem: "Web",
       inLanguage: "ru-RU",
       description:
-        "ИИ-чат, веб-поиск с источниками и генерация изображений в одном русскоязычном интерфейсе. Доступ к GPT-4o, Claude и Gemini без переключения сервисов.",
-      // Регистрация бесплатна; платные тарифы — отдельная страница.
-      // Указываем только подтверждённую бесплатную точку входа, без
-      // выдуманных цифр.
+        "ИИ-чат на русском с веб-поиском, источниками, генерацией изображений и работой с PDF/DOCX в одном окне.",
       offers: {
         "@type": "Offer",
         price: "0",
@@ -478,7 +415,35 @@ const homepageJsonLd = {
   ],
 };
 
-// ── Page ─────────────────────────────────────────────────────────────
+// ── Static data ─────────────────────────────────────────────────────
+const SCENARIOS = [
+  { title: "Улучшить резюме", hint: "Под конкретную вакансию" },
+  { title: "Подготовиться к интервью", hint: "Вопросы и ответы по вашей роли" },
+  { title: "Разобрать документ", hint: "PDF, DOCX, договор, бриф" },
+  { title: "Найти свежие данные", hint: "С ссылками на источники" },
+  { title: "Написать письмо", hint: "Деловое, личное, в нужном тоне" },
+  { title: "Создать визуал", hint: "Обложка, идея для презентации" },
+  { title: "Придумать пост", hint: "Соцсети, рассылка, лид-форма" },
+  { title: "Сравнить варианты", hint: "Тарифы, инструменты, гипотезы" },
+];
+
+const PROJECT_USE_CASES = [
+  { title: "Поиск работы", hint: "Резюме, вакансии, сопровод." },
+  { title: "Учёба", hint: "Конспекты, статьи, разборы" },
+  { title: "Бизнес-идея", hint: "Анализ, план, расчёты" },
+  { title: "Документы", hint: "Договоры, отчёты, презентации" },
+];
+
+const TRUST_POINTS = [
+  "Работает на русском",
+  "Показывает источники в веб-поиске",
+  "Читает PDF, DOCX, XLSX, TXT",
+  "Создаёт изображения по описанию",
+  "Помнит материалы внутри проекта",
+  "Подходит для работы, учёбы и личных задач",
+];
+
+// ─────────────────────────────────────────────────────────────────────
 export default function HomePage() {
   return (
     <Box as="main" bg={C.canvasPearl}>
@@ -487,20 +452,20 @@ export default function HomePage() {
         dangerouslySetInnerHTML={{ __html: JSON.stringify(homepageJsonLd) }}
       />
 
-      {/* ── Sticky nav — light translucent ─────────────────────────── */}
+      {/* ── Sticky nav ─────────────────────────────────────────────── */}
       <Box
         as="nav"
         position="sticky"
         top="0"
         zIndex="100"
-        bg="rgba(251,251,253,0.72)"
+        bg="rgba(251,251,253,0.78)"
         backdropFilter="blur(20px) saturate(180%)"
         borderBottom="1px solid"
         borderColor={C.hairlineSoft}
       >
         <Flex
           mx="auto"
-          maxW="1180px"
+          maxW="1200px"
           px={{ base: "20px", md: "44px" }}
           h="48px"
           align="center"
@@ -538,20 +503,19 @@ export default function HomePage() {
           <HStack spacing="28px" display={{ base: "none", md: "flex" }}>
             {[
               { label: "Возможности", href: "#features" },
-              { label: "Что внутри", href: "#explore" },
-              { label: "Тарифы", href: "#pricing" },
-              { label: "Как начать", href: "#start" },
+              { label: "Проекты", href: "#projects" },
+              { label: "Сценарии", href: "#scenarios" },
             ].map((l) => (
               <Box
                 key={l.href}
                 as={Link}
                 href={l.href}
                 fontSize="13px"
-                fontWeight="400"
+                fontWeight="500"
                 letterSpacing="-0.08px"
                 fontFamily={FT}
                 color={C.ink}
-                opacity={0.82}
+                opacity={0.78}
                 textDecoration="none"
                 _hover={{ opacity: 1 }}
                 transition="opacity 0.15s ease"
@@ -565,40 +529,42 @@ export default function HomePage() {
         </Flex>
       </Box>
 
-      {/* ── Hero — light, airy, single product scene ───────────────── */}
+      {/* ── 1. Hero ───────────────────────────────────────────────── */}
       <Box
         as="section"
+        bg={C.canvasPearl}
+        pt={{ base: "64px", md: "104px" }}
+        pb={{ base: "48px", md: "80px" }}
+        px={{ base: "24px", md: "48px" }}
         position="relative"
         overflow="hidden"
-        bg={C.canvasPearl}
-        pt={{ base: "72px", md: "108px" }}
-        pb={{ base: "80px", md: "120px" }}
-        px={{ base: "24px", md: "48px" }}
       >
-        {/* Single soft accent blob, very low opacity */}
+        {/* very soft single accent blob */}
         <Box
           position="absolute"
-          top="-220px"
+          top="-200px"
           left="50%"
           transform="translateX(-50%)"
           w="1100px"
-          h="540px"
+          h="500px"
           borderRadius="50%"
-          bg="radial-gradient(ellipse, rgba(0,102,204,0.08) 0%, transparent 70%)"
+          bg="radial-gradient(ellipse, rgba(0,102,204,0.06) 0%, transparent 70%)"
           filter="blur(60px)"
           pointerEvents="none"
         />
 
-        <Box mx="auto" maxW="1040px" textAlign="center" position="relative">
-          {/* ── Brand lockup — Apple product-page style ───────────────
-              Вертикальный logo + wordmark + тонкая caption-line.
-              Заменяет слабый текстовый бейдж. */}
-          <VStack spacing={{ base: "10px", md: "12px" }} mb={{ base: "28px", md: "36px" }}>
+        <Box mx="auto" maxW="1080px" textAlign="center" position="relative">
+          {/* Brand mark, no cheap label */}
+          <Flex
+            mx="auto"
+            justify="center"
+            mb={{ base: "20px", md: "28px" }}
+          >
             <Box position="relative" display="inline-flex">
               <Box
                 position="absolute"
                 inset="-22px"
-                bg="radial-gradient(circle, rgba(0,102,204,0.12) 0%, transparent 70%)"
+                bg="radial-gradient(circle, rgba(0,102,204,0.16) 0%, transparent 70%)"
                 filter="blur(22px)"
                 pointerEvents="none"
                 aria-hidden
@@ -607,1042 +573,689 @@ export default function HomePage() {
                 src="/brand.png"
                 alt="ИИСеть"
                 style={{
-                  width: "52px",
-                  height: "52px",
-                  borderRadius: "14px",
+                  width: "56px",
+                  height: "56px",
+                  borderRadius: "16px",
                   objectFit: "cover",
                   position: "relative",
                   boxShadow:
-                    "0 1px 2px rgba(15,23,42,0.06), 0 10px 30px -12px rgba(0,102,204,0.30)",
+                    "0 1px 2px rgba(15,23,42,0.08), 0 12px 36px -14px rgba(0,102,204,0.32)",
                 }}
               />
             </Box>
-            <Text
-              fontFamily={FD}
-              fontSize={{ base: "22px", md: "26px" }}
-              fontWeight="600"
-              letterSpacing="-0.02em"
-              lineHeight="1.1"
-              color={C.ink}
-            >
-              ИИСеть
-            </Text>
-            <Text
-              fontFamily={FT}
-              fontSize="13px"
-              fontWeight="500"
-              letterSpacing="0.18em"
-              textTransform="uppercase"
-              color={C.actionBlue}
-            >
-              AI · Поиск · Картинки
-            </Text>
-          </VStack>
+          </Flex>
 
           <Heading
             as="h1"
-            fontSize={{ base: "44px", sm: "60px", md: "80px" }}
-            fontWeight="600"
-            lineHeight="1.04"
-            letterSpacing="-0.025em"
             fontFamily={FD}
+            fontSize={{ base: "44px", sm: "60px", md: "84px" }}
+            fontWeight="600"
+            lineHeight="1.02"
+            letterSpacing="-0.028em"
             color={C.ink}
             mb="20px"
-            maxW="900px"
-            mx="auto"
           >
-            Один сервис для всего,
-            <br />
-            что умеет ИИ.
+            Напишите. Найдите. Создайте.
           </Heading>
 
           <Text
-            fontSize={{ base: "19px", md: "22px" }}
-            fontWeight="400"
-            lineHeight="1.45"
-            letterSpacing="-0.012em"
             fontFamily={FD}
+            fontSize={{ base: "18px", md: "22px" }}
+            fontWeight="400"
+            lineHeight="1.4"
+            letterSpacing="-0.012em"
             color={C.inkSecondary}
-            mb="36px"
-            maxW="640px"
+            mb={{ base: "32px", md: "40px" }}
+            maxW="680px"
             mx="auto"
           >
-            Диалог с лучшими моделями, веб-поиск со ссылками на источники и генерация
-            изображений — на русском, в одном окне.
+            ИИСеть объединяет чат с ИИ, веб-поиск, генерацию изображений
+            и работу с файлами в одном простом сервисе на русском.
           </Text>
 
           <HStack
-            spacing="6px"
+            spacing="8px"
             justify="center"
             flexWrap="wrap"
-            mb={{ base: "56px", md: "72px" }}
+            mb={{ base: "48px", md: "72px" }}
           >
             <CtaPrimary href="/chat" large>
-              Начать бесплатно
+              Открыть ИИСеть
             </CtaPrimary>
-            <CtaSecondary href="#features">Смотреть возможности</CtaSecondary>
+            <CtaSecondary href="#features">Посмотреть возможности</CtaSecondary>
           </HStack>
 
-          {/* Large floating product scene — replaces nested chat card */}
-          <Box mx="auto" maxW="940px">
-            <MacChrome>
-              <Box p={{ base: "20px", md: "32px" }} bg={C.canvas}>
-                <HStack spacing="8px" mb="20px">
-                  <Box
-                    px="10px"
-                    py="4px"
-                    borderRadius="9999px"
-                    bg={C.actionBlue}
-                    color="white"
-                    fontSize="12px"
-                    fontWeight="600"
-                    fontFamily={FT}
-                  >
-                    ИИ-чат
-                  </Box>
-                  <Box
-                    px="10px"
-                    py="4px"
-                    borderRadius="9999px"
-                    bg={C.canvasFog}
-                    color={C.inkSecondary}
-                    fontSize="12px"
-                    fontFamily={FT}
-                  >
-                    Веб-поиск
-                  </Box>
-                  <Box
-                    px="10px"
-                    py="4px"
-                    borderRadius="9999px"
-                    bg={C.canvasFog}
-                    color={C.inkSecondary}
-                    fontSize="12px"
-                    fontFamily={FT}
-                  >
-                    Изображения
-                  </Box>
-                </HStack>
-
-                <VStack align="stretch" spacing="12px" textAlign="left">
-                  <Box
-                    alignSelf="flex-start"
-                    bg={C.canvasFog}
-                    px="18px"
-                    py="14px"
-                    borderRadius="16px 16px 16px 4px"
-                    maxW={{ base: "90%", md: "70%" }}
-                  >
-                    <Text
-                      fontSize={{ base: "15px", md: "16px" }}
-                      fontFamily={FT}
-                      color={C.ink}
-                      lineHeight="1.5"
-                    >
-                      Напиши коммерческое предложение для небольшой бухгалтерской компании
-                    </Text>
-                  </Box>
-                  <Box
-                    alignSelf="flex-end"
-                    bg={C.actionBlue}
-                    px="18px"
-                    py="14px"
-                    borderRadius="16px 16px 4px 16px"
-                    maxW={{ base: "90%", md: "70%" }}
-                  >
-                    <Text
-                      fontSize={{ base: "15px", md: "16px" }}
-                      fontFamily={FT}
-                      color="white"
-                      lineHeight="1.5"
-                    >
-                      Готово. Вот вариант КП с фокусом на доверие, конкретные выгоды и
-                      чёткий следующий шаг.
-                    </Text>
-                  </Box>
-
-                  <HStack spacing="6px" mt="6px" flexWrap="wrap">
-                    {["GPT-4o", "Claude 3.5", "Gemini Pro"].map((m) => (
-                      <Box
-                        key={m}
-                        px="9px"
-                        py="3px"
-                        borderRadius="9999px"
-                        bg={C.canvasFog}
-                      >
-                        <Text fontSize="11px" fontFamily={FT} color={C.inkSecondary}>
-                          {m}
-                        </Text>
-                      </Box>
-                    ))}
-                    <Text fontSize="11px" fontFamily={FT} color={C.inkTertiary}>
-                      и другие
-                    </Text>
-                  </HStack>
-                </VStack>
-              </Box>
-            </MacChrome>
+          <Box mx="auto" maxW="1200px">
+            <PosterFrame
+              src="/landing/iiset-hero-workspace.webp"
+              alt="Рабочее пространство ИИСеть: чат с ИИ, веб-поиск с источниками и генерация изображений в одном окне на русском языке"
+              width={1672}
+              height={941}
+              priority
+              sizes="(max-width: 768px) 100vw, (max-width: 1280px) 92vw, 1200px"
+              borderRadius={{ base: "20px", md: "32px" }}
+              shadow="soft"
+            />
           </Box>
         </Box>
       </Box>
 
-      {/* ── Capabilities (3 hero tiles, light) ─────────────────────── */}
+      {/* ── 2. Dark Search Poster ─────────────────────────────────── */}
       <Box
         as="section"
         id="features"
-        bg={C.canvasFog}
-        py={{ base: "72px", md: "104px" }}
+        bg={C.inkDeep}
+        py={{ base: "80px", md: "128px" }}
         px={{ base: "24px", md: "48px" }}
-      >
-        <Box mx="auto" maxW="1180px">
-          <Box mb={{ base: "40px", md: "56px" }} maxW="720px">
-            <SectionEyebrow>Возможности</SectionEyebrow>
-            <Heading
-              as="h2"
-              fontSize={{ base: "32px", md: "52px" }}
-              fontWeight="600"
-              lineHeight="1.06"
-              letterSpacing="-0.022em"
-              fontFamily={FD}
-              color={C.ink}
-              mb="16px"
-            >
-              Три инструмента,
-              <br />
-              одно окно.
-            </Heading>
-            <Text
-              fontSize={{ base: "18px", md: "20px" }}
-              fontWeight="400"
-              lineHeight="1.5"
-              fontFamily={FD}
-              color={C.inkSecondary}
-              maxW="540px"
-            >
-              Больше не нужно держать пять сервисов открытыми одновременно.
-            </Text>
-          </Box>
-
-          {/* 2x1 bento: lead tile (2 cols) + 2 stacked tiles */}
-          <Box
-            display="grid"
-            gridTemplateColumns={{ base: "1fr", lg: "1.4fr 1fr" }}
-            gap="20px"
-          >
-            {/* Lead tile — ИИ-чат */}
-            <Tile p={{ base: "32px", md: "48px" }} borderRadius="28px">
-              <Caption>ИИ-чат</Caption>
-              <Heading
-                as="h3"
-                fontSize={{ base: "26px", md: "34px" }}
-                fontWeight="600"
-                lineHeight="1.12"
-                letterSpacing="-0.018em"
-                fontFamily={FD}
-                color={C.ink}
-                mt="10px"
-                mb="14px"
-              >
-                Диалог с любой моделью.
-              </Heading>
-              <Text
-                fontSize="17px"
-                lineHeight="1.5"
-                fontFamily={FT}
-                color={C.inkSecondary}
-                mb="28px"
-                maxW="480px"
-              >
-                GPT-4o, Claude 3.5, Gemini и другие — один интерфейс для всех задач.
-                Пишите письма, анализируйте документы, получайте советы.
-              </Text>
-
-              <Box bg={C.canvasFog} borderRadius="16px" p="20px">
-                <VStack align="stretch" spacing="10px">
-                  {[
-                    { user: true, text: "Переведи этот абзац на английский и сделай формальнее" },
-                    { user: false, text: "Here is a formal English translation, maintaining professional tone throughout." },
-                    { user: true, text: "Добавь заключительный абзац с призывом к действию" },
-                  ].map((msg, i) => (
-                    <Box
-                      key={i}
-                      alignSelf={msg.user ? "flex-start" : "flex-end"}
-                      bg={msg.user ? C.canvas : C.actionBlue}
-                      px="14px"
-                      py="10px"
-                      borderRadius="12px"
-                      maxW="86%"
-                      boxShadow={msg.user ? "0 1px 2px rgba(15,23,42,0.04)" : "none"}
-                    >
-                      <Text
-                        fontSize="14px"
-                        fontFamily={FT}
-                        color={msg.user ? C.ink : "white"}
-                        lineHeight="1.5"
-                      >
-                        {msg.text}
-                      </Text>
-                    </Box>
-                  ))}
-                </VStack>
-              </Box>
-
-              <Box mt="20px">
-                <CtaSecondary href="/chat">Открыть чат</CtaSecondary>
-              </Box>
-            </Tile>
-
-            {/* Right column: 2 stacked tiles */}
-            <VStack spacing="20px" align="stretch">
-              <Tile p={{ base: "28px", md: "36px" }} borderRadius="28px">
-                <Caption>Веб-поиск</Caption>
-                <Heading
-                  as="h3"
-                  fontSize={{ base: "22px", md: "26px" }}
-                  fontWeight="600"
-                  lineHeight="1.14"
-                  letterSpacing="-0.016em"
-                  fontFamily={FD}
-                  color={C.ink}
-                  mt="8px"
-                  mb="10px"
-                >
-                  Свежие данные со ссылками.
-                </Heading>
-                <Text
-                  fontSize="15px"
-                  lineHeight="1.5"
-                  fontFamily={FT}
-                  color={C.inkSecondary}
-                  mb="20px"
-                >
-                  ИИ ищет в реальном времени и показывает источники.
-                </Text>
-
-                <VStack spacing="8px" align="stretch">
-                  {[
-                    { src: "РБК", text: "Курс доллара на сегодня…" },
-                    { src: "Forbes", text: "Топ-10 ИИ-инструментов 2025…" },
-                  ].map((r) => (
-                    <Flex
-                      key={r.src}
-                      gap="10px"
-                      p="10px 12px"
-                      bg={C.canvasFog}
-                      borderRadius="10px"
-                      align="center"
-                    >
-                      <Box
-                        px="7px"
-                        py="2px"
-                        borderRadius="6px"
-                        bg={C.canvas}
-                        border="1px solid"
-                        borderColor={C.hairlineSoft}
-                      >
-                        <Text
-                          fontSize="11px"
-                          fontWeight="600"
-                          fontFamily={FT}
-                          color={C.ink}
-                        >
-                          {r.src}
-                        </Text>
-                      </Box>
-                      <Text
-                        fontSize="13px"
-                        fontFamily={FT}
-                        color={C.inkSecondary}
-                        noOfLines={1}
-                      >
-                        {r.text}
-                      </Text>
-                    </Flex>
-                  ))}
-                </VStack>
-
-                <Box mt="16px">
-                  <CtaSecondary href="/chat">Попробовать поиск</CtaSecondary>
-                </Box>
-              </Tile>
-
-              <Tile p={{ base: "28px", md: "36px" }} borderRadius="28px">
-                <Caption>Генерация</Caption>
-                <Heading
-                  as="h3"
-                  fontSize={{ base: "22px", md: "26px" }}
-                  fontWeight="600"
-                  lineHeight="1.14"
-                  letterSpacing="-0.016em"
-                  fontFamily={FD}
-                  color={C.ink}
-                  mt="8px"
-                  mb="10px"
-                >
-                  Изображения по тексту.
-                </Heading>
-                <Text
-                  fontSize="15px"
-                  lineHeight="1.5"
-                  fontFamily={FT}
-                  color={C.inkSecondary}
-                  mb="16px"
-                >
-                  Опишите идею — получите иллюстрацию за секунды.
-                </Text>
-
-                {/* Prompt pill — имитация ввода пользователя */}
-                <Flex
-                  align="center"
-                  gap="10px"
-                  px="12px"
-                  py="10px"
-                  borderRadius="12px"
-                  bg={C.canvasFog}
-                  mb="12px"
-                >
-                  <Box
-                    boxSize="6px"
-                    borderRadius="50%"
-                    bg={C.actionBlue}
-                    flexShrink={0}
-                  />
-                  <Text
-                    fontSize="12px"
-                    fontFamily={FT}
-                    color={C.inkSecondary}
-                    lineHeight="1.4"
-                    noOfLines={1}
-                  >
-                    «Футуристичный офис в стиле Apple, мягкий свет»
-                  </Text>
-                </Flex>
-
-                {/* 2×2 CSS-art preview gallery */}
-                <SimpleGrid columns={2} spacing="8px" mb="12px">
-                  {[
-                    {
-                      label: "Фото",
-                      // Photoreal: pearl bg + glass sphere highlight + deep tone
-                      background:
-                        "radial-gradient(circle at 35% 32%, rgba(255,255,255,0.95) 0%, rgba(255,255,255,0.35) 16%, transparent 32%), radial-gradient(circle at 65% 70%, rgba(0,102,204,0.45) 0%, rgba(0,102,204,0) 55%), linear-gradient(135deg, #eaf0fb 0%, #cfd9ef 100%)",
-                    },
-                    {
-                      label: "Иллюстрация",
-                      // Flat geometric — warm pastel + circle + soft rect overlay
-                      background:
-                        "radial-gradient(circle at 72% 32%, #ffb8a0 0%, #ffb8a0 22%, transparent 23%), linear-gradient(160deg, #fff6ec 0%, #ffe2cf 100%)",
-                    },
-                    {
-                      label: "Концепт",
-                      // Concept-art: deep blue night + pink/indigo orbs
-                      background:
-                        "radial-gradient(circle at 22% 78%, rgba(255,137,194,0.85) 0%, transparent 48%), radial-gradient(circle at 78% 28%, rgba(94,92,230,0.85) 0%, transparent 55%), linear-gradient(135deg, #1a1b3a 0%, #2c1a4a 100%)",
-                      labelDark: true,
-                    },
-                    {
-                      label: "Абстракция",
-                      // Mesh gradient — three soft radial stops
-                      background:
-                        "radial-gradient(at 28% 28%, #ffe57f 0px, transparent 50%), radial-gradient(at 72% 28%, #82d4ff 0px, transparent 50%), radial-gradient(at 50% 80%, #b8a4ff 0px, transparent 50%), linear-gradient(135deg, #fdf6ee 0%, #f3edf8 100%)",
-                    },
-                  ].map((card, i) => (
-                    <Box
-                      key={i}
-                      position="relative"
-                      borderRadius="12px"
-                      overflow="hidden"
-                      border="1px solid"
-                      borderColor="rgba(15,23,42,0.06)"
-                      boxShadow="inset 0 1px 0 rgba(255,255,255,0.55), 0 1px 2px rgba(15,23,42,0.04)"
-                      sx={{
-                        aspectRatio: "1 / 1",
-                        background: card.background,
-                      }}
-                    >
-                      {/* Inner gloss highlight for premium feel */}
-                      <Box
-                        position="absolute"
-                        top="0"
-                        left="0"
-                        right="0"
-                        h="40%"
-                        pointerEvents="none"
-                        sx={{
-                          background:
-                            "linear-gradient(180deg, rgba(255,255,255,0.18) 0%, rgba(255,255,255,0) 100%)",
-                        }}
-                      />
-                      {/* Small floating category label */}
-                      <Box
-                        position="absolute"
-                        bottom="6px"
-                        left="6px"
-                        px="7px"
-                        py="2px"
-                        borderRadius="9999px"
-                        bg={card.labelDark ? "rgba(255,255,255,0.18)" : "rgba(255,255,255,0.78)"}
-                        sx={{
-                          backdropFilter: "blur(8px)",
-                          WebkitBackdropFilter: "blur(8px)",
-                        }}
-                      >
-                        <Text
-                          fontSize="10px"
-                          fontWeight="600"
-                          fontFamily={FT}
-                          color={card.labelDark ? "white" : C.ink}
-                          letterSpacing="-0.02em"
-                        >
-                          {card.label}
-                        </Text>
-                      </Box>
-                    </Box>
-                  ))}
-                </SimpleGrid>
-
-                {/* Meta line — AI-generated marker */}
-                <Flex align="center" gap="6px" mb="16px">
-                  <Box
-                    boxSize="5px"
-                    borderRadius="50%"
-                    bg={C.actionBlue}
-                    flexShrink={0}
-                  />
-                  <Text
-                    fontSize="11px"
-                    fontFamily={FT}
-                    color={C.inkTertiary}
-                    letterSpacing="-0.02em"
-                  >
-                    AI · готово за 3 секунды
-                  </Text>
-                </Flex>
-
-                <CtaSecondary href="/chat">Сгенерировать изображение</CtaSecondary>
-              </Tile>
-            </VStack>
-          </Box>
-        </Box>
-      </Box>
-
-      {/* ── Horizontal scroll: Возможности ИИСеть (product tiles) ── */}
-      <Box
-        as="section"
-        id="explore"
-        bg={C.canvasPearl}
-        py={{ base: "72px", md: "104px" }}
-      >
-        <Box mx="auto" maxW="1180px" px={{ base: "24px", md: "48px" }} mb="40px">
-          <SectionEyebrow>Что можно сделать</SectionEyebrow>
-          <Flex
-            direction={{ base: "column", md: "row" }}
-            justify="space-between"
-            align={{ base: "flex-start", md: "flex-end" }}
-            gap="16px"
-          >
-            <Heading
-              as="h2"
-              fontSize={{ base: "32px", md: "52px" }}
-              fontWeight="600"
-              lineHeight="1.06"
-              letterSpacing="-0.022em"
-              fontFamily={FD}
-              color={C.ink}
-              maxW="720px"
-            >
-              Возможности ИИСеть.
-            </Heading>
-            <CtaSecondary href="/chat">Открыть всё в чате</CtaSecondary>
-          </Flex>
-        </Box>
-
-        {/* Edge-faded horizontal scroller, no JS, scroll-snap, swipe-friendly */}
-        <Box
-          sx={{
-            overflowX: "auto",
-            overflowY: "hidden",
-            scrollSnapType: "x mandatory",
-            scrollPaddingLeft: "48px",
-            scrollbarWidth: "none",
-            "&::-webkit-scrollbar": { display: "none" },
-            WebkitOverflowScrolling: "touch",
-            maskImage:
-              "linear-gradient(to right, transparent 0, black 56px, black calc(100% - 56px), transparent 100%)",
-            WebkitMaskImage:
-              "linear-gradient(to right, transparent 0, black 56px, black calc(100% - 56px), transparent 100%)",
-            "@media (prefers-reduced-motion: reduce)": {
-              scrollBehavior: "auto",
-            },
-          }}
-        >
-          <Flex
-            as="ul"
-            listStyleType="none"
-            gap="20px"
-            px={{ base: "24px", md: "48px" }}
-            py="8px"
-            mx="auto"
-            maxW="1180px"
-            w="max-content"
-          >
-            {featureTiles.map((t) => (
-              <Box
-                as="li"
-                key={t.title}
-                sx={{ scrollSnapAlign: "start" }}
-                w={{ base: "78vw", sm: "360px", md: "380px" }}
-                minW={{ base: "78vw", sm: "360px", md: "380px" }}
-              >
-                <Tile
-                  p={{ base: "26px", md: "30px" }}
-                  borderRadius="24px"
-                  h="100%"
-                  display="flex"
-                  flexDirection="column"
-                  justifyContent="space-between"
-                  minH="280px"
-                >
-                  <Box>
-                    <Flex
-                      align="center"
-                      justify="center"
-                      boxSize="40px"
-                      borderRadius="12px"
-                      bg={C.canvasFog}
-                      mb="20px"
-                    >
-                      <Icon as={t.icon} color={t.accent} boxSize="18px" />
-                    </Flex>
-                    <Caption>{t.eyebrow}</Caption>
-                    <Heading
-                      as="h3"
-                      fontSize="22px"
-                      fontWeight="600"
-                      lineHeight="1.18"
-                      letterSpacing="-0.014em"
-                      fontFamily={FD}
-                      color={C.ink}
-                      mt="8px"
-                      mb="10px"
-                    >
-                      {t.title}
-                    </Heading>
-                    <Text
-                      fontSize="15px"
-                      fontFamily={FT}
-                      color={C.inkSecondary}
-                      lineHeight="1.5"
-                    >
-                      {t.text}
-                    </Text>
-                  </Box>
-                  <Box mt="20px">
-                    <Box
-                      as={Link}
-                      href={t.href}
-                      display="inline-flex"
-                      alignItems="center"
-                      gap="3px"
-                      fontSize="15px"
-                      fontWeight="400"
-                      letterSpacing="-0.16px"
-                      fontFamily={FT}
-                      color={t.accent}
-                      textDecoration="none"
-                      _hover={{ textDecoration: "underline" }}
-                      transition="color 0.15s ease"
-                    >
-                      {t.cta}
-                      <Icon as={FiArrowRight} boxSize="14px" />
-                    </Box>
-                  </Box>
-                </Tile>
-              </Box>
-            ))}
-          </Flex>
-        </Box>
-      </Box>
-
-      {/* ── Why ИИСеть (light, asymmetric) ─────────────────────────── */}
-      <Box
-        as="section"
-        bg={C.canvasFog}
-        py={{ base: "72px", md: "104px" }}
-        px={{ base: "24px", md: "48px" }}
-      >
-        <Box mx="auto" maxW="1180px">
-          <Box mb={{ base: "40px", md: "56px" }} maxW="720px">
-            <SectionEyebrow>Почему ИИСеть</SectionEyebrow>
-            <Heading
-              as="h2"
-              fontSize={{ base: "32px", md: "52px" }}
-              fontWeight="600"
-              lineHeight="1.06"
-              letterSpacing="-0.022em"
-              fontFamily={FD}
-              color={C.ink}
-              mb="16px"
-            >
-              Не «ИИ-сервис».
-              <br />
-              Конкретная польза.
-            </Heading>
-            <Text
-              fontSize={{ base: "18px", md: "20px" }}
-              fontWeight="400"
-              lineHeight="1.5"
-              fontFamily={FD}
-              color={C.inkSecondary}
-              maxW="540px"
-            >
-              Четыре причины, почему люди возвращаются каждый день.
-            </Text>
-          </Box>
-
-          <SimpleGrid columns={{ base: 1, md: 2, lg: 4 }} spacing="20px">
-            {whyCards.map((w) => (
-              <Tile key={w.title} p={{ base: "28px", md: "30px" }} borderRadius="22px">
-                <Flex
-                  boxSize="44px"
-                  borderRadius="12px"
-                  bg={C.canvasFog}
-                  align="center"
-                  justify="center"
-                  mb="18px"
-                >
-                  <Icon as={w.icon} color={C.actionBlue} boxSize="20px" />
-                </Flex>
-                <Text
-                  fontSize="18px"
-                  fontWeight="600"
-                  letterSpacing="-0.014em"
-                  lineHeight="1.22"
-                  fontFamily={FD}
-                  color={C.ink}
-                  mb="8px"
-                >
-                  {w.title}
-                </Text>
-                <Body muted>{w.text}</Body>
-              </Tile>
-            ))}
-          </SimpleGrid>
-        </Box>
-      </Box>
-
-      {/* ── Pricing (light, one dark accent tile) ──────────────────── */}
-      <Box
-        as="section"
-        id="pricing"
-        bg={C.canvasPearl}
-        py={{ base: "72px", md: "104px" }}
-        px={{ base: "24px", md: "48px" }}
-      >
-        <Box mx="auto" maxW="1080px">
-          <Box mb={{ base: "40px", md: "56px" }} textAlign="center">
-            <SectionEyebrow>Тарифы</SectionEyebrow>
-            <Heading
-              as="h2"
-              fontSize={{ base: "32px", md: "52px" }}
-              fontWeight="600"
-              lineHeight="1.06"
-              letterSpacing="-0.022em"
-              fontFamily={FD}
-              color={C.ink}
-              mb="16px"
-            >
-              Платите только за то,
-              <br />
-              что используете.
-            </Heading>
-            <Text
-              fontSize={{ base: "18px", md: "20px" }}
-              fontWeight="400"
-              lineHeight="1.5"
-              fontFamily={FD}
-              color={C.inkSecondary}
-              maxW="520px"
-              mx="auto"
-            >
-              Регистрация бесплатна. Тариф можно менять в любой момент.
-            </Text>
-          </Box>
-
-          <SimpleGrid columns={{ base: 1, md: 3 }} spacing="20px" alignItems="stretch">
-            {pricingPlans.map((plan) => {
-              const isDark = plan.dark;
-              return (
-                <Tile
-                  key={plan.name}
-                  bg={isDark ? C.inkDeep : C.canvas}
-                  p={{ base: "30px", md: "36px" }}
-                  borderRadius="26px"
-                  position="relative"
-                  display="flex"
-                  flexDirection="column"
-                  sx={
-                    isDark
-                      ? {
-                          boxShadow:
-                            "0 1px 2px rgba(10,10,12,0.10), 0 24px 48px -16px rgba(10,10,12,0.30)",
-                        }
-                      : undefined
-                  }
-                >
-                  {plan.badge && (
-                    <Box
-                      position="absolute"
-                      top="-12px"
-                      left="50%"
-                      transform="translateX(-50%)"
-                      bg={C.actionBlue}
-                      color="white"
-                      fontSize="11px"
-                      fontWeight="600"
-                      letterSpacing="0.04em"
-                      textTransform="uppercase"
-                      fontFamily={FT}
-                      borderRadius="9999px"
-                      px="12px"
-                      py="4px"
-                      whiteSpace="nowrap"
-                    >
-                      {plan.badge}
-                    </Box>
-                  )}
-
-                  <Text
-                    fontSize="14px"
-                    fontWeight="600"
-                    letterSpacing="0.04em"
-                    textTransform="uppercase"
-                    fontFamily={FT}
-                    color={isDark ? "rgba(255,255,255,0.55)" : C.inkTertiary}
-                    mb="14px"
-                  >
-                    {plan.name}
-                  </Text>
-
-                  <HStack align="baseline" spacing="6px" mb="10px">
-                    <Text
-                      fontSize="44px"
-                      fontWeight="600"
-                      lineHeight="1.05"
-                      letterSpacing="-0.022em"
-                      fontFamily={FD}
-                      color={isDark ? "white" : C.ink}
-                      sx={{ fontVariantNumeric: "tabular-nums" }}
-                    >
-                      {plan.price}
-                    </Text>
-                    <Text
-                      fontSize="14px"
-                      fontFamily={FT}
-                      color={isDark ? "rgba(255,255,255,0.55)" : C.inkTertiary}
-                    >
-                      {plan.period}
-                    </Text>
-                  </HStack>
-
-                  <Body dark={isDark} muted={isDark}>
-                    {plan.desc}
-                  </Body>
-                  <Box mt="10px" mb="24px">
-                    <Text
-                      fontSize="14px"
-                      fontFamily={FT}
-                      color={isDark ? "rgba(255,255,255,0.62)" : C.inkSecondary}
-                      lineHeight="1.45"
-                    >
-                      {plan.detail}
-                    </Text>
-                  </Box>
-
-                  <Box mt="auto">
-                    {isDark ? (
-                      <Button
-                        as={Link}
-                        href={plan.cta.href}
-                        bg="white"
-                        color={C.ink}
-                        borderRadius="9999px"
-                        px="20px"
-                        py="10px"
-                        fontSize="15px"
-                        fontWeight="500"
-                        fontFamily={FT}
-                        _hover={{ bg: "#f5f5f7" }}
-                        _active={{ transform: "scale(0.98)" }}
-                        transition="background-color 0.15s ease, transform 0.15s ease"
-                        h="auto"
-                        w={{ base: "100%", md: "auto" }}
-                      >
-                        {plan.cta.label}
-                      </Button>
-                    ) : (
-                      <CtaPrimary href={plan.cta.href}>{plan.cta.label}</CtaPrimary>
-                    )}
-                  </Box>
-                </Tile>
-              );
-            })}
-          </SimpleGrid>
-
-          <Box textAlign="center" mt="36px">
-            <CtaSecondary href="/profile">Все тарифы и сравнение</CtaSecondary>
-          </Box>
-        </Box>
-      </Box>
-
-      {/* ── How to start (light editorial timeline) ────────────────── */}
-      <Box
-        as="section"
-        id="start"
-        bg={C.canvasFog}
-        py={{ base: "72px", md: "104px" }}
-        px={{ base: "24px", md: "48px" }}
-      >
-        <Box mx="auto" maxW="1080px">
-          <Box mb={{ base: "40px", md: "56px" }} maxW="720px">
-            <SectionEyebrow>Как начать</SectionEyebrow>
-            <Heading
-              as="h2"
-              fontSize={{ base: "32px", md: "52px" }}
-              fontWeight="600"
-              lineHeight="1.06"
-              letterSpacing="-0.022em"
-              fontFamily={FD}
-              color={C.ink}
-              mb="16px"
-            >
-              Три шага. Без настроек.
-            </Heading>
-            <Text
-              fontSize={{ base: "18px", md: "20px" }}
-              fontWeight="400"
-              lineHeight="1.5"
-              fontFamily={FD}
-              color={C.inkSecondary}
-              maxW="520px"
-            >
-              Никаких API-ключей. Никаких сложных интерфейсов. Просто чат.
-            </Text>
-          </Box>
-
-          <SimpleGrid columns={{ base: 1, md: 3 }} spacing={{ base: "32px", md: "20px" }}>
-            {[
-              {
-                n: "01",
-                t: "Откройте чат",
-                d: "Зайдите с любого браузера. Регистрация — за одну минуту.",
-              },
-              {
-                n: "02",
-                t: "Опишите задачу",
-                d: "Напишите запрос или выберите агента. ИИСеть подберёт модель.",
-              },
-              {
-                n: "03",
-                t: "Используйте результат",
-                d: "Скопируйте, отредактируйте, скачайте. Готово к работе.",
-              },
-            ].map((s) => (
-              <Box key={s.n} position="relative">
-                <Text
-                  fontSize={{ base: "88px", md: "120px" }}
-                  fontWeight="600"
-                  lineHeight="1"
-                  letterSpacing="-0.04em"
-                  fontFamily={FD}
-                  color={C.hairline}
-                  mb="12px"
-                  sx={{ fontVariantNumeric: "tabular-nums" }}
-                >
-                  {s.n}
-                </Text>
-                <Heading
-                  as="h3"
-                  fontSize="22px"
-                  fontWeight="600"
-                  letterSpacing="-0.014em"
-                  fontFamily={FD}
-                  color={C.ink}
-                  mb="8px"
-                >
-                  {s.t}
-                </Heading>
-                <Body muted>{s.d}</Body>
-              </Box>
-            ))}
-          </SimpleGrid>
-        </Box>
-      </Box>
-
-      {/* ── Final CTA — soft and contained ─────────────────────────── */}
-      <Box
-        as="section"
+        color={C.inkDeepText}
         position="relative"
         overflow="hidden"
-        bg={C.canvasPearl}
-        py={{ base: "88px", md: "128px" }}
-        px={{ base: "24px", md: "48px" }}
-        textAlign="center"
       >
         <Box
           position="absolute"
-          top="50%"
-          left="50%"
-          transform="translate(-50%, -50%)"
-          w="900px"
-          h="380px"
+          top="-200px"
+          right="-200px"
+          w="700px"
+          h="700px"
           borderRadius="50%"
-          bg="radial-gradient(ellipse, rgba(0,102,204,0.07) 0%, transparent 70%)"
-          filter="blur(60px)"
+          bg="radial-gradient(circle, rgba(41,151,255,0.18) 0%, transparent 65%)"
+          filter="blur(80px)"
           pointerEvents="none"
         />
-        <Box mx="auto" maxW="720px" position="relative">
-          <Heading
-            as="h2"
-            fontSize={{ base: "36px", md: "60px" }}
-            fontWeight="600"
-            lineHeight="1.04"
-            letterSpacing="-0.024em"
-            fontFamily={FD}
-            color={C.ink}
-            mb="20px"
+
+        <Box mx="auto" maxW="1200px" position="relative">
+          <Flex
+            direction={{ base: "column", lg: "row" }}
+            align={{ base: "flex-start", lg: "center" }}
+            gap={{ base: "40px", lg: "64px" }}
           >
-            Попробуйте прямо сейчас.
-          </Heading>
-          <Text
-            fontSize={{ base: "18px", md: "22px" }}
-            fontWeight="400"
-            lineHeight="1.45"
-            fontFamily={FD}
-            color={C.inkSecondary}
-            mb="36px"
-          >
-            Первый запрос — бесплатно. Результат — за секунды.
-          </Text>
-          <HStack spacing="6px" justify="center" flexWrap="wrap">
-            <CtaPrimary href="/chat" large>
-              Открыть чат
-            </CtaPrimary>
-            <CtaGhost href="/others/sign-in" large>
-              Зарегистрироваться
-            </CtaGhost>
-          </HStack>
+            <Box flex="1 1 0" maxW={{ lg: "480px" }}>
+              <SectionEyebrow color={C.actionBlueOnDark}>
+                Веб-поиск с источниками
+              </SectionEyebrow>
+              <SectionHeading dark size="xl">
+                Ответы со свежими источниками.
+              </SectionHeading>
+              <SectionLead dark>
+                ИИСеть ищет в интернете и сразу показывает, откуда взята
+                информация. Без догадок, без устаревших данных.
+              </SectionLead>
+              <Box mt={{ base: "24px", md: "32px" }} mb={{ base: "32px", lg: "0" }}>
+                <DemoCard
+                  dark
+                  query="Что происходит на рынке труда в IT прямо сейчас?"
+                  resultLabel="Ответ + источники"
+                  result="Краткая сводка по найму, зарплатам и вакансиям с метками [1], [2], [3] на конкретные публикации в Forbes, РБК и vc.ru."
+                />
+              </Box>
+            </Box>
+
+            <Box flex="1.2 1 0" width="100%">
+              <PosterFrame
+                src="/landing/iiset-search-sources.webp"
+                alt="Веб-поиск ИИСеть: ответ нейросети с цитатами и карточками источников"
+                width={1672}
+                height={941}
+                sizes="(max-width: 1024px) 100vw, 700px"
+                borderRadius={{ base: "20px", md: "28px" }}
+                shadow="deep"
+              />
+            </Box>
+          </Flex>
         </Box>
       </Box>
 
-      {/* ── Footer ─────────────────────────────────────────────────── */}
+      {/* ── 3. Writing — text that's already ready to send ─────────── */}
+      <Box
+        as="section"
+        bg={C.canvas}
+        py={{ base: "80px", md: "128px" }}
+        px={{ base: "24px", md: "48px" }}
+      >
+        <Box mx="auto" maxW="1200px">
+          <Flex
+            direction={{ base: "column", lg: "row-reverse" }}
+            align={{ base: "flex-start", lg: "center" }}
+            gap={{ base: "40px", lg: "64px" }}
+          >
+            <Box flex="1 1 0" maxW={{ lg: "480px" }}>
+              <SectionEyebrow>Тексты</SectionEyebrow>
+              <SectionHeading>Текст, который уже можно отправлять.</SectionHeading>
+              <SectionLead>
+                Напишите письмо, резюме или пост без пустого листа. ИИСеть
+                подберёт нужный тон и сразу даст готовый вариант, который
+                можно скопировать и отправить.
+              </SectionLead>
+
+              <Flex
+                gap="6px"
+                flexWrap="wrap"
+                mt="24px"
+                mb={{ base: "28px", md: "0" }}
+              >
+                {["Письмо", "Резюме", "Пост", "Описание", "Идея"].map((t) => (
+                  <Box
+                    key={t}
+                    px="12px"
+                    py="6px"
+                    borderRadius="9999px"
+                    border="1px solid"
+                    borderColor={C.hairlineSoft}
+                    bg={C.canvasPearl}
+                  >
+                    <Text
+                      fontFamily={FT}
+                      fontSize="13px"
+                      fontWeight="500"
+                      color={C.ink}
+                    >
+                      {t}
+                    </Text>
+                  </Box>
+                ))}
+              </Flex>
+
+              <Box mt={{ base: "20px", md: "28px" }}>
+                <DemoCard
+                  query="Сделай сопроводительное письмо под вакансию Senior PM"
+                  resultLabel="Готовый текст"
+                  result="Письмо с сильным позиционированием, конкретными цифрами и понятным CTA — ровно на 220 слов."
+                />
+              </Box>
+            </Box>
+
+            <Box flex="1.2 1 0" width="100%">
+              <PosterFrame
+                src="/landing/iiset-writing-before-after.webp"
+                alt="ИИСеть переписывает черновик: до и после — сухой текст превращается в готовое сильное сообщение"
+                width={1672}
+                height={941}
+                sizes="(max-width: 1024px) 100vw, 700px"
+                borderRadius={{ base: "20px", md: "28px" }}
+                shadow="soft"
+              />
+            </Box>
+          </Flex>
+        </Box>
+      </Box>
+
+      {/* ── 4. Image Generation — gallery, real images ─────────────── */}
+      <Box
+        as="section"
+        bg={C.canvasFog}
+        py={{ base: "80px", md: "128px" }}
+        px={{ base: "24px", md: "48px" }}
+      >
+        <Box mx="auto" maxW="1200px">
+          <Box maxW="720px" mb={{ base: "32px", md: "48px" }}>
+            <SectionEyebrow>Картинки</SectionEyebrow>
+            <SectionHeading>Картинки из одной фразы.</SectionHeading>
+            <SectionLead>
+              Превратите идею в изображение для презентации, поста или
+              обложки. Опишите словами — получите готовый визуал.
+            </SectionLead>
+          </Box>
+
+          <SimpleGrid columns={{ base: 1, sm: 2 }} spacing={{ base: "14px", md: "20px" }}>
+            {[
+              {
+                src: "/landing/gen-office.webp",
+                alt: "Светлый минималистичный офис, мягкое утреннее освещение — пример изображения, сгенерированного ИИСеть",
+                label: "Светлый офис",
+                prompt: "«Минималистичный офис, мягкий утренний свет»",
+              },
+              {
+                src: "/landing/gen-presentation.webp",
+                alt: "Современная презентация с инфографикой на большом экране — визуал, созданный ИИСеть",
+                label: "Презентация",
+                prompt: "«Слайд с инфографикой и спокойной палитрой»",
+              },
+              {
+                src: "/landing/gen-interior.webp",
+                alt: "Дизайнерский интерьер в светлых тонах — изображение, сгенерированное по описанию",
+                label: "Интерьер",
+                prompt: "«Скандинавская гостиная, дерево и беж»",
+              },
+              {
+                src: "/landing/gen-ai-sphere.webp",
+                alt: "Абстрактная футуристичная сфера — концептуальная иллюстрация, созданная ИИСеть",
+                label: "Концепт-арт",
+                prompt: "«Футуристичная сфера, неоновый свет»",
+              },
+            ].map((g) => (
+              <Box
+                key={g.src}
+                bg={C.canvas}
+                borderRadius={{ base: "18px", md: "24px" }}
+                overflow="hidden"
+                boxShadow="0 1px 2px rgba(15,23,42,0.04), 0 18px 48px -22px rgba(15,23,42,0.16)"
+                border="1px solid"
+                borderColor={C.hairlineSoft}
+                transition="transform 0.22s ease, box-shadow 0.22s ease"
+                _hover={{
+                  transform: "translateY(-3px)",
+                  boxShadow:
+                    "0 2px 4px rgba(15,23,42,0.06), 0 28px 56px -22px rgba(15,23,42,0.22)",
+                }}
+                sx={{
+                  "@media (prefers-reduced-motion: reduce)": {
+                    transition: "none",
+                  },
+                }}
+              >
+                <Box position="relative" lineHeight={0}>
+                  <Image
+                    src={g.src}
+                    alt={g.alt}
+                    width={1448}
+                    height={1086}
+                    sizes="(max-width: 640px) 100vw, (max-width: 1200px) 50vw, 580px"
+                    style={{
+                      width: "100%",
+                      height: "auto",
+                      display: "block",
+                    }}
+                  />
+                </Box>
+                <Box p={{ base: "16px", md: "20px" }}>
+                  <Text
+                    fontFamily={FT}
+                    fontSize="11px"
+                    fontWeight="700"
+                    letterSpacing="0.4px"
+                    textTransform="uppercase"
+                    color={C.inkTertiary}
+                    mb="6px"
+                  >
+                    {g.label}
+                  </Text>
+                  <Text
+                    fontFamily={FT}
+                    fontSize="14px"
+                    color={C.ink}
+                    lineHeight="1.45"
+                  >
+                    {g.prompt}
+                  </Text>
+                </Box>
+              </Box>
+            ))}
+          </SimpleGrid>
+
+          <Flex justify="center" mt={{ base: "32px", md: "48px" }}>
+            <CtaPrimary href="/chat" large>
+              Сгенерировать изображение
+            </CtaPrimary>
+          </Flex>
+        </Box>
+      </Box>
+
+      {/* ── 5. Smart Projects ────────────────────────────────────── */}
+      <Box
+        as="section"
+        id="projects"
+        bg={C.canvasPearl}
+        py={{ base: "80px", md: "128px" }}
+        px={{ base: "24px", md: "48px" }}
+      >
+        <Box mx="auto" maxW="1200px">
+          <Flex
+            direction={{ base: "column", lg: "row" }}
+            align={{ base: "flex-start", lg: "center" }}
+            gap={{ base: "40px", lg: "64px" }}
+          >
+            <Box flex="1 1 0" maxW={{ lg: "480px" }}>
+              <SectionEyebrow>Проекты</SectionEyebrow>
+              <SectionHeading>
+                Проекты, которые помнят ваши материалы.
+              </SectionHeading>
+              <SectionLead>
+                Загрузите резюме, PDF, ссылки или заметки — ИИСеть будет
+                отвечать с учётом вашего контекста, а не из общих знаний.
+              </SectionLead>
+
+              <SimpleGrid
+                columns={2}
+                spacing="8px"
+                mt="24px"
+                mb={{ base: "28px", md: "0" }}
+              >
+                {PROJECT_USE_CASES.map((u) => (
+                  <Box
+                    key={u.title}
+                    p="14px 16px"
+                    borderRadius="14px"
+                    border="1px solid"
+                    borderColor={C.hairlineSoft}
+                    bg={C.canvas}
+                  >
+                    <Text
+                      fontFamily={FT}
+                      fontSize="14px"
+                      fontWeight="600"
+                      color={C.ink}
+                      letterSpacing="-0.1px"
+                    >
+                      {u.title}
+                    </Text>
+                    <Text
+                      fontFamily={FT}
+                      fontSize="12px"
+                      color={C.inkSecondary}
+                      mt="2px"
+                      lineHeight="1.4"
+                    >
+                      {u.hint}
+                    </Text>
+                  </Box>
+                ))}
+              </SimpleGrid>
+
+              <Box mt={{ base: "20px", md: "28px" }}>
+                <DemoCard
+                  query="Что улучшить в моём резюме?"
+                  resultLabel="Рекомендации по resume.pdf"
+                  result="Конкретные правки по структуре, цифрам и формулировкам — со ссылками на разделы вашего файла."
+                />
+              </Box>
+
+              <Box mt="24px">
+                <CtaSecondary href="/chat">Создать проект</CtaSecondary>
+              </Box>
+            </Box>
+
+            <Box flex="1.2 1 0" width="100%">
+              <PosterFrame
+                src="/landing/iiset-project-memory.webp"
+                alt="Рабочая комната проекта в ИИСеть: загруженные файлы, цель, выводы и память по вашим материалам"
+                width={1672}
+                height={941}
+                sizes="(max-width: 1024px) 100vw, 700px"
+                borderRadius={{ base: "20px", md: "28px" }}
+                shadow="soft"
+              />
+            </Box>
+          </Flex>
+        </Box>
+      </Box>
+
+      {/* ── 6. «Не нужно разбираться в ИИ» — text-led ───────────── */}
+      <Box
+        as="section"
+        bg={C.canvas}
+        py={{ base: "72px", md: "112px" }}
+        px={{ base: "24px", md: "48px" }}
+        textAlign="center"
+      >
+        <Box mx="auto" maxW="720px">
+          <SectionEyebrow color={C.violet}>Для всех</SectionEyebrow>
+          <SectionHeading>Не нужно разбираться в моделях.</SectionHeading>
+          <SectionLead maxW="680px">
+            Просто напишите задачу обычными словами. ИИСеть сама подберёт
+            формат ответа — текст, поиск, изображение или работу с файлом.
+          </SectionLead>
+        </Box>
+      </Box>
+
+      {/* ── 7. Больше, чем просто чат ────────────────────────────── */}
+      <Box
+        as="section"
+        bg={C.canvasFog}
+        py={{ base: "72px", md: "112px" }}
+        px={{ base: "24px", md: "48px" }}
+      >
+        <Box mx="auto" maxW="1100px">
+          <Box maxW="640px" mb={{ base: "32px", md: "56px" }}>
+            <SectionEyebrow>Отличие</SectionEyebrow>
+            <SectionHeading>Больше, чем просто чат.</SectionHeading>
+          </Box>
+
+          <SimpleGrid
+            columns={{ base: 1, md: 3 }}
+            spacing={{ base: "20px", md: "24px" }}
+          >
+            {[
+              {
+                title: "Веб-поиск показывает источники.",
+                text:
+                  "Каждый ответ можно проверить — рядом с фрагментом стоит ссылка на сайт.",
+              },
+              {
+                title: "Проекты помнят ваши файлы.",
+                text:
+                  "Загруженные PDF, DOCX и заметки остаются в проекте — ИИ работает с ними как с памятью.",
+              },
+              {
+                title: "Изображения создаются в том же окне.",
+                text:
+                  "Не нужно открывать отдельный сервис: чат и генерация картинок живут вместе.",
+              },
+            ].map((d) => (
+              <Box key={d.title}>
+                <Text
+                  fontFamily={FD}
+                  fontSize={{ base: "20px", md: "22px" }}
+                  fontWeight="600"
+                  letterSpacing="-0.014em"
+                  color={C.ink}
+                  mb="8px"
+                  lineHeight="1.25"
+                >
+                  {d.title}
+                </Text>
+                <Text
+                  fontFamily={FT}
+                  fontSize="16px"
+                  color={C.inkSecondary}
+                  lineHeight="1.5"
+                  maxW="360px"
+                >
+                  {d.text}
+                </Text>
+              </Box>
+            ))}
+          </SimpleGrid>
+
+          {/* Trust strip — honest proof points, no fake reviews/logos */}
+          <Box
+            mt={{ base: "40px", md: "64px" }}
+            pt={{ base: "24px", md: "32px" }}
+            borderTop="1px solid"
+            borderColor={C.hairlineSoft}
+          >
+            <Flex gap={{ base: "8px", md: "12px" }} flexWrap="wrap">
+              {TRUST_POINTS.map((p) => (
+                <Flex
+                  key={p}
+                  align="center"
+                  gap="6px"
+                  px="12px"
+                  py="6px"
+                  borderRadius="9999px"
+                  bg={C.canvas}
+                  border="1px solid"
+                  borderColor={C.hairlineSoft}
+                >
+                  <Box
+                    w="5px"
+                    h="5px"
+                    borderRadius="50%"
+                    bg={C.actionBlue}
+                    flexShrink={0}
+                  />
+                  <Text
+                    fontFamily={FT}
+                    fontSize="13px"
+                    color={C.ink}
+                    fontWeight="500"
+                  >
+                    {p}
+                  </Text>
+                </Flex>
+              ))}
+            </Flex>
+          </Box>
+        </Box>
+      </Box>
+
+      {/* ── 8. Scenarios — что можно сделать за пару минут ──────── */}
+      <Box
+        as="section"
+        id="scenarios"
+        bg={C.canvas}
+        py={{ base: "80px", md: "128px" }}
+        px={{ base: "24px", md: "48px" }}
+      >
+        <Box mx="auto" maxW="1200px">
+          <Box
+            mb={{ base: "32px", md: "48px" }}
+            textAlign={{ base: "left", md: "center" }}
+            maxW={{ md: "800px" }}
+            mx={{ md: "auto" }}
+          >
+            <SectionEyebrow>Сценарии</SectionEyebrow>
+            <SectionHeading>Что можно сделать за пару минут.</SectionHeading>
+            <SectionLead maxW="640px">
+              Готовые форматы запросов под обычные жизненные и рабочие задачи.
+            </SectionLead>
+          </Box>
+
+          <SimpleGrid
+            columns={{ base: 1, sm: 2, lg: 4 }}
+            spacing={{ base: "10px", md: "14px" }}
+          >
+            {SCENARIOS.map((s, i) => (
+              <Box
+                key={s.title}
+                as={Link}
+                href="/chat"
+                p={{ base: "18px", md: "22px" }}
+                borderRadius={{ base: "16px", md: "18px" }}
+                bg={C.canvasPearl}
+                border="1px solid"
+                borderColor={C.hairlineSoft}
+                textDecoration="none"
+                display="block"
+                minH={{ base: "auto", md: "120px" }}
+                transition="transform 0.18s ease, border-color 0.18s ease, box-shadow 0.18s ease"
+                _hover={{
+                  transform: "translateY(-2px)",
+                  borderColor: C.actionBlue,
+                  boxShadow:
+                    "0 1px 2px rgba(15,23,42,0.04), 0 18px 36px -18px rgba(0,102,204,0.18)",
+                }}
+                sx={{
+                  "@media (prefers-reduced-motion: reduce)": {
+                    transition: "none",
+                  },
+                }}
+              >
+                <Flex align="center" justify="space-between" mb="6px">
+                  <Text
+                    fontFamily={FT}
+                    fontSize="11px"
+                    fontWeight="700"
+                    letterSpacing="0.4px"
+                    textTransform="uppercase"
+                    color={C.inkTertiary}
+                    sx={{ fontVariantNumeric: "tabular-nums" }}
+                  >
+                    {String(i + 1).padStart(2, "0")}
+                  </Text>
+                  <Icon
+                    as={FiArrowRight}
+                    boxSize="14px"
+                    color={C.inkTertiary}
+                  />
+                </Flex>
+                <Text
+                  fontFamily={FD}
+                  fontSize="17px"
+                  fontWeight="600"
+                  color={C.ink}
+                  letterSpacing="-0.014em"
+                  lineHeight="1.25"
+                  mb="6px"
+                >
+                  {s.title}
+                </Text>
+                <Text
+                  fontFamily={FT}
+                  fontSize="13px"
+                  color={C.inkSecondary}
+                  lineHeight="1.4"
+                >
+                  {s.hint}
+                </Text>
+              </Box>
+            ))}
+          </SimpleGrid>
+
+          <Flex justify="center" mt={{ base: "32px", md: "48px" }}>
+            <CtaSecondary href="/chat">Попробовать в чате</CtaSecondary>
+          </Flex>
+        </Box>
+      </Box>
+
+      {/* ── 9. Final CTA — poster ────────────────────────────────── */}
+      <Box
+        as="section"
+        id="start"
+        bg={C.canvasPearl}
+        py={{ base: "80px", md: "128px" }}
+        px={{ base: "24px", md: "48px" }}
+      >
+        <Box mx="auto" maxW="1200px">
+          <Flex
+            direction={{ base: "column", md: "row" }}
+            align="center"
+            gap={{ base: "32px", md: "64px" }}
+          >
+            <Box flex="1 1 0" width="100%">
+              <PosterFrame
+                src="/landing/iiset-final-cta.webp"
+                alt="Финальный визуал ИИСеть: открытый чат с готовым ответом и спокойной премиальной композицией"
+                width={1672}
+                height={941}
+                sizes="(max-width: 768px) 100vw, 640px"
+                borderRadius={{ base: "20px", md: "28px" }}
+                shadow="soft"
+              />
+            </Box>
+
+            <Box flex="1 1 0" maxW={{ md: "440px" }} textAlign={{ base: "center", md: "left" }}>
+              <SectionEyebrow>Старт</SectionEyebrow>
+              <SectionHeading size="xl">Начните с одной задачи.</SectionHeading>
+              <SectionLead>
+                Откройте ИИСеть и попросите сделать то, что давно
+                откладывали. Регистрация бесплатна.
+              </SectionLead>
+              <HStack
+                spacing="8px"
+                mt={{ base: "28px", md: "36px" }}
+                justify={{ base: "center", md: "flex-start" }}
+                flexWrap="wrap"
+              >
+                <CtaPrimary href="/chat" large>
+                  Открыть чат
+                </CtaPrimary>
+                <CtaGhost href="/others/sign-in" large>
+                  Зарегистрироваться
+                </CtaGhost>
+              </HStack>
+            </Box>
+          </Flex>
+        </Box>
+      </Box>
+
+      {/* ── Footer ─────────────────────────────────────────────── */}
       <Box
         as="footer"
         bg={C.canvasFog}
         py={{ base: "44px", md: "56px" }}
         px={{ base: "24px", md: "48px" }}
       >
-        <Box mx="auto" maxW="1180px">
+        <Box mx="auto" maxW="1200px">
           <Flex
             direction={{ base: "column", md: "row" }}
             justify="space-between"
@@ -1677,12 +1290,17 @@ export default function HomePage() {
                 color={C.inkSecondary}
                 lineHeight="1.43"
                 letterSpacing="-0.16px"
+                maxW="320px"
               >
-                ИИ-чат, веб-поиск и генерация изображений
+                ИИ-чат на русском с веб-поиском, источниками, генерацией
+                изображений и работой с PDF/DOCX.
               </Text>
             </VStack>
 
-            <Flex direction={{ base: "column", sm: "row" }} gap={{ base: "24px", md: "48px" }}>
+            <Flex
+              direction={{ base: "column", sm: "row" }}
+              gap={{ base: "24px", md: "48px" }}
+            >
               {Object.entries(footerLinks).map(([section, links]) => (
                 <VStack key={section} align="flex-start" spacing="2px">
                   <Text

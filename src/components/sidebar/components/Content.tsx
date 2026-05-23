@@ -1,136 +1,448 @@
 'use client';
-// chakra imports
+/**
+ * Apple-like consumer sidebar для ИИСеть.
+ *
+ * Цель — личное рабочее пространство, а не админ-меню. Структура:
+ *   • Brand (компактный)
+ *   • «+ Новый запрос» — primary CTA в /chat
+ *   • Primary nav: Чат · Поиск · Картинки · История
+ *   • Проекты (через <ProjectSidebarSection/>)
+ *   • «Ещё» — accordion с дополнительными разделами (шаблоны, агенты, блог)
+ *   • «Администрирование» — accordion, ТОЛЬКО если в routes есть admin-paths
+ *   • Bottom: profile + logout (logout-логика next-auth сохранена 1:1)
+ *
+ * Admin detection: routes уже отфильтрованы выше (см. app/layout.tsx + Sidebar.tsx
+ * SidebarResponsive — `route.admin ? user?.isAdmin : true`). Здесь просто
+ * категоризуем входящие routes по path и не показываем admin-раздел, если
+ * соответствующих путей в routes нет.
+ */
+
 import {
   Box,
   Button,
+  Collapse,
   Flex,
   Icon,
   Stack,
   Text,
   useColorModeValue,
 } from '@chakra-ui/react';
-//   Custom components
 import { NextAvatar } from '@/components/image/Avatar';
 import Brand from '@/components/sidebar/components/Brand';
-import Links from '@/components/sidebar/components/Links';
-import React, { PropsWithChildren, Suspense, useContext } from 'react';
+import ProjectSidebarSection from '@/components/sidebar/components/ProjectSidebarSection';
+import React, { PropsWithChildren, Suspense, useContext, useMemo, useState } from 'react';
 import { IRoute } from '@/types/navigation';
-import { FiLogOut } from 'react-icons/fi';
+import {
+  FiLogOut,
+  FiChevronDown,
+  FiChevronRight,
+  FiSearch,
+  FiImage,
+  FiMessageCircle,
+  FiClock,
+  FiPlus,
+} from 'react-icons/fi';
 import { useAppSession } from '@/utils/hooks/useAppSession';
 import Link from 'next/link';
-import Card from '@/components/card/Card';
-import { mode } from '@chakra-ui/theme-tools';
 import { signOut } from 'next-auth/react';
 import { ModalContext } from '@/contexts/ModalContext';
-import { useRouter } from 'next/navigation';
-// SidebarCard (фиолетовая «Ежедневная статистика») удалён из sidebar:
-// конкурировал с проектами визуально и тянул весь экран в админский тон.
-// Сам компонент оставлен в репо — может пригодиться в /usage или /profile.
-import ProjectSidebarSection from '@/components/sidebar/components/ProjectSidebarSection';
-
-// FUNCTIONS
+import { usePathname } from 'next/navigation';
 
 interface SidebarContent extends PropsWithChildren {
   routes: IRoute[];
   [x: string]: any;
 }
 
+const FONT_DISPLAY = `'SF Pro Display', -apple-system, BlinkMacSystemFont, system-ui, sans-serif`;
+const FONT_TEXT = `'SF Pro Text', -apple-system, BlinkMacSystemFont, system-ui, sans-serif`;
+
+const ACCENT_BLUE = '#0066cc';
+const ACCENT_BLUE_HOVER = '#0071e3';
+const ACCENT_BLUE_ON_DARK = '#2997ff';
+
+// ── Primary nav items ────────────────────────────────────────────
+// Чат/Поиск/Картинки все ведут в /chat (там в composer есть toggle'ы
+// webSearch / image-mode). Отдельные пункты помогают пользователю
+// «зайти» с понятного входа, не ломая существующий роутинг.
+const PRIMARY_NAV = [
+  { label: 'Чат', icon: FiMessageCircle, href: '/chat' },
+  { label: 'Поиск', icon: FiSearch, href: '/chat' },
+  { label: 'Картинки', icon: FiImage, href: '/chat' },
+  { label: 'История', icon: FiClock, href: '/dialogs' },
+];
+
+// Категоризация secondary/admin путей. routes.tsx сейчас не маркирует
+// группы, поэтому делим по path. Кто меняет routes.tsx — пусть
+// проверит здесь.
+const SECONDARY_PATHS = new Set(['/all-templates', '/life-agents', '/blog']);
+const ADMIN_PATHS = new Set(['/blog/admin', '/users']);
+
 function SidebarContent(props: SidebarContent) {
-  const router = useRouter();
+  const { routes } = props;
+  const pathname = usePathname() || '';
   const { session, isAnonymous } = useAppSession();
   const { setSideBarOpen } = useContext(ModalContext);
 
-  const { routes, setApiKey } = props;
-  const textColor = useColorModeValue('navy.700', 'white');
-  const borderColor = useColorModeValue('gray.200', 'whiteAlpha.300');
-  const shadowPillBar = useColorModeValue(
-    '4px 17px 40px 4px rgba(112, 144, 176, 0.08)',
-    'none',
+  // ── Tokens ────────────────────────────────────────────────────
+  const surface = useColorModeValue('#ffffff', '#15171c');
+  const surfaceSoft = useColorModeValue('#fafafb', 'rgba(255,255,255,0.04)');
+  const hairline = useColorModeValue(
+    'rgba(15,23,42,0.08)',
+    'rgba(255,255,255,0.10)',
+  );
+  const hairlineSoft = useColorModeValue(
+    'rgba(15,23,42,0.05)',
+    'rgba(255,255,255,0.06)',
+  );
+  const itemHoverBg = useColorModeValue(
+    'rgba(0,0,0,0.04)',
+    'rgba(255,255,255,0.06)',
+  );
+  const activeBg = useColorModeValue(
+    'rgba(0,102,204,0.08)',
+    'rgba(41,151,255,0.14)',
+  );
+  const textPrimary = useColorModeValue('#1d1d1f', '#f5f5f7');
+  const textSecondary = useColorModeValue(
+    '#6e6e73',
+    'rgba(245,245,247,0.65)',
+  );
+  const textTertiary = useColorModeValue(
+    '#86868b',
+    'rgba(245,245,247,0.45)',
+  );
+  const accent = useColorModeValue(ACCENT_BLUE, ACCENT_BLUE_ON_DARK);
+
+  // ── Categorize received routes ────────────────────────────────
+  const { secondaryRoutes, adminRoutes } = useMemo(() => {
+    const sec: IRoute[] = [];
+    const adm: IRoute[] = [];
+    for (const r of routes || []) {
+      if (ADMIN_PATHS.has(r.path)) adm.push(r);
+      else if (SECONDARY_PATHS.has(r.path)) sec.push(r);
+      // Чат/история уже в PRIMARY_NAV — не дублируем.
+    }
+    return { secondaryRoutes: sec, adminRoutes: adm };
+  }, [routes]);
+
+  const [moreOpen, setMoreOpen] = useState(true);
+  const [adminOpen, setAdminOpen] = useState(false);
+
+  const closeDrawerIfMobile = () => setSideBarOpen?.(false);
+  const isActive = (href: string) => pathname === href || pathname.startsWith(href + '/');
+
+  // ── Item renderer ─────────────────────────────────────────────
+  const NavItem = ({
+    icon,
+    label,
+    href,
+    active,
+  }: {
+    icon: any;
+    label: string;
+    href: string;
+    active?: boolean;
+  }) => (
+    <Box
+      as={Link}
+      href={href}
+      onClick={closeDrawerIfMobile}
+      display="flex"
+      alignItems="center"
+      gap="10px"
+      px="12px"
+      h="36px"
+      borderRadius="10px"
+      bg={active ? activeBg : 'transparent'}
+      color={active ? accent : textPrimary}
+      textDecoration="none"
+      cursor="pointer"
+      transition="background-color 0.14s ease, color 0.14s ease"
+      _hover={{ bg: active ? activeBg : itemHoverBg }}
+      sx={{ WebkitTapHighlightColor: 'transparent' }}
+    >
+      <Icon as={icon} boxSize="16px" flexShrink={0} />
+      <Text
+        fontFamily={FONT_TEXT}
+        fontSize="14px"
+        fontWeight={active ? 600 : 500}
+        letterSpacing="-0.12px"
+        noOfLines={1}
+        flex="1 1 auto"
+        minW={0}
+      >
+        {label}
+      </Text>
+    </Box>
+  );
+
+  const SecondaryItem = ({ route }: { route: IRoute }) => {
+    const href = route.layout ? route.layout + route.path : route.path;
+    const active = isActive(href);
+    return (
+      <Box
+        as={Link}
+        href={href}
+        onClick={closeDrawerIfMobile}
+        display="flex"
+        alignItems="center"
+        gap="10px"
+        px="12px"
+        h="34px"
+        borderRadius="10px"
+        bg={active ? activeBg : 'transparent'}
+        color={active ? accent : textSecondary}
+        textDecoration="none"
+        cursor="pointer"
+        transition="background-color 0.14s ease, color 0.14s ease"
+        _hover={{ bg: active ? activeBg : itemHoverBg, color: active ? accent : textPrimary }}
+        sx={{ WebkitTapHighlightColor: 'transparent' }}
+      >
+        {route.icon ? (
+          <Box display="flex" alignItems="center" justifyContent="center" boxSize="16px" flexShrink={0}>
+            {route.icon}
+          </Box>
+        ) : null}
+        <Text
+          fontFamily={FONT_TEXT}
+          fontSize="13px"
+          fontWeight={active ? 600 : 500}
+          letterSpacing="-0.1px"
+          noOfLines={1}
+          flex="1 1 auto"
+          minW={0}
+        >
+          {route.name}
+        </Text>
+      </Box>
+    );
+  };
+
+  const SectionHeader = ({
+    label,
+    open,
+    onToggle,
+  }: {
+    label: string;
+    open: boolean;
+    onToggle: () => void;
+  }) => (
+    <Flex
+      as="button"
+      type="button"
+      onClick={onToggle}
+      align="center"
+      justify="space-between"
+      gap="6px"
+      w="100%"
+      px="12px"
+      py="6px"
+      bg="transparent"
+      cursor="pointer"
+      _hover={{ color: textPrimary }}
+      transition="color 0.14s ease"
+      sx={{ WebkitTapHighlightColor: 'transparent' }}
+      color={textTertiary}
+    >
+      <Text
+        fontFamily={FONT_TEXT}
+        fontSize="11px"
+        fontWeight="700"
+        letterSpacing="0.5px"
+        textTransform="uppercase"
+      >
+        {label}
+      </Text>
+      <Icon as={open ? FiChevronDown : FiChevronRight} boxSize="12px" />
+    </Flex>
+  );
+
+  // ── Bottom auth block ─────────────────────────────────────────
+  // КРИТИЧНО: логику login/logout не трогаем — только визуал. signOut
+  // из next-auth и Link на /profile сохранены 1:1.
+  const userName = session?.user?.name || (isAnonymous ? 'Анонимный' : '');
+  const BottomAuth = (
+    <Flex
+      align="center"
+      gap="10px"
+      px="10px"
+      py="8px"
+      borderRadius="14px"
+      bg={surfaceSoft}
+      border="1px solid"
+      borderColor={hairlineSoft}
+      mx="8px"
+      minW={0}
+    >
+      <Link
+        href="/profile"
+        onClick={closeDrawerIfMobile}
+        style={{ display: 'flex', alignItems: 'center', gap: '10px', flex: '1 1 auto', minWidth: 0, textDecoration: 'none' }}
+      >
+        <NextAvatar
+          minW="30px"
+          h="30px"
+          w="30px"
+          src={session?.user?.image}
+        />
+        <Text
+          fontFamily={FONT_TEXT}
+          fontSize="13px"
+          fontWeight="600"
+          color={textPrimary}
+          noOfLines={1}
+          letterSpacing="-0.1px"
+          flex="1 1 auto"
+          minW={0}
+        >
+          {userName}
+        </Text>
+      </Link>
+      <Button
+        onClick={() => signOut({ redirectTo: '/others/sign-in' })}
+        variant="ghost"
+        borderRadius="9999px"
+        w="32px"
+        h="32px"
+        minW="32px"
+        px="0"
+        color={textSecondary}
+        _hover={{ bg: itemHoverBg, color: textPrimary }}
+        aria-label="Выйти"
+        title="Выйти"
+        flexShrink={0}
+      >
+        <Icon as={FiLogOut} boxSize="15px" />
+      </Button>
+    </Flex>
   );
 
   return (
     <Flex
       direction="column"
       height="100%"
-      pt="20px"
-      pb="12px"
-      borderRadius="30px"
-      maxW="285px"
-      px="20px"
+      pt="14px"
+      pb="10px"
+      borderRadius="20px"
+      maxW={{ base: '100%', xl: '300px' }}
+      px="10px"
+      bg={surface}
     >
-      <Brand />
+      {/* Brand — компактнее */}
+      <Box px="12px" mb="14px">
+        <Brand />
+      </Box>
+
+      {/* Primary CTA: + Новый запрос */}
+      <Box px="8px" mb="14px">
+        <Box
+          as={Link}
+          href="/chat"
+          onClick={closeDrawerIfMobile}
+          display="flex"
+          alignItems="center"
+          gap="8px"
+          h="36px"
+          px="14px"
+          borderRadius="9999px"
+          bg={accent}
+          color="white"
+          textDecoration="none"
+          fontFamily={FONT_TEXT}
+          fontSize="14px"
+          fontWeight="500"
+          letterSpacing="-0.1px"
+          boxShadow="0 1px 2px rgba(15,23,42,0.05), 0 8px 24px -16px rgba(0,102,204,0.32)"
+          _hover={{ bg: ACCENT_BLUE_HOVER }}
+          _active={{ transform: 'scale(0.98)' }}
+          transition="background-color 0.15s ease, transform 0.12s ease"
+          sx={{ WebkitTapHighlightColor: 'transparent' }}
+        >
+          <Icon as={FiPlus} boxSize="16px" />
+          <Text>Новый запрос</Text>
+        </Box>
+      </Box>
+
+      {/* Scrollable middle: nav + projects + accordions */}
       <Stack
         direction="column"
         mb="auto"
-        mt="8px"
+        mt="0"
+        spacing="14px"
         overflowY="auto"
         sx={{
           '::-webkit-scrollbar': { width: '4px' },
           '::-webkit-scrollbar-thumb': {
-            background: 'rgba(127,127,127,0.25)',
+            background: 'rgba(127,127,127,0.22)',
             borderRadius: '999px',
           },
         }}
       >
-        <Box ps="0px" pe={{ md: '0px', '2xl': '0px' }}>
-          <Links routes={routes} />
+        {/* Primary nav */}
+        <Box px="2px">
+          {PRIMARY_NAV.map((it) => (
+            <NavItem
+              key={it.label}
+              icon={it.icon}
+              label={it.label}
+              href={it.href}
+              active={
+                it.label === 'История'
+                  ? pathname.startsWith('/dialogs')
+                  : pathname.startsWith('/chat')
+              }
+            />
+          ))}
         </Box>
-        {/* Suspense — useSearchParams внутри ProjectSidebarSection требует
-            явного boundary в App Router. fallback=null, чтобы не было flash. */}
+
+        {/* Projects (existing, polished) — Suspense нужен под
+            useSearchParams внутри ProjectSidebarSection. */}
         <Suspense fallback={null}>
           <ProjectSidebarSection />
         </Suspense>
+
+        {/* «Ещё» — secondary routes, по умолчанию свёрнуто-открыто
+            (open=true), чтобы пользователь сразу видел шаблоны и
+            агентов, но визуально это вторая категория. */}
+        {secondaryRoutes.length > 0 && (
+          <Box>
+            <SectionHeader
+              label="Ещё"
+              open={moreOpen}
+              onToggle={() => setMoreOpen((v) => !v)}
+            />
+            <Collapse in={moreOpen} animateOpacity unmountOnExit>
+              <Stack direction="column" spacing="2px" mt="4px" px="2px">
+                {secondaryRoutes.map((r) => (
+                  <SecondaryItem key={r.path} route={r} />
+                ))}
+              </Stack>
+            </Collapse>
+          </Box>
+        )}
+
+        {/* «Администрирование» — только если route с admin-path реально
+            пришёл (значит, текущий пользователь — админ). */}
+        {adminRoutes.length > 0 && (
+          <Box>
+            <SectionHeader
+              label="Администрирование"
+              open={adminOpen}
+              onToggle={() => setAdminOpen((v) => !v)}
+            />
+            <Collapse in={adminOpen} animateOpacity unmountOnExit>
+              <Stack direction="column" spacing="2px" mt="4px" px="2px">
+                {adminRoutes.map((r) => (
+                  <SecondaryItem key={r.path} route={r} />
+                ))}
+              </Stack>
+            </Collapse>
+          </Box>
+        )}
       </Stack>
-      <Box h="16px" />
-      <Card
-        m={0}
-        p={0}
-        boxShadow={
-          mode(
-            '0px 0px 37px -5px rgba(112, 144, 176, 0.15)' as any,
-            'unset',
-          ) as any
-        }
-      >
-        <Flex
-          justifyContent="space-between"
-          alignItems="center"
-          boxShadow={shadowPillBar}
-          borderRadius="30px"
-          p="14px"
-          gap="12px"
-        >
-          <Link href="/profile" onClick={() => setSideBarOpen!(false)}>
-            <Flex w="100%" alignItems="center">
-              <NextAvatar
-                minW="34px"
-                h="34px"
-                w="34px"
-                src={session?.user?.image}
-                me="10px"
-              />
-              <Text color={textColor} fontSize="xs" fontWeight="600" me="10px">
-                {isAnonymous ? 'Анонимный' : session?.user?.name}
-              </Text>
-            </Flex>
-          </Link>
-          <Button
-            onClick={() => signOut({ redirectTo: '/others/sign-in' })}
-            variant="transparent"
-            border="1px solid"
-            borderColor={borderColor}
-            borderRadius="full"
-            w="34px"
-            h="34px"
-            px="0px"
-            minW="34px"
-            justifyContent={'center'}
-            alignItems="center"
-          >
-            <Icon as={FiLogOut} width="16px" height="16px" color="inherit" />
-          </Button>
-        </Flex>
-      </Card>
+
+      {/* Bottom auth — компактный блок, login/logout не тронут */}
+      <Box mt="10px">{BottomAuth}</Box>
     </Flex>
   );
 }

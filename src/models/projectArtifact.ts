@@ -7,7 +7,11 @@ export type ProjectArtifactType =
   | 'comparison'
   | 'plan'
   | 'risks'
-  | 'faq';
+  | 'faq'
+  // Agent Workspace artifact kinds:
+  | 'intake' // заполненная пользователем анкета
+  | 'living_document' // главный документ проекта (книга, курсовая, бизнес-план)
+  | 'tracker'; // markdown-таблица прогресса (вес/калории, разделы, главы)
 
 export interface IProjectArtifact {
   project: Types.ObjectId;
@@ -36,7 +40,18 @@ const projectArtifactSchema = new Schema<IProjectArtifact>(
     userEmail: { type: String, required: true, index: true },
     type: {
       type: String,
-      enum: ['brief', 'report', 'mindmap', 'comparison', 'plan', 'risks', 'faq'],
+      enum: [
+        'brief',
+        'report',
+        'mindmap',
+        'comparison',
+        'plan',
+        'risks',
+        'faq',
+        'intake',
+        'living_document',
+        'tracker',
+      ],
       required: true,
     },
     title: { type: String, required: true },

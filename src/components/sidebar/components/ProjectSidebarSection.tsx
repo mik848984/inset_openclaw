@@ -37,14 +37,18 @@ import {
   projectsService,
   IProjectUI,
   IProjectThreadUI,
+  RU_DOMAIN_LABELS_UI,
 } from '@/services/ui/ProjectsService';
 import { ModalContext } from '@/contexts/ModalContext';
 import { useUser } from '@/utils/hooks/useUser';
 
 const PROJECT_EXAMPLES = [
-  'Развить сайт ИИСеть до 100 тыс. ₽/мес',
-  'Подготовиться к собеседованию',
-  'Запустить небольшой бизнес',
+  'Открыть свой бизнес',
+  'Написать курсовую',
+  'Похудеть к лету',
+  'Выучить Python',
+  'Найти работу',
+  'Написать книгу',
 ];
 
 const FONT_APPLE_TEXT = `'SF Pro Text', -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif`;
@@ -281,7 +285,48 @@ function ProjectSidebarSection() {
 
   const isOnChat = pathname === '/chat';
 
-  const visibleProjects = useMemo(() => projects.slice(0, 12), [projects]);
+  // Apple-like consumer sidebar — показываем максимум 5 «недавних»
+  // проектов. Остальное скрыто за «Показать все». Это убирает ощущение
+  // админ-списка и оставляет внимание на главных проектах.
+  const PROJECTS_PREVIEW_LIMIT = 5;
+  const [showAllProjects, setShowAllProjects] = useState(false);
+  const visibleProjects = useMemo(
+    () =>
+      showAllProjects
+        ? projects.slice(0, 50)
+        : projects.slice(0, PROJECTS_PREVIEW_LIMIT),
+    [projects, showAllProjects],
+  );
+  const hiddenProjectsCount = Math.max(
+    0,
+    projects.length - PROJECTS_PREVIEW_LIMIT,
+  );
+
+  // Статус-строка под названием проекта. Apple-like: одна строка,
+  // line-clamp 1, без визуального шума.
+  const buildStatusFor = (p: IProjectUI): string => {
+    const bp = p.blueprint;
+    if (bp?.domain) {
+      const domain =
+        RU_DOMAIN_LABELS_UI[bp.domain as keyof typeof RU_DOMAIN_LABELS_UI] ||
+        'Проект';
+      if (bp.primaryDocumentTitle) {
+        return `${domain} · ${bp.primaryDocumentTitle.toLowerCase()}`;
+      }
+      const mech = bp.mechanics || [];
+      if (mech.includes('metric_tracking') || mech.includes('progress_tracking')) {
+        return `${domain} · трекер`;
+      }
+      if (mech.includes('file_required')) return `${domain} · материалы`;
+      if (mech.includes('web_research_required')) return `${domain} · исследование`;
+      if (p.nextStep) return `${domain} · следующий шаг`;
+      return `${domain} · рабочая комната`;
+    }
+    if (p.nextStep) return 'Следующий шаг';
+    const memCount = Array.isArray(p.memoryItems) ? p.memoryItems.length : 0;
+    if (memCount > 0) return `${memCount} заметок`;
+    return 'Добавьте материалы';
+  };
 
   if (isAnonymous) {
     // Тихо скрываем секцию для гостей — UI всё равно ничего не покажет.
@@ -346,9 +391,6 @@ function ProjectSidebarSection() {
           {visibleProjects.map((p) => {
             const isActive = p._id === activeProjectId && isOnChat;
             const isExpanded = expandedProjectId === p._id;
-            const memoryCount = Array.isArray(p.memoryItems)
-              ? p.memoryItems.length
-              : 0;
             const threads = threadsByProject[p._id] || [];
             const isLoadingThreads = threadsLoadingFor === p._id;
             const isCreatingThreadHere = creatingThreadFor === p._id;
@@ -418,49 +460,19 @@ function ProjectSidebarSection() {
                     >
                       {p.title || 'Без названия'}
                     </Text>
-                    {p.nextStep && !isExpanded && (
+                    {!isExpanded && (
                       <Text
                         mt="2px"
                         fontFamily={FONT_APPLE_TEXT}
                         fontSize="11px"
-                        color={hintColor}
-                        noOfLines={2}
+                        color={isActive ? ACCENT_BLUE : hintColor}
+                        opacity={isActive ? 0.9 : 1}
+                        noOfLines={1}
                         wordBreak="break-word"
                         lineHeight="1.35"
                       >
-                        → {p.nextStep}
+                        {buildStatusFor(p)}
                       </Text>
-                    )}
-                    {memoryCount > 0 && !isExpanded && (
-                      <Flex
-                        mt="6px"
-                        gap="4px"
-                        align="center"
-                        minW={0}
-                        overflow="hidden"
-                      >
-                        <Box
-                          px="6px"
-                          py="1px"
-                          borderRadius="9999px"
-                          bg="rgba(0,102,204,0.10)"
-                          color={ACCENT_BLUE}
-                        >
-                          <Text
-                            fontFamily={FONT_APPLE_TEXT}
-                            fontSize="10px"
-                            fontWeight="600"
-                            letterSpacing="0.2px"
-                          >
-                            {memoryCount}{' '}
-                            {memoryCount === 1
-                              ? 'заметка'
-                              : memoryCount < 5
-                                ? 'заметки'
-                                : 'заметок'}
-                          </Text>
-                        </Box>
-                      </Flex>
                     )}
                   </Box>
                 </Flex>
@@ -473,8 +485,6 @@ function ProjectSidebarSection() {
                     mt="2px"
                     ml="22px"
                     pl="6px"
-                    borderLeft="1px solid"
-                    borderColor={modalBorder}
                     minW={0}
                   >
                     {isLoadingThreads && threads.length === 0 ? (
@@ -571,6 +581,37 @@ function ProjectSidebarSection() {
               </Box>
             );
           })}
+
+          {/* «+N ещё» / «Свернуть» — без отдельной /projects страницы;
+              просто раскрываем список в самой шторке. */}
+          {hiddenProjectsCount > 0 && (
+            <Box
+              as="button"
+              type="button"
+              onClick={() => setShowAllProjects((v) => !v)}
+              mt="4px"
+              px="10px"
+              py="6px"
+              borderRadius="8px"
+              bg="transparent"
+              color={ACCENT_BLUE}
+              _hover={{ bg: itemHoverBg }}
+              textAlign="left"
+              cursor="pointer"
+              sx={{ WebkitTapHighlightColor: 'transparent' }}
+            >
+              <Text
+                fontFamily={FONT_APPLE_TEXT}
+                fontSize="12px"
+                fontWeight="500"
+                letterSpacing="-0.1px"
+              >
+                {showAllProjects
+                  ? 'Свернуть'
+                  : `Показать все · +${hiddenProjectsCount}`}
+              </Text>
+            </Box>
+          )}
         </Flex>
       )}
 
@@ -633,7 +674,7 @@ function ProjectSidebarSection() {
               letterSpacing="-0.35px"
               color={modalText}
             >
-              Новый проект
+              Что хотите довести до результата?
             </ModalHeader>
             <ModalCloseButton
               top={{ base: '12px', md: '16px' }}
@@ -654,8 +695,8 @@ function ProjectSidebarSection() {
                 lineHeight="1.45"
                 mb="16px"
               >
-                Опишите задачу одной фразой — ИИСеть соберёт цель, контекст
-                и следующий шаг.
+                ИИСеть определит тип цели, соберёт первые шаги, создаст
+                анкеты, документы и трекер, если они нужны.
               </Text>
 
               <Text
@@ -666,12 +707,12 @@ function ProjectSidebarSection() {
                 mb="6px"
                 letterSpacing="0.2px"
               >
-                Что хотите сделать?
+                Цель одной фразой
               </Text>
               <Textarea
                 value={rawText}
                 onChange={(e) => setRawText(e.target.value)}
-                placeholder="Например: открыть кофейню в Екатеринбурге и понять, окупится ли она"
+                placeholder="Например: открыть свой бизнес, написать курсовую, похудеть к лету"
                 rows={4}
                 minH="120px"
                 bg={inputBg}

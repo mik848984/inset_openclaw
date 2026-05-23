@@ -91,6 +91,13 @@ export function SidebarResponsive(props: { routes: IRoute[] }) {
           _hover={{ cursor: 'pointer' }}
         />
       </Flex>
+      {/* ── Mobile drawer ────────────────────────────────────────
+          portalProps.appendToParentPortal=false страхует от вложения
+          в чужой Chakra Portal (например, project Modal внутри sidebar
+          раньше оказывался под overlay). z-index на Chakra default
+          `modal=1400` уже выше chat composer (z=20) и sticky bars.
+          BlockScrollOnMount по умолчанию true — body не скроллится,
+          drawer имеет свой скролл. Esc и overlay-click тоже default. */}
       <Drawer
         isOpen={!!sideBarOpen}
         onClose={() => setSideBarOpen!(false)}
@@ -99,27 +106,46 @@ export function SidebarResponsive(props: { routes: IRoute[] }) {
             ? 'right'
             : 'left'
         }
+        size="xs"
+        closeOnOverlayClick
+        closeOnEsc
+        portalProps={{ appendToParentPortal: false }}
       >
-        <DrawerOverlay />
+        <DrawerOverlay
+          bg="rgba(0,0,0,0.42)"
+          sx={{
+            backdropFilter: 'blur(6px)',
+            WebkitBackdropFilter: 'blur(6px)',
+          }}
+        />
         <DrawerContent
-          w="285px"
-          maxW="285px"
-          ms={{
-            sm: '16px',
-          }}
-          my={{
-            sm: '16px',
-          }}
-          borderRadius="16px"
+          w={{ base: '92vw', sm: '360px' }}
+          maxW="360px"
+          my="0"
+          ms="0"
+          borderRadius="0"
           bg={sidebarBackgroundColor}
+          boxShadow="0 1px 2px rgba(15,23,42,0.04), 24px 0 60px -16px rgba(15,23,42,0.24)"
         >
           <DrawerCloseButton
             zIndex="3"
+            top="14px"
+            right="14px"
+            borderRadius="9999px"
             onClick={() => setSideBarOpen!(false)}
             _focus={{ boxShadow: 'none' }}
             _hover={{ boxShadow: 'none' }}
           />
-          <DrawerBody maxW="285px" px="0rem" pb="0">
+          <DrawerBody
+            px="0"
+            pb="calc(env(safe-area-inset-bottom) + 8px)"
+            sx={{
+              // Хочется чистого блюра без скроллбара внутри body.
+              overflowY: 'hidden',
+              display: 'flex',
+              flexDirection: 'column',
+            }}
+          >
             <Content
               routes={routes.filter((route) => {
                 if (route.admin) {

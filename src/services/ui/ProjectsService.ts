@@ -14,6 +14,83 @@ export interface IProjectMemoryItemUI {
   createdAt: string;
 }
 
+// ── Agent Blueprint (UI mirror of server types) ─────────────────
+export type ProjectDomainUI =
+  | 'business'
+  | 'career'
+  | 'health_fitness'
+  | 'education'
+  | 'academic_writing'
+  | 'creative_writing'
+  | 'content'
+  | 'document_analysis'
+  | 'research_decision'
+  | 'travel_relocation'
+  | 'personal_productivity'
+  | 'general';
+
+export type ProjectMechanicUI =
+  | 'intake_required'
+  | 'file_required'
+  | 'web_research_required'
+  | 'single_living_document'
+  | 'multi_artifact_workspace'
+  | 'progress_tracking'
+  | 'metric_tracking'
+  | 'deadline_tracking'
+  | 'calculator_required'
+  | 'comparison_required'
+  | 'source_citation_required'
+  | 'recurring_checkins'
+  | 'risk_sensitive';
+
+export type ProjectFirstStepTypeUI =
+  | 'intake_form'
+  | 'upload_sources'
+  | 'web_research'
+  | 'create_living_document';
+
+export interface IProjectFirstStepUI {
+  type: ProjectFirstStepTypeUI;
+  title: string;
+  hint: string;
+  formKind?: string;
+}
+
+export interface IProjectArtifactPlanUI {
+  kind: 'input' | 'research' | 'living_document' | 'tracker' | 'calculation' | 'comparison' | 'generated_document';
+  title: string;
+  hint: string;
+}
+
+export interface IProjectBlueprintUI {
+  domain: ProjectDomainUI;
+  mechanics: ProjectMechanicUI[];
+  missingInputs: string[];
+  firstStep: IProjectFirstStepUI;
+  steps: string[];
+  artifactPlans: IProjectArtifactPlanUI[];
+  trackerColumns?: string[];
+  primaryDocumentTitle?: string;
+}
+
+// Чистые лейблы для UI — продублированы здесь, чтобы не тянуть
+// серверный модуль в клиент.
+export const RU_DOMAIN_LABELS_UI: Record<ProjectDomainUI, string> = {
+  business: 'Бизнес и запуск',
+  career: 'Карьера и работа',
+  health_fitness: 'Здоровье и форма',
+  education: 'Обучение и навыки',
+  academic_writing: 'Учебная работа',
+  creative_writing: 'Творческое письмо',
+  content: 'Контент и публикации',
+  document_analysis: 'Работа с документом',
+  research_decision: 'Исследование и решение',
+  travel_relocation: 'Поездка или переезд',
+  personal_productivity: 'Личная задача',
+  general: 'Общая задача',
+};
+
 export interface IProjectUI {
   _id: string;
   title: string;
@@ -23,6 +100,7 @@ export interface IProjectUI {
   nextStep: string;
   suggestedActions: string[];
   memoryItems: IProjectMemoryItemUI[];
+  blueprint?: IProjectBlueprintUI;
   createdAt: string;
   updatedAt: string;
 }

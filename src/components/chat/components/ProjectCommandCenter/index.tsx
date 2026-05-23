@@ -55,7 +55,10 @@ import {
   IProjectArtifactUI,
   ProjectArtifactKind,
   IProjectMemoryItemUI,
+  IProjectBlueprintUI,
+  RU_DOMAIN_LABELS_UI,
 } from '@/services/ui/ProjectsService';
+import ProjectIntakeForm from '@/components/chat/components/ProjectIntakeForm';
 
 const FONT_DISPLAY = `'SF Pro Display', -apple-system, BlinkMacSystemFont, system-ui, sans-serif`;
 const FONT_TEXT = `'SF Pro Text', -apple-system, BlinkMacSystemFont, system-ui, sans-serif`;
@@ -133,6 +136,10 @@ function ProjectCommandCenter({
   const [isLoading, setIsLoading] = useState(true);
   const [generatingArtifact, setGeneratingArtifact] =
     useState<ProjectArtifactKind | null>(null);
+  // Blueprint-driven UI
+  const [intakeOpen, setIntakeOpen] = useState(false);
+  const [creatingLivingDoc, setCreatingLivingDoc] = useState(false);
+  const [creatingTracker, setCreatingTracker] = useState(false);
 
   // ── Tokens ────────────────────────────────────────────────────
   const surface = useColorModeValue('#ffffff', 'rgba(28,28,32,0.78)');
@@ -219,6 +226,96 @@ function ProjectCommandCenter({
         `Цель: «${goal}». Предложи конкретный следующий шаг с критерием успеха ` +
         `и начни его выполнять на основе источников проекта.`;
     onSendAction(prompt);
+  };
+
+  // ── Blueprint-driven first step ──────────────────────────────
+  const handleFirstStep = async () => {
+    const bp = project?.blueprint;
+    if (!bp) return handleNextStep();
+    const fs = bp.firstStep;
+    switch (fs?.type) {
+      case 'intake_form':
+        setIntakeOpen(true);
+        return;
+      case 'upload_sources':
+        onOpenSources();
+        return;
+      case 'web_research': {
+        const goal = project?.goal || project?.title || '';
+        onSendAction(
+          `Запусти веб-исследование под цель проекта «${project?.title || ''}»: ${goal}. ` +
+            `Используй интернет-поиск, обязательно приведи источники [1], [2] для ключевых утверждений. ` +
+            `В конце предложи 3 следующих шага.`,
+        );
+        return;
+      }
+      case 'create_living_document': {
+        await handleCreateLivingDoc();
+        return;
+      }
+      default:
+        return handleNextStep();
+    }
+  };
+
+  const handleCreateLivingDoc = async () => {
+    setCreatingLivingDoc(true);
+    try {
+      const a = await projectsService.createArtifact(
+        projectId,
+        'living_document' as ProjectArtifactKind,
+      );
+      if (a) {
+        setArtifacts((prev) => [a, ...prev]);
+        toast({
+          title: 'Главный документ создан',
+          description: a.title,
+          status: 'success',
+          duration: 2500,
+          isClosable: true,
+        });
+      }
+    } catch (e) {
+      console.error(e);
+      toast({
+        title: 'Не удалось создать документ',
+        status: 'error',
+        duration: 3000,
+        isClosable: true,
+      });
+    } finally {
+      setCreatingLivingDoc(false);
+    }
+  };
+
+  const handleCreateTracker = async () => {
+    setCreatingTracker(true);
+    try {
+      const a = await projectsService.createArtifact(
+        projectId,
+        'tracker' as ProjectArtifactKind,
+      );
+      if (a) {
+        setArtifacts((prev) => [a, ...prev]);
+        toast({
+          title: 'Трекер создан',
+          description: a.title,
+          status: 'success',
+          duration: 2500,
+          isClosable: true,
+        });
+      }
+    } catch (e) {
+      console.error(e);
+      toast({
+        title: 'Не удалось создать трекер',
+        status: 'error',
+        duration: 3000,
+        isClosable: true,
+      });
+    } finally {
+      setCreatingTracker(false);
+    }
   };
 
   // ── Memory grouped by type ────────────────────────────────────
@@ -368,6 +465,26 @@ function ProjectCommandCenter({
           </Box>
         )}
       </Box>
+
+      {/* ── Agent Blueprint block (показывается, если есть) ───── */}
+      {project.blueprint && (
+        <BlueprintBlock
+          blueprint={project.blueprint}
+          surface={surface}
+          surfaceSoft={surfaceSoft}
+          hairline={hairline}
+          accentSoftBg={accentSoftBg}
+          accent={accent}
+          textPrimary={textPrimary}
+          textSecondary={textSecondary}
+          textTertiary={textTertiary}
+          onFirstStep={handleFirstStep}
+          onCreateLivingDoc={handleCreateLivingDoc}
+          onCreateTracker={handleCreateTracker}
+          creatingLivingDoc={creatingLivingDoc}
+          creatingTracker={creatingTracker}
+        />
+      )}
 
       {/* ── Stats + quick actions ────────────────────────────── */}
       <SimpleGrid columns={{ base: 2, md: 4 }} spacing="8px">
@@ -712,6 +829,20 @@ function ProjectCommandCenter({
           _hover={{ color: textPrimary }}
         />
       </Flex>
+
+      {/* Intake form — модалка анкеты, открывается при firstStep.type==='intake_form' */}
+      {project.blueprint?.firstStep?.type === 'intake_form' && (
+        <ProjectIntakeForm
+          projectId={projectId}
+          formKind={project.blueprint.firstStep.formKind || 'general'}
+          open={intakeOpen}
+          onClose={() => setIntakeOpen(false)}
+          onSubmitted={(msg) => {
+            void load();
+            onSendAction(msg);
+          }}
+        />
+      )}
     </Flex>
   );
 }
@@ -962,6 +1093,373 @@ function SourceMiniCard({
       </Flex>
     </Box>
   );
+}
+
+// ── BlueprintBlock ────────────────────────────────────────────
+// Показывает agent-blueprint: домен, недостающие вводные, первый шаг
+// как action card, план, будущие артефакты, главный документ, трекер.
+function BlueprintBlock({
+  blueprint,
+  surface,
+  surfaceSoft,
+  hairline,
+  accentSoftBg,
+  accent,
+  textPrimary,
+  textSecondary,
+  textTertiary,
+  onFirstStep,
+  onCreateLivingDoc,
+  onCreateTracker,
+  creatingLivingDoc,
+  creatingTracker,
+}: {
+  blueprint: IProjectBlueprintUI;
+  surface: string;
+  surfaceSoft: string;
+  hairline: string;
+  accentSoftBg: string;
+  accent: string;
+  textPrimary: string;
+  textSecondary: string;
+  textTertiary: string;
+  onFirstStep: () => void;
+  onCreateLivingDoc: () => void;
+  onCreateTracker: () => void;
+  creatingLivingDoc: boolean;
+  creatingTracker: boolean;
+}) {
+  const domainLabel = RU_DOMAIN_LABELS_UI[blueprint.domain] || 'Общая задача';
+  const fs = blueprint.firstStep;
+  const hasTracker =
+    blueprint.mechanics?.includes('progress_tracking') ||
+    blueprint.mechanics?.includes('metric_tracking');
+  const hasLivingDoc = blueprint.mechanics?.includes('single_living_document');
+  const firstStepCta =
+    fs?.type === 'intake_form'
+      ? 'Заполнить анкету'
+      : fs?.type === 'upload_sources'
+        ? 'Загрузить документы'
+        : fs?.type === 'web_research'
+          ? 'Запустить исследование'
+          : fs?.type === 'create_living_document'
+            ? 'Создать главный документ'
+            : 'Сделать шаг';
+
+  return (
+    <Box
+      bg={surface}
+      border="1px solid"
+      borderColor={hairline}
+      borderRadius={{ base: '18px', md: '22px' }}
+      p={{ base: '20px', md: '28px' }}
+      boxShadow="0 1px 2px rgba(15,23,42,0.04), 0 12px 32px -16px rgba(15,23,42,0.12)"
+    >
+      {/* Domain pill */}
+      <Flex align="center" gap="8px" mb="14px" flexWrap="wrap">
+        <Box
+          px="10px"
+          py="4px"
+          borderRadius="9999px"
+          bg={accentSoftBg}
+          color={accent}
+        >
+          <Text
+            fontFamily={FONT_TEXT}
+            fontSize="11px"
+            fontWeight="700"
+            letterSpacing="0.4px"
+            textTransform="uppercase"
+          >
+            {domainLabel}
+          </Text>
+        </Box>
+        {(blueprint.mechanics || []).slice(0, 3).map((m) => (
+          <Text
+            key={m}
+            fontFamily={FONT_TEXT}
+            fontSize="10px"
+            fontWeight="600"
+            color={textTertiary}
+            letterSpacing="0.3px"
+            textTransform="uppercase"
+          >
+            {ruMechanicLabel(m)}
+          </Text>
+        ))}
+      </Flex>
+
+      <Heading
+        as="h3"
+        fontFamily={FONT_DISPLAY}
+        fontSize={{ base: '20px', md: '24px' }}
+        fontWeight="600"
+        letterSpacing="-0.018em"
+        lineHeight="1.18"
+        color={textPrimary}
+        mb="10px"
+      >
+        Маршрут к результату
+      </Heading>
+
+      {/* First step action card */}
+      {fs && (
+        <Box
+          bg={surfaceSoft}
+          border="1px solid"
+          borderColor={hairline}
+          borderRadius="14px"
+          p={{ base: '14px', md: '16px' }}
+          mb="16px"
+        >
+          <Text
+            fontFamily={FONT_TEXT}
+            fontSize="11px"
+            fontWeight="700"
+            letterSpacing="0.4px"
+            textTransform="uppercase"
+            color={textTertiary}
+            mb="6px"
+          >
+            Шаг 1
+          </Text>
+          <Text
+            fontFamily={FONT_DISPLAY}
+            fontSize={{ base: '16px', md: '18px' }}
+            fontWeight="600"
+            color={textPrimary}
+            letterSpacing="-0.014em"
+            mb="6px"
+            lineHeight="1.3"
+          >
+            {fs.title}
+          </Text>
+          {fs.hint && (
+            <Text
+              fontFamily={FONT_TEXT}
+              fontSize="13px"
+              color={textSecondary}
+              lineHeight="1.45"
+              mb="12px"
+            >
+              {fs.hint}
+            </Text>
+          )}
+          <Button
+            onClick={onFirstStep}
+            bg={accent}
+            color="white"
+            borderRadius="9999px"
+            h="34px"
+            px="16px"
+            fontFamily={FONT_TEXT}
+            fontWeight="500"
+            fontSize="13px"
+            _hover={{ bg: '#0071e3' }}
+            _active={{ transform: 'scale(0.98)' }}
+            transition="background-color 0.15s ease, transform 0.15s ease"
+          >
+            {firstStepCta}
+          </Button>
+        </Box>
+      )}
+
+      {/* Missing inputs */}
+      {Array.isArray(blueprint.missingInputs) &&
+        blueprint.missingInputs.length > 0 && (
+          <Box mb="16px">
+            <Text
+              fontFamily={FONT_TEXT}
+              fontSize="11px"
+              fontWeight="700"
+              letterSpacing="0.4px"
+              textTransform="uppercase"
+              color={textTertiary}
+              mb="8px"
+            >
+              Что нужно собрать
+            </Text>
+            <Flex gap="6px" flexWrap="wrap">
+              {blueprint.missingInputs.slice(0, 10).map((mi) => (
+                <Box
+                  key={mi}
+                  px="10px"
+                  py="4px"
+                  borderRadius="9999px"
+                  bg="transparent"
+                  border="1px solid"
+                  borderColor={hairline}
+                >
+                  <Text
+                    fontFamily={FONT_TEXT}
+                    fontSize="12px"
+                    color={textSecondary}
+                  >
+                    {mi}
+                  </Text>
+                </Box>
+              ))}
+            </Flex>
+          </Box>
+        )}
+
+      {/* Plan steps */}
+      {Array.isArray(blueprint.steps) && blueprint.steps.length > 0 && (
+        <Box mb="16px">
+          <Text
+            fontFamily={FONT_TEXT}
+            fontSize="11px"
+            fontWeight="700"
+            letterSpacing="0.4px"
+            textTransform="uppercase"
+            color={textTertiary}
+            mb="8px"
+          >
+            План
+          </Text>
+          <VStack align="stretch" spacing="6px">
+            {blueprint.steps.slice(0, 8).map((s, i) => (
+              <Flex
+                key={`${i}-${s}`}
+                gap="10px"
+                align="flex-start"
+                p="8px 10px"
+                borderRadius="10px"
+                bg={surfaceSoft}
+                border="1px solid"
+                borderColor={hairline}
+              >
+                <Text
+                  fontFamily={FONT_TEXT}
+                  fontSize="11px"
+                  fontWeight="700"
+                  letterSpacing="0.4px"
+                  color={textTertiary}
+                  flexShrink={0}
+                  pt="1px"
+                  sx={{ fontVariantNumeric: 'tabular-nums' }}
+                >
+                  {String(i + 1).padStart(2, '0')}
+                </Text>
+                <Text
+                  fontFamily={FONT_TEXT}
+                  fontSize="13px"
+                  color={textPrimary}
+                  lineHeight="1.45"
+                >
+                  {s}
+                </Text>
+              </Flex>
+            ))}
+          </VStack>
+        </Box>
+      )}
+
+      {/* Future artifacts plan */}
+      {Array.isArray(blueprint.artifactPlans) &&
+        blueprint.artifactPlans.length > 0 && (
+          <Box mb={hasLivingDoc || hasTracker ? '16px' : '0'}>
+            <Text
+              fontFamily={FONT_TEXT}
+              fontSize="11px"
+              fontWeight="700"
+              letterSpacing="0.4px"
+              textTransform="uppercase"
+              color={textTertiary}
+              mb="8px"
+            >
+              Будущие документы
+            </Text>
+            <Flex gap="6px" flexWrap="wrap">
+              {blueprint.artifactPlans.map((ap) => (
+                <Box
+                  key={ap.title}
+                  px="10px"
+                  py="6px"
+                  borderRadius="9999px"
+                  bg={surfaceSoft}
+                  border="1px solid"
+                  borderColor={hairline}
+                  title={ap.hint}
+                >
+                  <Text
+                    fontFamily={FONT_TEXT}
+                    fontSize="12px"
+                    fontWeight="500"
+                    color={textPrimary}
+                  >
+                    {ap.title}
+                  </Text>
+                </Box>
+              ))}
+            </Flex>
+          </Box>
+        )}
+
+      {/* Primary living document + tracker quick actions */}
+      {(hasLivingDoc || hasTracker) && (
+        <Flex gap="8px" flexWrap="wrap" mt="6px">
+          {hasLivingDoc && (
+            <Button
+              onClick={onCreateLivingDoc}
+              isLoading={creatingLivingDoc}
+              bg="transparent"
+              color={textPrimary}
+              border="1px solid"
+              borderColor={hairline}
+              borderRadius="9999px"
+              h="32px"
+              px="14px"
+              fontFamily={FONT_TEXT}
+              fontWeight="500"
+              fontSize="12px"
+              _hover={{ borderColor: accent, color: accent }}
+            >
+              Создать «{blueprint.primaryDocumentTitle || 'Главный документ'}»
+            </Button>
+          )}
+          {hasTracker && (
+            <Button
+              onClick={onCreateTracker}
+              isLoading={creatingTracker}
+              bg="transparent"
+              color={textPrimary}
+              border="1px solid"
+              borderColor={hairline}
+              borderRadius="9999px"
+              h="32px"
+              px="14px"
+              fontFamily={FONT_TEXT}
+              fontWeight="500"
+              fontSize="12px"
+              _hover={{ borderColor: accent, color: accent }}
+            >
+              Завести трекер
+            </Button>
+          )}
+        </Flex>
+      )}
+    </Box>
+  );
+}
+
+const RU_MECHANIC_LABELS: Record<string, string> = {
+  intake_required: 'Анкета',
+  file_required: 'Файлы',
+  web_research_required: 'Веб-поиск',
+  single_living_document: 'Гл. документ',
+  multi_artifact_workspace: 'Несколько артефактов',
+  progress_tracking: 'Прогресс',
+  metric_tracking: 'Метрики',
+  deadline_tracking: 'Дедлайны',
+  calculator_required: 'Расчёт',
+  comparison_required: 'Сравнение',
+  source_citation_required: 'Источники',
+  recurring_checkins: 'Регулярные сверки',
+  risk_sensitive: 'Риски',
+};
+function ruMechanicLabel(m: string): string {
+  return RU_MECHANIC_LABELS[m] || m;
 }
 
 export default ProjectCommandCenter;

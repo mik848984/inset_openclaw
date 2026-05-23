@@ -24,6 +24,9 @@ const ALLOWED: ProjectArtifactType[] = [
   'comparison',
   'mindmap',
   'report',
+  'intake',
+  'living_document',
+  'tracker',
 ];
 
 const TITLES: Record<ProjectArtifactType, string> = {
@@ -34,6 +37,9 @@ const TITLES: Record<ProjectArtifactType, string> = {
   comparison: 'Сравнение источников',
   mindmap: 'Карта проекта',
   report: 'Briefing document',
+  intake: 'Анкета проекта',
+  living_document: 'Главный документ проекта',
+  tracker: 'Трекер прогресса',
 };
 
 const INSTRUCTIONS: Record<ProjectArtifactType, string> = {
@@ -51,6 +57,12 @@ const INSTRUCTIONS: Record<ProjectArtifactType, string> = {
     'Сделай текстовую карту проекта: ключевые узлы (цель, источники, факты, риски, шаги) с короткими описаниями.',
   report:
     'Сделай briefing document: цель → контекст → ключевые факты с цитированиями → выводы → next steps.',
+  intake:
+    'Зафиксируй ответы пользователя по анкете проекта как короткий структурированный summary: что выяснили, что осталось уточнить.',
+  living_document:
+    'Создай или обнови главный документ проекта. Структурируй по разделам, оставь видимые TODO в местах, где не хватает данных. Это living document — он будет обновляться по мере работы.',
+  tracker:
+    'Сделай markdown-таблицу с колонками-метриками проекта. Первая строка — заголовки, под ней — пустые строки для будущих записей. Если есть исходные данные пользователя из анкеты — заполни первую строку как «исходная точка».',
 };
 
 export async function POST(req: NextRequest, { params }: Params) {
