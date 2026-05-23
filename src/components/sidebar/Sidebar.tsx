@@ -11,6 +11,7 @@ import {
   DrawerOverlay,
   Flex,
   Icon,
+  useColorModeValue,
 } from '@chakra-ui/react';
 import Content from '@/components/sidebar/components/Content';
 
@@ -27,12 +28,16 @@ export interface SidebarProps extends PropsWithChildren {
 
 function Sidebar(props: SidebarProps) {
   const { routes, setApiKey } = props;
-  // Sidebar всегда light — без useColorModeValue. Раньше при system
-  // dark mode фон превращался в navy.800 и появлялась «тёмная подложка
-  // + тёмно-серый drawer» — это ломало Apple-like premium consumer UI.
+  // Theme-aware sidebar. Светлый при light theme, графит при dark.
+  // Раньше hardcode-или белый — на dark-странице получалось белое
+  // окно посреди тёмного интерфейса. Теперь sidebar совпадает с темой.
+  // НЕ используем navy.* — это слишком админский синий.
   const variantChange = '0.2s linear';
-  const shadow = '14px 17px 40px 4px rgba(112, 144, 176, 0.08)';
-  const sidebarBg = 'white';
+  const shadow = useColorModeValue(
+    '14px 17px 40px 4px rgba(112, 144, 176, 0.08)',
+    '0 1px 2px rgba(0,0,0,0.30), 24px 0 48px -18px rgba(0,0,0,0.40)',
+  );
+  const sidebarBg = useColorModeValue('white', '#15161a');
   const sidebarRadius = '14px';
   const sidebarMargins = '0px';
   // SIDEBAR
@@ -63,11 +68,21 @@ function Sidebar(props: SidebarProps) {
 
 // FUNCTIONS
 export function SidebarResponsive(props: { routes: IRoute[] }) {
-  // Drawer всегда light, иконка-гамбургер тёмная — соответствует
-  // премиальному светлому интерфейсу ИИСеть. Не зависит от system
-  // dark mode.
-  const sidebarBackgroundColor = 'white';
-  const menuColor = 'gray.500';
+  // Drawer theme-aware: соответствует текущей теме страницы.
+  // Иконка-гамбургер тёмная на свете, светлая на тёмной странице.
+  const sidebarBackgroundColor = useColorModeValue('white', '#15161a');
+  const menuColor = useColorModeValue('gray.500', 'whiteAlpha.700');
+  const overlayBg = useColorModeValue(
+    'rgba(15,23,42,0.24)',
+    'rgba(0,0,0,0.45)',
+  );
+  const closeBtnColor = useColorModeValue('#6b7280', 'whiteAlpha.700');
+  const closeBtnHoverBg = useColorModeValue(
+    'rgba(15,23,42,0.04)',
+    'rgba(255,255,255,0.08)',
+  );
+  const closeBtnHoverColor = useColorModeValue('#111827', 'white');
+  const drawerText = useColorModeValue('#111827', '#f5f7fb');
   // // SIDEBAR
   const { sideBarOpen, setSideBarOpen } = useContext(ModalContext);
 
@@ -112,11 +127,10 @@ export function SidebarResponsive(props: { routes: IRoute[] }) {
         portalProps={{ appendToParentPortal: false }}
       >
         <DrawerOverlay
-          // Нейтральный overlay (slate, не navy) + лёгкий blur. Раньше
-          // overlay был чисто чёрный, и сквозь него просвечивал
-          // дефолтный navy.800 body — выглядело как «тёмно-синяя сцена
-          // под тёмным drawer».
-          bg="rgba(15,23,42,0.24)"
+          // Theme-aware нейтральный overlay. На светлой странице
+          // лёгкий slate (24%), на тёмной — более насыщенный чёрный
+          // (45%). НЕ навязываем синий цвет.
+          bg={overlayBg}
           sx={{
             backdropFilter: 'blur(4px)',
             WebkitBackdropFilter: 'blur(4px)',
@@ -128,21 +142,29 @@ export function SidebarResponsive(props: { routes: IRoute[] }) {
           my="0"
           ms="0"
           borderRadius="0"
-          // Opaque белый — не #fff с alpha, чтобы 100% перекрыть navy
-          // body за drawer, даже если страница в dark mode.
+          // Opaque фон — 100% перекрывает body за drawer, drawer
+          // выглядит как часть текущей темы, а не белая шторка над
+          // тёмным интерфейсом.
           bg={sidebarBackgroundColor}
-          color="#111827"
-          boxShadow="0 1px 2px rgba(15,23,42,0.04), 24px 0 48px -18px rgba(15,23,42,0.18)"
+          color={drawerText}
+          boxShadow={useColorModeValue(
+            '0 1px 2px rgba(15,23,42,0.04), 24px 0 48px -18px rgba(15,23,42,0.18)',
+            '0 1px 2px rgba(0,0,0,0.30), 24px 0 48px -18px rgba(0,0,0,0.40)',
+          )}
         >
           <DrawerCloseButton
             zIndex="3"
             top="14px"
             right="14px"
             borderRadius="9999px"
-            color="#6b7280"
+            color={closeBtnColor}
             onClick={() => setSideBarOpen!(false)}
             _focus={{ boxShadow: 'none' }}
-            _hover={{ boxShadow: 'none', color: '#111827', bg: 'rgba(15,23,42,0.04)' }}
+            _hover={{
+              boxShadow: 'none',
+              color: closeBtnHoverColor,
+              bg: closeBtnHoverBg,
+            }}
           />
           <DrawerBody
             px="0"

@@ -38,7 +38,7 @@ import {
   VStack,
 } from '@chakra-ui/react';
 import React, { useMemo, useState } from 'react';
-import { MdAutoAwesome } from 'react-icons/md';
+import { MdArrowBack, MdAutoAwesome } from 'react-icons/md';
 import {
   projectsService,
   IProjectIntakeUI,
@@ -132,6 +132,58 @@ const FORMS: Record<string, { title: string; hint: string; fields: IntakeField[]
       { name: 'deadline', label: 'Срок (если есть)', kind: 'text', placeholder: 'через месяц, к лету, …' },
       { name: 'constraints', label: 'Ограничения', kind: 'textarea', placeholder: 'Время, бюджет, доступ, …' },
       { name: 'context', label: 'Контекст', kind: 'textarea', placeholder: 'Что важно знать о ситуации?' },
+    ],
+  },
+  // ── Education (выучить Python и т.п.) ────────────────────────
+  // Имена полей — intake-схема, через free-form keys пройдут в
+  // PATCH /api/projects/[id]/intake без жёсткой валидации backend'а
+  // (тот пропускает unknown string/number поля «как есть»).
+  education: {
+    title: 'Анкета обучения',
+    hint: 'Соберём уровень, цель и формат обучения — ИИСеть подберёт диагностику, дорожную карту и материалы.',
+    fields: [
+      {
+        name: 'learningLevel',
+        label: 'Текущий уровень',
+        kind: 'select',
+        options: ['Начинающий', 'Базовый', 'Средний', 'Продвинутый'],
+        required: true,
+      },
+      {
+        name: 'learningGoal',
+        label: 'Цель обучения',
+        kind: 'select',
+        options: [
+          'Работа',
+          'Автоматизация',
+          'Data analysis',
+          'AI / ML',
+          'Backend',
+          'Учёба',
+          'Своё (укажу в комментарии)',
+        ],
+      },
+      { name: 'learningDeadline', label: 'Срок', kind: 'text', placeholder: 'за 3 месяца, к сентябрю…' },
+      { name: 'learningHoursPerWeek', label: 'Часов в неделю', kind: 'number', placeholder: '5' },
+      {
+        name: 'programmingExperience',
+        label: 'Опыт программирования',
+        kind: 'select',
+        options: ['Нет', 'Немного (любой язык)', 'Есть (другой язык)', 'Есть (этот же язык)'],
+      },
+      {
+        name: 'learningFormat',
+        label: 'Формат обучения',
+        kind: 'select',
+        options: ['Видео', 'Текст', 'Практика', 'Проекты', 'Смешанный'],
+      },
+      {
+        name: 'learningEnvironment',
+        label: 'Среда / устройство',
+        kind: 'text',
+        placeholder: 'macOS, VS Code, Python 3.12 установлен',
+      },
+      { name: 'comment', label: 'Комментарий', kind: 'textarea', placeholder: 'Что важно учесть.' },
     ],
   },
 };
@@ -301,6 +353,29 @@ function ProjectIntakeForm({
           letterSpacing="-0.35px"
           color={textPrimary}
         >
+          {/* «← К проекту» — явная back-навигация в шапке формы.
+              На mobile видна сразу сверху, не перекрывается chat input. */}
+          <Box
+            as="button"
+            type="button"
+            onClick={onClose}
+            display="inline-flex"
+            alignItems="center"
+            gap="4px"
+            fontFamily={FONT_TEXT}
+            fontSize="12px"
+            fontWeight="500"
+            color={textSecondary}
+            bg="transparent"
+            cursor="pointer"
+            mb="6px"
+            _hover={{ color: textPrimary }}
+            sx={{ WebkitTapHighlightColor: 'transparent' }}
+            aria-label="Назад к проекту"
+          >
+            <Icon as={MdArrowBack} boxSize="13px" />
+            <Text>К проекту</Text>
+          </Box>
           <Flex align="center" gap="10px">
             <Flex
               boxSize="28px"

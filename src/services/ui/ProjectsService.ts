@@ -149,6 +149,12 @@ export type RoadmapStepStatusUI = 'locked' | 'todo' | 'active' | 'done';
 export type RoadmapWidgetTypeUI =
   | 'intake_form'
   | 'tracker'
+  // education-specific widgets:
+  | 'learning_tracker'
+  | 'diagnostic'
+  | 'learning_roadmap'
+  | 'learning_materials'
+  | 'learning_review'
   | 'calculator'
   | 'document'
   | 'web_research'

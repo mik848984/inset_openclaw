@@ -50,11 +50,14 @@ import {
   VStack,
 } from '@chakra-ui/react';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import { useRouter } from 'next/navigation';
 import {
   MdAdd,
+  MdArrowBack,
   MdAutoAwesome,
   MdCheck,
   MdCheckCircle,
+  MdDeleteForever,
   MdDescription,
   MdEdit,
   MdFolderOpen,
@@ -66,6 +69,7 @@ import {
   MdRefresh,
   MdRestartAlt,
   MdTrendingUp,
+  MdWarningAmber,
 } from 'react-icons/md';
 import {
   projectsService,
@@ -76,6 +80,7 @@ import {
   IProjectAgentStateUI,
   IProjectIntakeUI,
   IProjectTrackerEntryUI,
+  IProjectFirstStepUI,
   IRoadmapStepUI,
   RU_DOMAIN_LABELS_UI,
 } from '@/services/ui/ProjectsService';
@@ -183,46 +188,162 @@ function buildHealthRoadmap(
   ];
 }
 
-// Generic roadmap для не-health доменов: пока используем blueprint.steps
-// как plain список (legacy), но с stateful intake-шагом.
+// ── Education roadmap (state-driven, full domain coverage) ────
+function buildEducationRoadmap(
+  agentState: IProjectAgentStateUI | undefined,
+  artifacts: IProjectArtifactUI[],
+): IRoadmapStepUI[] {
+  const intake = agentState?.intake;
+  const tracker = agentState?.tracker;
+  const hasIntake = !!(intake && (intake as any).learningLevel);
+  const hasTracker = !!tracker;
+  const titleHas = (needle: string) =>
+    artifacts.some((a) => (a.title || '').toLowerCase().includes(needle));
+  const hasDiagnostic = titleHas('диагност');
+  const hasRoadmap = titleHas('дорожн') || titleHas('roadmap') || titleHas('учебн');
+  const hasMaterials = titleHas('материал') || titleHas('задани');
+
+  return [
+    {
+      id: 'intake',
+      title: 'Заполнить анкету обучения',
+      widgetType: 'intake_form',
+      actionLabel: hasIntake ? 'Изменить анкету' : 'Заполнить анкету',
+      status: hasIntake ? 'done' : 'active',
+      hint: hasIntake
+        ? 'Уровень, цель и формат собраны — можно дополнить, если что-то изменилось.'
+        : 'Уровень, цель, формат обучения и доступное время.',
+    },
+    {
+      id: 'diagnostic',
+      title: 'Сделать диагностику текущих знаний',
+      widgetType: 'diagnostic',
+      actionLabel: hasDiagnostic ? 'Открыть диагностику' : 'Пройти диагностику',
+      status: !hasIntake ? 'locked' : hasDiagnostic ? 'done' : 'active',
+      hint: 'Что уже знаете и где пробелы — нужно, чтобы план был под вас.',
+    },
+    {
+      id: 'learning_roadmap',
+      title: 'Собрать дорожную карту обучения',
+      widgetType: 'learning_roadmap',
+      actionLabel: hasRoadmap ? 'Открыть карту' : 'Создать карту',
+      status: !hasIntake ? 'locked' : hasRoadmap ? 'done' : 'todo',
+      hint: 'Пошаговый план тем с критериями «понял / умею».',
+    },
+    {
+      id: 'learning_materials',
+      title: 'Подобрать материалы и задания',
+      widgetType: 'learning_materials',
+      actionLabel: hasMaterials ? 'Открыть подборку' : 'Подобрать материалы',
+      status: !hasRoadmap ? 'locked' : hasMaterials ? 'done' : 'todo',
+      hint: 'Курсы, статьи, видео и практические задания.',
+    },
+    {
+      id: 'tracker_create',
+      title: 'Завести трекер недель и тем',
+      widgetType: 'learning_tracker',
+      actionLabel: hasTracker ? 'Открыть трекер' : 'Создать трекер',
+      status: !hasIntake ? 'locked' : hasTracker ? 'done' : 'active',
+      hint: 'Неделя, тема, материал, задание, статус, комментарий.',
+    },
+    {
+      id: 'tracker_entry',
+      title: 'Добавить запись в трекер обучения',
+      widgetType: 'learning_tracker',
+      actionLabel: 'Добавить запись',
+      status:
+        !hasTracker ? 'locked' : (tracker?.entries?.length || 0) > 0 ? 'done' : 'active',
+      hint: 'Раз в неделю фиксируйте, что изучили и где застряли.',
+    },
+    {
+      id: 'learning_review',
+      title: 'Еженедельная сверка прогресса',
+      widgetType: 'learning_review',
+      actionLabel: 'Провести сверку',
+      status:
+        (tracker?.entries?.length || 0) < 2 ? 'locked' : 'todo',
+      hint: 'Что прошли, где застряли, какой следующий учебный шаг.',
+    },
+  ];
+}
+
+// ── Generic roadmap: smart widget inference (no health text) ──
+// Раньше всем шагам (кроме первого) присваивался widgetType='review',
+// а review-handler был health-specific. Теперь делаем умную инференцию
+// типа по словам в заголовке шага.
+function inferWidgetFromTitle(
+  title: string,
+  blueprintFirst?: IProjectFirstStepUI,
+): IRoadmapStepUI['widgetType'] {
+  const t = (title || '').toLowerCase();
+  if (/анкет|опросник|уточн|вводн/.test(t)) return 'intake_form';
+  if (/трекер|учёт|учет|замер/.test(t)) return 'tracker';
+  if (/диагност|оценк[уи] уровн|тест уровн/.test(t)) return 'diagnostic';
+  if (/дорожн|roadmap|план|структур|содержани/.test(t)) return 'document';
+  if (/материал|подбер|подбор|источник|загруз/.test(t)) return 'learning_materials';
+  if (/расч[её]т|калькулятор|финансы|финмодель/.test(t)) return 'calculator';
+  if (/исследован|рынок|анализ|сравни|web/.test(t)) return 'web_research';
+  if (/документ|brief|обзор|резюме|план питания|план трениров/.test(t)) return 'document';
+  if (/сверк|ретро|обзор недели|еженедель/.test(t)) return 'review';
+  // Fallback к типу первого шага в blueprint, иначе review.
+  return blueprintFirst?.type === 'upload_sources'
+    ? 'document'
+    : blueprintFirst?.type === 'web_research'
+      ? 'web_research'
+      : 'review';
+}
+
 function buildGenericRoadmap(
   project: IProjectUI,
 ): IRoadmapStepUI[] {
   const intake = project.agentState?.intake;
   const hasIntake = !!(intake && Object.keys(intake).some((k) => k !== 'updatedAt'));
+  const tracker = project.agentState?.tracker;
+  const hasTracker = !!tracker;
   const bpSteps = project.blueprint?.steps || [];
-  const firstStepType = project.blueprint?.firstStep?.type;
-  const widgetForFirst: IRoadmapStepUI['widgetType'] =
-    firstStepType === 'intake_form'
-      ? 'intake_form'
-      : firstStepType === 'upload_sources'
-        ? 'document'
-        : firstStepType === 'web_research'
-          ? 'web_research'
-          : 'intake_form';
+  const firstStepType = project.blueprint?.firstStep;
+
   return bpSteps.map((title, i) => {
-    if (i === 0) {
-      return {
-        id: `step_${i}`,
-        title,
-        widgetType: widgetForFirst,
-        actionLabel:
-          widgetForFirst === 'intake_form'
-            ? hasIntake
-              ? 'Изменить'
-              : 'Заполнить'
-            : widgetForFirst === 'document'
-              ? 'Загрузить'
-              : 'Запустить',
-        status: hasIntake ? 'done' : 'active',
-      };
+    const inferred = inferWidgetFromTitle(title, firstStepType);
+    // Первый шаг — обычно intake_form, если blueprint так сказал.
+    const widget =
+      i === 0 && firstStepType?.type === 'intake_form' ? 'intake_form' : inferred;
+
+    // Простая state-логика: intake_form done при hasIntake; tracker done
+    // при hasTracker; первый незаблокированный — active.
+    let status: IRoadmapStepUI['status'] = 'todo';
+    if (widget === 'intake_form') {
+      status = hasIntake ? 'done' : 'active';
+    } else if (widget === 'tracker') {
+      status = !hasIntake ? 'locked' : hasTracker ? 'done' : 'active';
+    } else {
+      status = !hasIntake && i > 0 ? 'locked' : 'todo';
     }
+
+    const actionLabel =
+      widget === 'intake_form'
+        ? hasIntake
+          ? 'Изменить'
+          : 'Заполнить'
+        : widget === 'tracker'
+          ? hasTracker
+            ? 'Открыть трекер'
+            : 'Создать трекер'
+          : widget === 'document'
+            ? 'Создать документ'
+            : widget === 'calculator'
+              ? 'Рассчитать'
+              : widget === 'web_research'
+                ? 'Запустить исследование'
+                : widget === 'learning_materials'
+                  ? 'Подобрать'
+                  : 'Открыть';
     return {
       id: `step_${i}`,
       title,
-      widgetType: 'review',
-      actionLabel: 'Открыть',
-      status: !hasIntake ? 'locked' : i === 1 ? 'active' : 'todo',
+      widgetType: widget,
+      actionLabel,
+      status,
     };
   });
 }
@@ -255,10 +376,16 @@ function ProjectCommandCenter({
   const [artifacts, setArtifacts] = useState<IProjectArtifactUI[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
+  const router = useRouter();
+
   const [intakeOpen, setIntakeOpen] = useState(false);
   const [entryOpen, setEntryOpen] = useState(false);
+  const [learningEntryOpen, setLearningEntryOpen] = useState(false);
   const [creatingTracker, setCreatingTracker] = useState(false);
   const [resettingIntake, setResettingIntake] = useState(false);
+  const [deleteOpen, setDeleteOpen] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  const [eduWorking, setEduWorking] = useState<string | null>(null);
 
   // ── Tokens ───────────────────────────────────────────────────
   const surface = useColorModeValue('#ffffff', 'rgba(28,28,32,0.92)');
@@ -306,13 +433,20 @@ function ProjectCommandCenter({
 
   const domain = project?.blueprint?.domain;
   const isHealth = domain === 'health_fitness';
+  const isEducation = domain === 'education';
 
   // Roadmap depends on state. Active step = first non-locked non-done.
+  // Domain-aware dispatch:
+  //   health_fitness → buildHealthRoadmap (weight/calories/training)
+  //   education      → buildEducationRoadmap (diagnostic/roadmap/materials)
+  //   остальное      → buildGenericRoadmap с smart inference
   const roadmap: IRoadmapStepUI[] = useMemo(() => {
     if (!project) return [];
     if (isHealth) return buildHealthRoadmap(project.agentState, artifacts);
+    if (isEducation)
+      return buildEducationRoadmap(project.agentState, artifacts);
     return buildGenericRoadmap(project);
-  }, [project, artifacts, isHealth]);
+  }, [project, artifacts, isHealth, isEducation]);
 
   const activeStep =
     roadmap.find((s) => s.status === 'active') ||
@@ -336,11 +470,31 @@ function ProjectCommandCenter({
         setIntakeOpen(true);
         return;
       case 'tracker':
+        // Health weight-tracker.
         if (!project?.agentState?.tracker) {
           void handleCreateTracker(true);
         } else {
           setEntryOpen(true);
         }
+        return;
+      case 'learning_tracker':
+        if (!project?.agentState?.tracker) {
+          void handleCreateTracker(true);
+        } else {
+          setLearningEntryOpen(true);
+        }
+        return;
+      case 'diagnostic':
+        void handleEducationArtifact(
+          'brief',
+          'Диагностика текущего уровня',
+        );
+        return;
+      case 'learning_roadmap':
+        void handleEducationArtifact('plan', 'Дорожная карта обучения');
+        return;
+      case 'learning_materials':
+        void handleEducationArtifact('brief', 'Материалы и задания');
         return;
       case 'calculator':
         void handleCalculator();
@@ -354,28 +508,49 @@ function ProjectCommandCenter({
             `Используй интернет-поиск, обязательно приведи источники [1], [2] для ключевых утверждений.`,
         );
         return;
-      case 'review':
+      case 'learning_review':
+        // Domain-neutral для education — ни калорий, ни тренировок.
         onSendAction(
-          `Сделай еженедельную сверку прогресса. Сравни последние замеры из трекера ` +
-            `с целью и предложи корректировки калорий / тренировок, если нужно.`,
+          `Сверь прогресс обучения по трекеру: какие темы пройдены, ` +
+            `где застряли и какой следующий учебный шаг под цель ` +
+            `«${project?.goal || project?.title || ''}».`,
+        );
+        return;
+      case 'review':
+      default:
+        // Generic neutral — БЕЗ упоминания health (калории/тренировки/вес).
+        onSendAction(
+          `Сверь текущее состояние проекта «${project?.title || ''}» с целью, ` +
+            `источниками, документами и трекером. Что уже сделано, что застряло, ` +
+            `какой следующий конкретный шаг?`,
         );
         return;
     }
   };
 
-  // ── Tracker handlers ─────────────────────────────────────────
+  // ── Tracker handlers (domain-aware) ──────────────────────────
+  // health_fitness → требуется intake.startWeightKg, создаём baseline-
+  //                  entry с весом из анкеты.
+  // education      → требуется intake (любое поле), создаём пустой
+  //                  tracker типа learning_progress.
+  // прочие домены  → создаём пустой tracker без health-assumptions.
   const handleCreateTracker = async (openEntryAfter = false) => {
     if (!project) return;
     if (project.agentState?.tracker) {
-      if (openEntryAfter) setEntryOpen(true);
+      if (openEntryAfter) {
+        if (isEducation) setLearningEntryOpen(true);
+        else setEntryOpen(true);
+      }
       return;
     }
     const intake = project.agentState?.intake;
-    if (!intake?.startWeightKg) {
+    const hasIntake =
+      !!intake && Object.keys(intake).some((k) => k !== 'updatedAt');
+    if (!hasIntake) {
       toast({
         title: 'Сначала заполните исходные данные',
         description:
-          'Стартовый вес нужен, чтобы трекер мог считать прогресс.',
+          'Анкета нужна, чтобы трекер строился под вашу цель и контекст.',
         status: 'warning',
         duration: 3000,
         isClosable: true,
@@ -383,27 +558,80 @@ function ProjectCommandCenter({
       setIntakeOpen(true);
       return;
     }
+
     setCreatingTracker(true);
     try {
-      // Создаём tracker с одним baseline-entry — стартовая точка
-      // из intake. Дальше пользователь добавляет реальные замеры.
       const today = new Date().toISOString().slice(0, 10);
+
+      if (isHealth) {
+        if (!intake?.startWeightKg) {
+          toast({
+            title: 'Не указан стартовый вес',
+            description: 'Откройте анкету и добавьте текущий вес.',
+            status: 'warning',
+            duration: 2800,
+          });
+          setCreatingTracker(false);
+          setIntakeOpen(true);
+          return;
+        }
+        const result = await projectsService.addTrackerEntry(projectId, {
+          date: today,
+          weightKg: intake.startWeightKg,
+          comment: 'Стартовая точка из анкеты',
+        });
+        if (result?.project) {
+          setProject(result.project);
+          toast({
+            title: 'Трекер создан',
+            description: 'Добавлена стартовая запись из анкеты.',
+            status: 'success',
+            duration: 2200,
+            isClosable: true,
+          });
+          if (openEntryAfter) setEntryOpen(true);
+        }
+        return;
+      }
+
+      if (isEducation) {
+        // Учебный tracker: тип learning_progress, первая запись —
+        // неделя 1 «Старт обучения». Никакого веса.
+        const result = await projectsService.addTrackerEntry(projectId, {
+          date: today,
+          // free-form keys: backend пропустит string/number поля «как есть».
+          ...({
+            week: '1',
+            topic: 'Старт обучения',
+            status: 'planned',
+          } as any),
+          comment: 'Трекер создан из анкеты обучения',
+          ...({ type: 'learning_progress' } as any),
+        });
+        if (result?.project) {
+          setProject(result.project);
+          toast({
+            title: 'Трекер обучения создан',
+            status: 'success',
+            duration: 2200,
+            isClosable: true,
+          });
+          if (openEntryAfter) setLearningEntryOpen(true);
+        }
+        return;
+      }
+
+      // Generic: создаём tracker пустой записью «Старт».
       const result = await projectsService.addTrackerEntry(projectId, {
         date: today,
-        weightKg: intake.startWeightKg,
-        comment: 'Стартовая точка из анкеты',
+        comment: 'Трекер создан',
       });
       if (result?.project) {
         setProject(result.project);
-        toast({
-          title: 'Трекер создан',
-          description: 'Добавлена стартовая запись из анкеты.',
-          status: 'success',
-          duration: 2200,
-          isClosable: true,
-        });
+        toast({ title: 'Трекер создан', status: 'success', duration: 2000 });
         if (openEntryAfter) setEntryOpen(true);
       }
+      return;
     } catch (e) {
       console.error(e);
       toast({
@@ -473,6 +701,82 @@ function ProjectCommandCenter({
       }
     } finally {
       setResettingIntake(false);
+    }
+  };
+
+  // ── Education artifacts (diagnostic / roadmap / materials) ──
+  // Создаём через существующий artifacts API. Backend LLM-генератор
+  // получит project context (goal + intake) и сгенерирует контент.
+  // Результат появляется в DocumentsCard с чистым preview.
+  // НЕ уходим в чат-prompt.
+  const handleEducationArtifact = async (
+    kind: ProjectArtifactKind,
+    expectedTitleHint: string,
+  ) => {
+    setEduWorking(expectedTitleHint);
+    try {
+      const a = await projectsService.createArtifact(projectId, kind);
+      if (a) {
+        setArtifacts((prev) => [a, ...prev]);
+        toast({
+          title: 'Готово',
+          description: a.title || expectedTitleHint,
+          status: 'success',
+          duration: 2400,
+          isClosable: true,
+        });
+      } else {
+        throw new Error('null artifact');
+      }
+    } catch (e) {
+      console.error(e);
+      toast({
+        title: 'Не удалось создать документ',
+        description: 'Попробуйте ещё раз через минуту.',
+        status: 'error',
+        duration: 3000,
+        isClosable: true,
+      });
+    } finally {
+      setEduWorking(null);
+    }
+  };
+
+  // ── Delete project (cascade) ────────────────────────────────
+  const handleDeleteProject = async () => {
+    setDeleting(true);
+    try {
+      const ok = await projectsService.remove(projectId);
+      if (!ok) throw new Error('delete failed');
+      toast({
+        title: 'Проект удалён',
+        description: 'Источники, файлы, документы и трекер удалены.',
+        status: 'success',
+        duration: 2500,
+        isClosable: true,
+      });
+      setDeleteOpen(false);
+      // Перевести пользователя из удалённого проекта.
+      // URL без projectId — обычный чат, не сломанный state.
+      if (typeof window !== 'undefined') {
+        const url = new URL(window.location.href);
+        url.searchParams.delete('projectId');
+        url.searchParams.delete('threadId');
+        router.replace(url.pathname + (url.search || ''));
+      } else {
+        router.replace('/chat');
+      }
+    } catch (e) {
+      console.error(e);
+      toast({
+        title: 'Не удалось удалить проект',
+        description: 'Попробуйте ещё раз через минуту.',
+        status: 'error',
+        duration: 3500,
+        isClosable: true,
+      });
+    } finally {
+      setDeleting(false);
     }
   };
 
@@ -692,7 +996,7 @@ function ProjectCommandCenter({
         resetting={resettingIntake}
       />
 
-      {/* ── Tracker (health only) ──────────────────────────── */}
+      {/* ── Tracker (domain-aware) ────────────────────────── */}
       {isHealth && (
         <TrackerWidget
           tracker={tracker}
@@ -707,6 +1011,22 @@ function ProjectCommandCenter({
           creatingTracker={creatingTracker}
           onCreateTracker={() => handleCreateTracker(false)}
           onAddEntry={() => setEntryOpen(true)}
+          onDeleteEntry={handleDeleteEntry}
+        />
+      )}
+      {isEducation && (
+        <LearningTrackerWidget
+          tracker={tracker}
+          surface={surface}
+          surfaceSoft={surfaceSoft}
+          hairline={hairline}
+          accent={accent}
+          textPrimary={textPrimary}
+          textSecondary={textSecondary}
+          textTertiary={textTertiary}
+          creatingTracker={creatingTracker}
+          onCreateTracker={() => handleCreateTracker(false)}
+          onAddEntry={() => setLearningEntryOpen(true)}
           onDeleteEntry={handleDeleteEntry}
         />
       )}
@@ -751,6 +1071,15 @@ function ProjectCommandCenter({
         textTertiary={textTertiary}
       />
 
+      {/* ── Danger zone ─────────────────────────────────── */}
+      <DangerZoneCard
+        surface={surface}
+        hairline={hairline}
+        textSecondary={textSecondary}
+        textTertiary={textTertiary}
+        onDelete={() => setDeleteOpen(true)}
+      />
+
       {/* Refresh */}
       <Flex justify="flex-end">
         <IconButton
@@ -772,13 +1101,15 @@ function ProjectCommandCenter({
           project.blueprint?.firstStep?.formKind ||
           (domain === 'health_fitness'
             ? 'health'
-            : domain === 'business'
-              ? 'business'
-              : domain === 'career'
-                ? 'career'
-                : domain === 'academic_writing'
-                  ? 'academic'
-                  : 'general')
+            : domain === 'education'
+              ? 'education'
+              : domain === 'business'
+                ? 'business'
+                : domain === 'career'
+                  ? 'career'
+                  : domain === 'academic_writing'
+                    ? 'academic'
+                    : 'general')
         }
         open={intakeOpen}
         initial={intake}
@@ -794,6 +1125,25 @@ function ProjectCommandCenter({
           baselineWeight={intake?.startWeightKg}
         />
       )}
+
+      {isEducation && (
+        <AddLearningEntryModal
+          open={learningEntryOpen}
+          onClose={() => setLearningEntryOpen(false)}
+          onSubmit={handleAddEntry}
+          suggestedWeek={
+            ((tracker?.entries?.length || 0) + 1).toString()
+          }
+        />
+      )}
+
+      <DeleteProjectModal
+        open={deleteOpen}
+        title={project.title}
+        onClose={() => setDeleteOpen(false)}
+        onConfirm={handleDeleteProject}
+        deleting={deleting}
+      />
     </Flex>
   );
 }
@@ -830,6 +1180,17 @@ function BaselineCard({
         summary.push({ label: 'Рост', value: `${intake.heightCm} см` });
       if (intake.activityLevel)
         summary.push({ label: 'Активность', value: String(intake.activityLevel) });
+    } else if (domain === 'education') {
+      if ((intake as any).learningLevel)
+        summary.push({ label: 'Уровень', value: String((intake as any).learningLevel) });
+      if ((intake as any).learningGoal)
+        summary.push({ label: 'Цель', value: String((intake as any).learningGoal) });
+      if ((intake as any).learningHoursPerWeek !== undefined)
+        summary.push({ label: 'Часов в неделю', value: String((intake as any).learningHoursPerWeek) });
+      if ((intake as any).learningDeadline)
+        summary.push({ label: 'Срок', value: String((intake as any).learningDeadline) });
+      if ((intake as any).learningFormat)
+        summary.push({ label: 'Формат', value: String((intake as any).learningFormat) });
     } else {
       // Generic — показываем первые 4 непустых string/number поля
       for (const [k, v] of Object.entries(intake)) {
@@ -1697,6 +2058,28 @@ function AddEntryModal({
           letterSpacing="-0.018em"
           color={textPrimary}
         >
+          {/* «← К проекту» — back-навигация всегда видна сверху. */}
+          <Box
+            as="button"
+            type="button"
+            onClick={onClose}
+            display="inline-flex"
+            alignItems="center"
+            gap="4px"
+            fontFamily={FONT_TEXT}
+            fontSize="12px"
+            fontWeight="500"
+            color={textSecondary}
+            bg="transparent"
+            cursor="pointer"
+            mb="6px"
+            _hover={{ color: textPrimary }}
+            sx={{ WebkitTapHighlightColor: 'transparent' }}
+            aria-label="Назад к проекту"
+          >
+            <Icon as={MdArrowBack} boxSize="13px" />
+            <Text>К проекту</Text>
+          </Box>
           Новый замер
         </ModalHeader>
         <ModalCloseButton borderRadius="9999px" top={{ base: '12px', md: '14px' }} right={{ base: '12px', md: '14px' }} />
@@ -1783,6 +2166,707 @@ function pluralize(n: number, one: string, few: string, many: string): string {
   if (mod10 === 1 && mod100 !== 11) return one;
   if ([2, 3, 4].includes(mod10) && ![12, 13, 14].includes(mod100)) return few;
   return many;
+}
+
+// ── DangerZoneCard ──────────────────────────────────────────────
+// Тихий блок «Удаление проекта» внизу overview. Слабый акцент,
+// чтобы не светил destructive-цветом в основной workflow, но был
+// найден когда пользователь хочет убрать ненужный проект.
+function DangerZoneCard({
+  surface,
+  hairline,
+  textSecondary,
+  textTertiary,
+  onDelete,
+}: {
+  surface: string;
+  hairline: string;
+  textSecondary: string;
+  textTertiary: string;
+  onDelete: () => void;
+}) {
+  return (
+    <Box
+      bg={surface}
+      border="1px solid"
+      borderColor={hairline}
+      borderRadius={{ base: '18px', md: '22px' }}
+      p={{ base: '16px', md: '20px' }}
+    >
+      <Flex
+        justify="space-between"
+        align={{ base: 'flex-start', md: 'center' }}
+        gap="10px"
+        direction={{ base: 'column', md: 'row' }}
+      >
+        <Box>
+          <Text
+            fontFamily={FONT_TEXT}
+            fontSize="11px"
+            fontWeight="700"
+            letterSpacing="0.4px"
+            textTransform="uppercase"
+            color={textTertiary}
+            mb="2px"
+          >
+            Опасная зона
+          </Text>
+          <Text
+            fontFamily={FONT_TEXT}
+            fontSize="13px"
+            color={textSecondary}
+            lineHeight="1.45"
+            maxW="520px"
+          >
+            Удаление проекта вместе с источниками, документами, анкетой
+            и трекером. Действие нельзя отменить.
+          </Text>
+        </Box>
+        <Button
+          onClick={onDelete}
+          variant="outline"
+          borderColor="rgba(239,68,68,0.40)"
+          color="#dc2626"
+          borderRadius="9999px"
+          h="34px"
+          px="16px"
+          fontFamily={FONT_TEXT}
+          fontSize="13px"
+          fontWeight="500"
+          leftIcon={<Icon as={MdDeleteForever} boxSize="15px" />}
+          _hover={{
+            bg: 'rgba(239,68,68,0.08)',
+            borderColor: '#dc2626',
+            color: '#dc2626',
+          }}
+          flexShrink={0}
+        >
+          Удалить проект
+        </Button>
+      </Flex>
+    </Box>
+  );
+}
+
+// ── DeleteProjectModal ─────────────────────────────────────────
+// Apple-like solid modal (см. фиксы прошлых сессий: appendToParentPortal
+// false + solid surface). Требует ввести название проекта для
+// подтверждения — защита от случайного клика.
+function DeleteProjectModal({
+  open,
+  title,
+  onClose,
+  onConfirm,
+  deleting,
+}: {
+  open: boolean;
+  title: string;
+  onClose: () => void;
+  onConfirm: () => void;
+  deleting: boolean;
+}) {
+  const [typed, setTyped] = useState('');
+
+  useEffect(() => {
+    if (!open) setTyped('');
+  }, [open]);
+
+  const surface = useColorModeValue('#ffffff', '#1c1d22');
+  const hairline = useColorModeValue(
+    'rgba(15,23,42,0.08)',
+    'rgba(255,255,255,0.10)',
+  );
+  const textPrimary = useColorModeValue('#111827', '#f5f7fb');
+  const textSecondary = useColorModeValue('#6b7280', 'rgba(245,247,251,0.62)');
+  const inputBg = useColorModeValue('#f7f8fb', 'rgba(255,255,255,0.04)');
+  const matches = typed.trim() === title.trim();
+
+  return (
+    <Modal
+      isOpen={open}
+      onClose={onClose}
+      isCentered
+      size={{ base: 'full', md: 'md' } as any}
+      motionPreset="slideInBottom"
+      closeOnOverlayClick={!deleting}
+      closeOnEsc={!deleting}
+      autoFocus
+      portalProps={{ appendToParentPortal: false }}
+    >
+      <ModalOverlay
+        bg="rgba(0,0,0,0.48)"
+        sx={{
+          backdropFilter: 'blur(14px) saturate(160%)',
+          WebkitBackdropFilter: 'blur(14px) saturate(160%)',
+        }}
+      />
+      <ModalContent
+        mx={{ base: '16px', md: 'auto' }}
+        my={{ base: '16px', md: 'auto' }}
+        maxW={{ base: 'calc(100vw - 32px)', md: '480px' }}
+        borderRadius={{ base: '22px', md: '24px' }}
+        border="1px solid"
+        borderColor={hairline}
+        bg={surface}
+        boxShadow="0 1px 2px rgba(15,23,42,0.04), 0 32px 64px -16px rgba(15,23,42,0.30)"
+        overflow="hidden"
+      >
+        <ModalHeader
+          px={{ base: '20px', md: '24px' }}
+          pt={{ base: '20px', md: '22px' }}
+          pb="4px"
+          fontFamily={FONT_DISPLAY}
+          fontSize={{ base: '18px', md: '20px' }}
+          fontWeight="600"
+          letterSpacing="-0.018em"
+          color={textPrimary}
+        >
+          <Flex align="center" gap="10px">
+            <Flex
+              boxSize="28px"
+              borderRadius="8px"
+              bg="rgba(239,68,68,0.12)"
+              align="center"
+              justify="center"
+              flexShrink={0}
+            >
+              <Icon as={MdWarningAmber} color="#dc2626" boxSize="16px" />
+            </Flex>
+            <Text>Удалить проект?</Text>
+          </Flex>
+        </ModalHeader>
+        <ModalCloseButton
+          borderRadius="9999px"
+          top={{ base: '12px', md: '14px' }}
+          right={{ base: '12px', md: '14px' }}
+          isDisabled={deleting}
+        />
+        <ModalBody px={{ base: '20px', md: '24px' }} pt="8px" pb="12px">
+          <Text
+            fontFamily={FONT_TEXT}
+            fontSize="14px"
+            color={textSecondary}
+            lineHeight="1.5"
+            mb="14px"
+          >
+            Проект <b>«{title}»</b>, его источники, файлы, документы,
+            анкеты, трекеры и история работы будут удалены. Это действие
+            нельзя отменить.
+          </Text>
+          <Text
+            fontFamily={FONT_TEXT}
+            fontSize="12px"
+            fontWeight="600"
+            color={textSecondary}
+            mb="6px"
+            letterSpacing="0.1px"
+          >
+            Введите название проекта, чтобы подтвердить
+          </Text>
+          <Input
+            value={typed}
+            onChange={(e) => setTyped(e.target.value)}
+            placeholder={title}
+            bg={inputBg}
+            borderColor={hairline}
+            borderRadius="10px"
+            fontFamily={FONT_TEXT}
+            fontSize="14px"
+            color={textPrimary}
+            _focus={{
+              borderColor: '#dc2626',
+              boxShadow: '0 0 0 3px rgba(239,68,68,0.15)',
+            }}
+          />
+        </ModalBody>
+        <ModalFooter
+          px={{ base: '20px', md: '24px' }}
+          pt="6px"
+          pb={{
+            base: 'calc(20px + env(safe-area-inset-bottom))',
+            md: '20px',
+          }}
+          borderTop="1px solid"
+          borderColor={hairline}
+          gap="8px"
+        >
+          <Button
+            onClick={onClose}
+            variant="ghost"
+            isDisabled={deleting}
+            borderRadius="9999px"
+            h="36px"
+            px="16px"
+            fontFamily={FONT_TEXT}
+            fontSize="13px"
+            fontWeight="500"
+            color={textPrimary}
+            _hover={{ bg: 'rgba(0,0,0,0.04)' }}
+          >
+            Отмена
+          </Button>
+          <Button
+            onClick={onConfirm}
+            isLoading={deleting}
+            isDisabled={!matches || deleting}
+            bg="#dc2626"
+            color="white"
+            borderRadius="9999px"
+            h="36px"
+            px="18px"
+            fontFamily={FONT_TEXT}
+            fontSize="13px"
+            fontWeight="600"
+            _hover={{ bg: '#b91c1c' }}
+            _active={{ transform: 'scale(0.98)' }}
+            _disabled={{
+              opacity: 0.5,
+              cursor: 'not-allowed',
+              bg: '#dc2626',
+            }}
+            leftIcon={<Icon as={MdDeleteForever} boxSize="15px" />}
+          >
+            Удалить проект
+          </Button>
+        </ModalFooter>
+      </ModalContent>
+    </Modal>
+  );
+}
+
+// ── LearningTrackerWidget ───────────────────────────────────────
+// Education-специфичный tracker. Колонки: Неделя · Тема · Материал
+// · Задание · Статус · Комментарий. Никакого веса/калорий.
+function LearningTrackerWidget({
+  tracker,
+  surface,
+  surfaceSoft,
+  hairline,
+  accent,
+  textPrimary,
+  textSecondary,
+  textTertiary,
+  creatingTracker,
+  onCreateTracker,
+  onAddEntry,
+  onDeleteEntry,
+}: any) {
+  const entries: any[] = tracker?.entries || [];
+  const sorted = [...entries].sort((a, b) => {
+    const wa = Number(a.week);
+    const wb = Number(b.week);
+    if (Number.isFinite(wa) && Number.isFinite(wb)) return wa - wb;
+    return (a.date || '').localeCompare(b.date || '');
+  });
+  const totalCount = entries.length;
+  const doneCount = entries.filter(
+    (e) => String(e.status || '').toLowerCase() === 'done',
+  ).length;
+
+  return (
+    <Box
+      bg={surface}
+      border="1px solid"
+      borderColor={hairline}
+      borderRadius={{ base: '18px', md: '22px' }}
+      p={{ base: '20px', md: '24px' }}
+      boxShadow="0 1px 2px rgba(15,23,42,0.04), 0 8px 24px -14px rgba(15,23,42,0.10)"
+    >
+      <Flex
+        justify="space-between"
+        align="flex-start"
+        gap="10px"
+        mb="12px"
+        flexWrap="wrap"
+      >
+        <Box>
+          <Text
+            fontFamily={FONT_TEXT}
+            fontSize="11px"
+            fontWeight="700"
+            letterSpacing="0.4px"
+            textTransform="uppercase"
+            color={textTertiary}
+            mb="4px"
+          >
+            Трекер обучения
+          </Text>
+          <Heading
+            as="h3"
+            fontFamily={FONT_DISPLAY}
+            fontSize={{ base: '18px', md: '20px' }}
+            fontWeight="600"
+            color={textPrimary}
+            letterSpacing="-0.014em"
+          >
+            {tracker ? `Недели и темы · ${doneCount}/${totalCount}` : 'Трекер не создан'}
+          </Heading>
+        </Box>
+        {tracker ? (
+          <Button
+            onClick={onAddEntry}
+            bg={accent}
+            color="white"
+            borderRadius="9999px"
+            h="32px"
+            px="14px"
+            fontFamily={FONT_TEXT}
+            fontSize="13px"
+            fontWeight="500"
+            leftIcon={<Icon as={MdAdd} boxSize="14px" />}
+            _hover={{ bg: ACCENT_BLUE_HOVER }}
+          >
+            Добавить запись
+          </Button>
+        ) : (
+          <Button
+            onClick={onCreateTracker}
+            isLoading={creatingTracker}
+            bg={accent}
+            color="white"
+            borderRadius="9999px"
+            h="32px"
+            px="14px"
+            fontFamily={FONT_TEXT}
+            fontSize="13px"
+            fontWeight="500"
+            leftIcon={<Icon as={MdTrendingUp} boxSize="14px" />}
+            _hover={{ bg: ACCENT_BLUE_HOVER }}
+          >
+            Создать трекер
+          </Button>
+        )}
+      </Flex>
+
+      {!tracker ? (
+        <Text
+          fontFamily={FONT_TEXT}
+          fontSize="14px"
+          color={textSecondary}
+          lineHeight="1.45"
+        >
+          Трекер поможет видеть, какие темы уже пройдены и что осталось.
+        </Text>
+      ) : sorted.length === 0 ? (
+        <Text
+          fontFamily={FONT_TEXT}
+          fontSize="13px"
+          color={textSecondary}
+        >
+          Записей пока нет. Добавьте первую — неделя, тема, статус.
+        </Text>
+      ) : (
+        <Box
+          border="1px solid"
+          borderColor={hairline}
+          borderRadius="14px"
+          overflow="hidden"
+        >
+          {/* Header — desktop only */}
+          <Flex
+            display={{ base: 'none', md: 'flex' }}
+            px="12px"
+            py="8px"
+            bg={surfaceSoft}
+            color={textTertiary}
+            fontFamily={FONT_TEXT}
+            fontSize="11px"
+            fontWeight="700"
+            letterSpacing="0.3px"
+            textTransform="uppercase"
+            gap="10px"
+          >
+            <Box flex="0 0 70px">Неделя</Box>
+            <Box flex="1 1 0">Тема</Box>
+            <Box flex="1 1 0">Материал / задание</Box>
+            <Box flex="0 0 110px">Статус</Box>
+            <Box flex="0 0 32px" />
+          </Flex>
+          {sorted.map((e) => (
+            <Flex
+              key={e.id}
+              direction={{ base: 'column', md: 'row' }}
+              px="12px"
+              py="10px"
+              borderTop="1px solid"
+              borderColor={hairline}
+              gap="6px"
+              align={{ base: 'flex-start', md: 'center' }}
+            >
+              <Box flex={{ md: '0 0 70px' }}>
+                <Text fontFamily={FONT_TEXT} fontSize="13px" fontWeight="600" color={textPrimary}>
+                  {e.week ? `Неделя ${e.week}` : '—'}
+                </Text>
+              </Box>
+              <Box flex={{ md: '1 1 0' }} minW={0}>
+                <Text fontFamily={FONT_TEXT} fontSize="13px" color={textPrimary} noOfLines={1}>
+                  {e.topic || '—'}
+                </Text>
+              </Box>
+              <Box flex={{ md: '1 1 0' }} minW={0}>
+                <Text
+                  fontFamily={FONT_TEXT}
+                  fontSize="12px"
+                  color={textSecondary}
+                  noOfLines={2}
+                >
+                  {[e.material, e.task, e.comment].filter(Boolean).join(' · ')}
+                </Text>
+              </Box>
+              <Box flex={{ md: '0 0 110px' }}>
+                <Text
+                  fontFamily={FONT_TEXT}
+                  fontSize="12px"
+                  color={
+                    String(e.status || '').toLowerCase() === 'done'
+                      ? accent
+                      : textSecondary
+                  }
+                  fontWeight="600"
+                  letterSpacing="-0.1px"
+                >
+                  {prettyStatus(e.status)}
+                </Text>
+              </Box>
+              <Box flex={{ md: '0 0 32px' }}>
+                <IconButton
+                  onClick={() => onDeleteEntry(e.id)}
+                  icon={<Icon as={MdRestartAlt} boxSize="14px" />}
+                  aria-label="Удалить запись"
+                  size="xs"
+                  variant="ghost"
+                  color={textTertiary}
+                  _hover={{ color: 'red.500' }}
+                />
+              </Box>
+            </Flex>
+          ))}
+        </Box>
+      )}
+    </Box>
+  );
+}
+
+function prettyStatus(s: any): string {
+  const v = String(s || '').toLowerCase();
+  if (v === 'done') return 'Пройдено';
+  if (v === 'in_progress' || v === 'active') return 'В работе';
+  if (v === 'blocked' || v === 'stuck') return 'Застрял';
+  if (v === 'planned') return 'Запланирована';
+  return s || '—';
+}
+
+// ── AddLearningEntryModal ───────────────────────────────────────
+function AddLearningEntryModal({
+  open,
+  onClose,
+  onSubmit,
+  suggestedWeek,
+}: {
+  open: boolean;
+  onClose: () => void;
+  onSubmit: (
+    entry: Omit<IProjectTrackerEntryUI, 'id' | 'createdAt'>,
+  ) => Promise<boolean>;
+  suggestedWeek?: string;
+}) {
+  const today = useMemo(() => new Date().toISOString().slice(0, 10), []);
+  const [date, setDate] = useState(today);
+  const [week, setWeek] = useState('');
+  const [topic, setTopic] = useState('');
+  const [material, setMaterial] = useState('');
+  const [task, setTask] = useState('');
+  const [status, setStatus] = useState('in_progress');
+  const [comment, setComment] = useState('');
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
+  const surface = useColorModeValue('#ffffff', '#1c1d22');
+  const hairline = useColorModeValue('rgba(15,23,42,0.08)', 'rgba(255,255,255,0.10)');
+  const inputBg = useColorModeValue('#fafafb', 'rgba(255,255,255,0.04)');
+  const textPrimary = useColorModeValue('#1d1d1f', '#f5f5f7');
+  const textSecondary = useColorModeValue('#6e6e73', 'rgba(245,245,247,0.65)');
+
+  useEffect(() => {
+    if (!open) return;
+    setDate(today);
+    setWeek(suggestedWeek || '');
+    setTopic('');
+    setMaterial('');
+    setTask('');
+    setStatus('in_progress');
+    setComment('');
+  }, [open, today, suggestedWeek]);
+
+  const handleSubmit = async () => {
+    setIsSubmitting(true);
+    const ok = await onSubmit({
+      date,
+      ...({
+        week: week.trim() || undefined,
+        topic: topic.trim() || undefined,
+        material: material.trim() || undefined,
+        task: task.trim() || undefined,
+        status,
+      } as any),
+      comment: comment.trim() || undefined,
+    });
+    setIsSubmitting(false);
+    if (ok) onClose();
+  };
+
+  return (
+    <Modal
+      isOpen={open}
+      onClose={onClose}
+      isCentered
+      size={{ base: 'full', md: 'md' } as any}
+      motionPreset="slideInBottom"
+      closeOnOverlayClick
+      closeOnEsc
+      autoFocus
+      portalProps={{ appendToParentPortal: false }}
+    >
+      <ModalOverlay
+        bg="rgba(0,0,0,0.48)"
+        sx={{
+          backdropFilter: 'blur(14px) saturate(160%)',
+          WebkitBackdropFilter: 'blur(14px) saturate(160%)',
+        }}
+      />
+      <ModalContent
+        mx={{ base: '16px', md: 'auto' }}
+        my={{ base: '16px', md: 'auto' }}
+        maxW={{ base: 'calc(100vw - 32px)', md: '560px' }}
+        borderRadius={{ base: '22px', md: '24px' }}
+        border="1px solid"
+        borderColor={hairline}
+        bg={surface}
+        boxShadow="0 1px 2px rgba(15,23,42,0.04), 0 32px 64px -16px rgba(15,23,42,0.30)"
+        overflow="hidden"
+      >
+        <ModalHeader
+          px={{ base: '20px', md: '24px' }}
+          pt={{ base: '20px', md: '22px' }}
+          pb="4px"
+          fontFamily={FONT_DISPLAY}
+          fontSize={{ base: '18px', md: '20px' }}
+          fontWeight="600"
+          letterSpacing="-0.018em"
+          color={textPrimary}
+        >
+          <Box
+            as="button"
+            type="button"
+            onClick={onClose}
+            display="inline-flex"
+            alignItems="center"
+            gap="4px"
+            fontFamily={FONT_TEXT}
+            fontSize="12px"
+            fontWeight="500"
+            color={textSecondary}
+            bg="transparent"
+            cursor="pointer"
+            mb="6px"
+            _hover={{ color: textPrimary }}
+            sx={{ WebkitTapHighlightColor: 'transparent' }}
+            aria-label="Назад к проекту"
+          >
+            <Icon as={MdArrowBack} boxSize="13px" />
+            <Text>К проекту</Text>
+          </Box>
+          Запись в трекер обучения
+        </ModalHeader>
+        <ModalCloseButton
+          borderRadius="9999px"
+          top={{ base: '12px', md: '14px' }}
+          right={{ base: '12px', md: '14px' }}
+        />
+        <ModalBody px={{ base: '20px', md: '24px' }} pt="6px" pb="12px">
+          <SimpleGrid columns={2} spacing="10px">
+            <Field label="Неделя" textSecondary={textSecondary}>
+              <Input value={week} onChange={(e) => setWeek(e.target.value)} placeholder="1" bg={inputBg} borderColor={hairline} borderRadius="10px" fontFamily={FONT_TEXT} fontSize="14px" color={textPrimary} />
+            </Field>
+            <Field label="Дата" textSecondary={textSecondary}>
+              <Input type="date" value={date} onChange={(e) => setDate(e.target.value)} bg={inputBg} borderColor={hairline} borderRadius="10px" fontFamily={FONT_TEXT} fontSize="14px" color={textPrimary} />
+            </Field>
+          </SimpleGrid>
+          <Box mt="10px">
+            <Field label="Тема" textSecondary={textSecondary}>
+              <Input value={topic} onChange={(e) => setTopic(e.target.value)} placeholder="Основы Python: переменные, типы…" bg={inputBg} borderColor={hairline} borderRadius="10px" fontFamily={FONT_TEXT} fontSize="14px" color={textPrimary} />
+            </Field>
+          </Box>
+          <Box mt="10px">
+            <Field label="Материал" textSecondary={textSecondary}>
+              <Input value={material} onChange={(e) => setMaterial(e.target.value)} placeholder="курс / книга / статья" bg={inputBg} borderColor={hairline} borderRadius="10px" fontFamily={FONT_TEXT} fontSize="14px" color={textPrimary} />
+            </Field>
+          </Box>
+          <Box mt="10px">
+            <Field label="Задание" textSecondary={textSecondary}>
+              <Input value={task} onChange={(e) => setTask(e.target.value)} placeholder="что нужно сделать" bg={inputBg} borderColor={hairline} borderRadius="10px" fontFamily={FONT_TEXT} fontSize="14px" color={textPrimary} />
+            </Field>
+          </Box>
+          <Box mt="10px">
+            <Field label="Статус" textSecondary={textSecondary}>
+              <Select value={status} onChange={(e) => setStatus(e.target.value)} bg={inputBg} borderColor={hairline} borderRadius="10px" fontFamily={FONT_TEXT} fontSize="14px" color={textPrimary}>
+                <option value="planned">Запланирована</option>
+                <option value="in_progress">В работе</option>
+                <option value="done">Пройдено</option>
+                <option value="blocked">Застрял</option>
+              </Select>
+            </Field>
+          </Box>
+          <Box mt="10px">
+            <Field label="Комментарий" textSecondary={textSecondary}>
+              <Textarea value={comment} onChange={(e) => setComment(e.target.value)} placeholder="что важно отметить" bg={inputBg} borderColor={hairline} borderRadius="10px" rows={2} fontFamily={FONT_TEXT} fontSize="14px" color={textPrimary} />
+            </Field>
+          </Box>
+        </ModalBody>
+        <ModalFooter
+          px={{ base: '20px', md: '24px' }}
+          pt="6px"
+          pb={{
+            base: 'calc(20px + env(safe-area-inset-bottom))',
+            md: '20px',
+          }}
+          borderTop="1px solid"
+          borderColor={hairline}
+          gap="8px"
+        >
+          <Button
+            onClick={onClose}
+            variant="ghost"
+            borderRadius="9999px"
+            h="36px"
+            px="16px"
+            fontFamily={FONT_TEXT}
+            fontSize="13px"
+            fontWeight="500"
+            color={textPrimary}
+            _hover={{ bg: 'rgba(0,0,0,0.04)' }}
+          >
+            Отмена
+          </Button>
+          <Button
+            onClick={handleSubmit}
+            isLoading={isSubmitting}
+            bg={ACCENT_BLUE}
+            color="white"
+            borderRadius="9999px"
+            h="36px"
+            px="18px"
+            fontFamily={FONT_TEXT}
+            fontSize="13px"
+            fontWeight="600"
+            _hover={{ bg: ACCENT_BLUE_HOVER }}
+            leftIcon={<Icon as={MdCheck} boxSize="14px" />}
+          >
+            Сохранить
+          </Button>
+        </ModalFooter>
+      </ModalContent>
+    </Modal>
+  );
 }
 
 export default ProjectCommandCenter;

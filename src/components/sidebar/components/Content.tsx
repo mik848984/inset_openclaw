@@ -25,6 +25,7 @@ import {
   Icon,
   Stack,
   Text,
+  useColorModeValue,
 } from '@chakra-ui/react';
 import { NextAvatar } from '@/components/image/Avatar';
 import Brand from '@/components/sidebar/components/Brand';
@@ -77,20 +78,38 @@ function SidebarContent(props: SidebarContent) {
   const { session, isAnonymous } = useAppSession();
   const { setSideBarOpen } = useContext(ModalContext);
 
-  // ── Tokens (фиксированно light) ─────────────────────────────
-  // useColorModeValue убран сознательно: sidebar/drawer должны быть
-  // светлым Apple-like premium UI независимо от system dark mode.
-  // Раньше dark mode превращал sidebar в navy admin-панель.
-  const surface = '#ffffff';
-  const surfaceSoft = '#f7f8fb';
-  const hairline = 'rgba(15,23,42,0.08)';
-  const hairlineSoft = 'rgba(15,23,42,0.05)';
-  const itemHoverBg = 'rgba(15,23,42,0.04)';
-  const activeBg = 'rgba(0,113,227,0.08)'; // soft Apple-blue tint
-  const textPrimary = '#111827';
-  const textSecondary = '#6b7280';
-  const textTertiary = '#9ca3af';
-  const accent = ACCENT_BLUE;
+  // ── Tokens (theme-aware) ─────────────────────────────────────
+  // Sidebar следует текущей теме страницы. Раньше hardcode-или light —
+  // на dark-странице sidebar выглядел чужеродным белым окном. Dark
+  // вариант — графит (НЕ navy.*), чтобы не превращать в админ-сцену.
+  const surface = useColorModeValue('#ffffff', '#15161a');
+  const surfaceSoft = useColorModeValue('#f7f8fb', 'rgba(255,255,255,0.04)');
+  const hairline = useColorModeValue(
+    'rgba(15,23,42,0.08)',
+    'rgba(255,255,255,0.10)',
+  );
+  const hairlineSoft = useColorModeValue(
+    'rgba(15,23,42,0.05)',
+    'rgba(255,255,255,0.06)',
+  );
+  const itemHoverBg = useColorModeValue(
+    'rgba(15,23,42,0.04)',
+    'rgba(255,255,255,0.06)',
+  );
+  const activeBg = useColorModeValue(
+    'rgba(0,113,227,0.08)',
+    'rgba(10,132,255,0.18)',
+  );
+  const textPrimary = useColorModeValue('#111827', '#f5f7fb');
+  const textSecondary = useColorModeValue(
+    '#6b7280',
+    'rgba(245,247,251,0.62)',
+  );
+  const textTertiary = useColorModeValue(
+    '#9ca3af',
+    'rgba(245,247,251,0.42)',
+  );
+  const accent = useColorModeValue(ACCENT_BLUE, '#5ab0ff');
 
   // ── Categorize received routes ────────────────────────────────
   const { secondaryRoutes, adminRoutes } = useMemo(() => {

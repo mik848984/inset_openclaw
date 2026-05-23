@@ -208,6 +208,25 @@ class VectorStoreService {
     );
     return !!(res && res.ok);
   }
+
+  /** Удалить все точки проекта (cascade при delete project). */
+  async deleteProject(
+    projectId: string,
+    userEmail: string,
+  ): Promise<boolean> {
+    if (!QDRANT_URL) return false;
+    const filter = {
+      must: [
+        { key: 'projectId', match: { value: projectId } },
+        { key: 'userEmail', match: { value: userEmail } },
+      ],
+    };
+    const res = await qfetch(
+      `/collections/${COLLECTION}/points/delete?wait=true`,
+      { method: 'POST', json: { filter } },
+    );
+    return !!(res && res.ok);
+  }
 }
 
 export const vectorStoreService = new VectorStoreService();

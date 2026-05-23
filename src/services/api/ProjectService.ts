@@ -583,7 +583,7 @@ function blueprintForDomain(
           type: 'intake_form',
           title: 'Анкета уровня и цели',
           hint: 'Оценим точку входа и подберём дорожную карту.',
-          formKind: 'general',
+          formKind: 'education',
         },
         steps: [
           'Заполнить анкету уровня',
