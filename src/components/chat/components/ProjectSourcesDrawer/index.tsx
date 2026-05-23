@@ -384,8 +384,43 @@ function ProjectSourcesDrawer({ projectId, open, onClose }: Props) {
     // даже если Qdrant временно отвалился. Mongo + project-level fallback
     // в RetrievalService подхватят содержимое.
     const isAnswerReady = s.status === 'ready' && s.chunksCount > 0;
-    const tag = isAnswerReady ? 'Готово к вопросам' : STATUS_LABEL[s.status];
-    const color = isAnswerReady ? 'green' : STATUS_COLOR[s.status];
+
+    // Для PDF, который не получилось проиндексировать, общий бейдж
+    // «Формат пока не индексируется» вводил в заблуждение — PDF мы
+    // поддерживаем. Различаем два кейса по тексту errorMessage,
+    // выставленному IngestionService (см. parsePdfBuffer):
+    //   • «без текстового слоя» / «OCR» → скан без OCR;
+    //   • «Не удалось извлечь» / «прочитать PDF» → реальная ошибка парсера.
+    const isPdf =
+      (s.originalName || '').toLowerCase().endsWith('.pdf') ||
+      (s.mimeType || '').includes('pdf');
+    const errMsg = (s.errorMessage || '').toLowerCase();
+    let pdfBadge: { tag: string; color: string } | null = null;
+    if (
+      isPdf &&
+      (s.status === 'unsupported' || s.status === 'error')
+    ) {
+      if (
+        errMsg.includes('текстового слоя') ||
+        errMsg.includes('скан') ||
+        errMsg.includes('ocr')
+      ) {
+        pdfBadge = { tag: 'PDF без текстового слоя', color: 'orange' };
+      } else {
+        pdfBadge = { tag: 'Не удалось прочитать PDF', color: 'red' };
+      }
+    }
+
+    const tag = pdfBadge
+      ? pdfBadge.tag
+      : isAnswerReady
+        ? 'Готово к вопросам'
+        : STATUS_LABEL[s.status];
+    const color = pdfBadge
+      ? pdfBadge.color
+      : isAnswerReady
+        ? 'green'
+        : STATUS_COLOR[s.status];
     const icon =
       s.type === 'file'
         ? MdInsertDriveFile

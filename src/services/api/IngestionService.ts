@@ -29,6 +29,9 @@ import { vectorStoreService } from '@/services/api/VectorStoreService';
 export type IngestionErrorCode =
   | 'unsupported_format'
   | 'empty_document'
+  // PDF без текстового слоя (скан/изображение). OCR не подключён.
+  | 'pdf_no_text_layer'
+  // Алиас прежнего кода — оставлен ради совместимости с UI/тестами.
   | 'pdf_text_not_extractable'
   | 'parse_failed'
   | 'ingestion_failed'
@@ -128,35 +131,88 @@ function unsupported(
 // ── Parsers per-format ────────────────────────────────────────────
 
 async function parsePdfBuffer(buffer: Buffer): Promise<ParsedSource> {
+  // pdf-parse v1.1.1 — Node-friendly. Импортируем через прямой путь
+  // `pdf-parse/lib/pdf-parse.js`, чтобы обойти вшитую в index.js загрузку
+  // тестового PDF при require (известный баг библиотеки).
+  //
+  // Раньше использовали pdf-parse v2, который тянет современный
+  // `pdfjs-dist` с зависимостью от browser-only DOMMatrix и падал в
+  // Node-runtime с `ReferenceError: DOMMatrix is not defined`.
   try {
-    // pdf-parse v2 — ESM-only, поэтому динамический import.
-    const mod: any = await import('pdf-parse');
-    const PDFParse = mod.PDFParse || mod.default?.PDFParse;
-    if (!PDFParse) {
-      return unsupported(
-        'PDF-парсер недоступен в этой сборке.',
-        'parse_failed',
-      );
+    const mod: any = await import('pdf-parse/lib/pdf-parse.js');
+    const pdfParse: (
+      buf: Buffer,
+      opts?: any,
+    ) => Promise<{
+      text: string;
+      numpages: number;
+      info?: any;
+    }> = (mod && (mod.default || mod)) as any;
+
+    if (typeof pdfParse !== 'function') {
+      return unsupported('PDF-парсер недоступен.', 'parse_failed');
     }
-    const parser = new PDFParse({ data: new Uint8Array(buffer) });
-    const result = await parser.getText();
-    const segments: ParsedSegment[] = (result?.pages || [])
-      .map((p: { num: number; text: string }) => ({
-        page: p.num,
-        text: (p.text || '').trim(),
-      }))
-      .filter((s: ParsedSegment) => s.text.length > 0);
-    const fullText = segments.map((s) => s.text).join('\n\n');
+
+    // pagerender вызывается на каждую страницу. Собираем текст по
+    // индексу страницы — это даёт нам segments[] с `page` metadata
+    // для последующего chunk-инга с правильной ссылкой [P1 · стр. N].
+    const pageTexts: string[] = [];
+    const render = async (pageData: any): Promise<string> => {
+      const textContent = await pageData.getTextContent({
+        normalizeWhitespace: true,
+        disableCombineTextItems: false,
+      });
+      const items = Array.isArray(textContent?.items)
+        ? textContent.items
+        : [];
+      const text = items.map((it: any) => it?.str || '').join(' ');
+      const idx = (pageData?.pageNumber || pageTexts.length + 1) - 1;
+      pageTexts[idx] = text;
+      return text;
+    };
+
+    const data = await pdfParse(buffer, {
+      pagerender: render,
+      // Чёткий лимит — защита от мегафайлов.
+      max: 500,
+    });
+
+    const segments: ParsedSegment[] = pageTexts
+      .map((t, i) => ({ page: i + 1, text: (t || '').trim() }))
+      .filter((s) => s.text.length > 0);
+
+    // Fallback: если pagerender не отработал (старый pdfjs / sandbox),
+    // используем плоский data.text — теряем page metadata, но работает.
+    const fullText =
+      segments.length > 0
+        ? segments.map((s) => s.text).join('\n\n')
+        : (data?.text || '').trim();
+
     if (!fullText.trim()) {
+      // Это НЕ ошибка парсера — он отработал, но текстового слоя нет
+      // (отсканированный PDF / изображение). OCR не подключён.
       return unsupported(
-        'PDF не содержит извлекаемого текста. OCR пока не поддерживается.',
-        'pdf_text_not_extractable',
+        'PDF похож на скан или файл без текстового слоя. Пока OCR не подключён — загрузите DOCX/TXT или PDF с выделяемым текстом.',
+        'pdf_no_text_layer',
       );
     }
-    return buildParsed(fullText, segments);
-  } catch (e) {
-    console.error('[INGEST] pdf parse failed', e);
-    return unsupported('Не удалось прочитать PDF.', 'parse_failed');
+
+    return buildParsed(
+      fullText,
+      segments.length > 0 ? segments : undefined,
+    );
+  } catch (e: any) {
+    // Реальный краш парсера: повреждённый PDF / неподдерживаемая
+    // версия / OOM. Лог с техническим сообщением для backend, для
+    // пользователя — мягкое объяснение и подсказка чем заменить.
+    console.error(
+      '[INGEST] pdf parse failed',
+      e?.message || String(e),
+    );
+    return unsupported(
+      'Не удалось извлечь текст из PDF. Попробуйте DOCX/TXT или PDF с текстовым слоем.',
+      'parse_failed',
+    );
   }
 }
 
