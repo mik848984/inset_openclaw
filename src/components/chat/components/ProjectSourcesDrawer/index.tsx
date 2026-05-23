@@ -380,8 +380,12 @@ function ProjectSourcesDrawer({ projectId, open, onClose }: Props) {
 
   const renderSourceCard = (s: IProjectSourceUI) => {
     const isBusy = busyId === s._id;
-    const tag = STATUS_LABEL[s.status];
-    const color = STATUS_COLOR[s.status];
+    // Если есть хотя бы один chunk — источник реально пригоден для вопросов,
+    // даже если Qdrant временно отвалился. Mongo + project-level fallback
+    // в RetrievalService подхватят содержимое.
+    const isAnswerReady = s.status === 'ready' && s.chunksCount > 0;
+    const tag = isAnswerReady ? 'Готово к вопросам' : STATUS_LABEL[s.status];
+    const color = isAnswerReady ? 'green' : STATUS_COLOR[s.status];
     const icon =
       s.type === 'file'
         ? MdInsertDriveFile

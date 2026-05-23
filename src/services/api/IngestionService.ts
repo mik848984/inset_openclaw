@@ -20,6 +20,7 @@
  * запросов без файлов.
  */
 
+import { randomUUID } from 'crypto';
 import ProjectChunk from '@/models/projectChunk';
 import { chunkText, csvToReadable, jsonToReadable } from '@/utils/textChunker';
 import { embeddingService } from '@/services/api/EmbeddingService';
@@ -386,14 +387,24 @@ export async function ingestParsedText(
     try {
       const texts = rows.map((r) => r.text);
       const vectors = await embeddingService.embedBatch(texts);
+
+      // ── Qdrant point id ─────────────────────────────────────────
+      // Qdrant принимает только UUID или unsigned integer как id точки;
+      // Mongo ObjectId — 24-hex строка, упёрается в 400 «Format error
+      // in JSON body: value is not a valid point ID». Генерим UUIDv4
+      // для каждого chunk-а; настоящий Mongo `_id` кладём в payload.chunkId,
+      // чтобы при поиске можно было его поднять.
+      const chunkVectorIds: string[] = inserted.map(() => randomUUID());
+
       const points = inserted
         .map((doc: any, idx: number) => {
           const vec = vectors[idx];
           if (!Array.isArray(vec) || vec.length === 0) return null;
           return {
-            id: String(doc._id),
+            id: chunkVectorIds[idx],
             vector: vec,
             payload: {
+              chunkId: String(doc._id),
               projectId: String(plan.projectId),
               sourceId: String(plan.sourceId),
               userEmail: plan.userEmail,
@@ -408,14 +419,17 @@ export async function ingestParsedText(
           };
         })
         .filter(Boolean) as any[];
+
       if (points.length > 0) {
         const upserted = await vectorStoreService.upsertChunks(points);
         if (upserted > 0) {
+          // Сохраняем настоящий vectorId (UUID) в ProjectChunk — нужен
+          // для последующего удаления/обновления точки в Qdrant.
           await Promise.all(
-            inserted.map((doc: any) =>
+            inserted.map((doc: any, idx: number) =>
               ProjectChunk.updateOne(
                 { _id: doc._id },
-                { $set: { vectorId: String(doc._id) } },
+                { $set: { vectorId: chunkVectorIds[idx] } },
               ),
             ),
           );
@@ -423,7 +437,7 @@ export async function ingestParsedText(
       }
     } catch (e) {
       // Не валим ingestion — chunks уже в Mongo, retrieval работает
-      // через keyword fallback.
+      // через project-level fallback и keyword fallback.
       console.error('[INGEST] vector upsert failed', e);
     }
   }

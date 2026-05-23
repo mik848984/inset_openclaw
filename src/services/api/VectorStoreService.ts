@@ -21,10 +21,18 @@ const VECTOR_SIZE = Number(process.env.EMBEDDING_DIM || 1024); // BAAI/bge-m3-mu
 const HTTP_TIMEOUT_MS = 7000;
 
 export interface VectorUpsertItem {
-  /** Stable id для точки. Лучше передавать ObjectId chunk-а. */
+  /**
+   * Stable id для точки. ОБЯЗАТЕЛЬНО UUID (или unsigned integer).
+   * Mongo ObjectId как id Qdrant НЕ принимает — будет 400.
+   */
   id: string;
   vector: number[];
   payload: {
+    /**
+     * Mongo `_id` соответствующего ProjectChunk. Хранится в payload,
+     * чтобы при поиске поднять оригинальный документ.
+     */
+    chunkId?: string;
     projectId: string;
     sourceId: string;
     userEmail: string;
@@ -125,9 +133,14 @@ class VectorStoreService {
       json: { points },
     });
     if (!res || !res.ok) {
+      // Подтягиваем тело ошибки, чтобы видеть конкретную причину 4xx:
+      // обычно «invalid point ID», «vector size mismatch», «collection
+      // not found». Обрезаем до 1k, чтобы не залить логи payload-ом.
+      const errorText = res ? await res.text().catch(() => '') : '';
       console.error(
         '[QDRANT] upsert failed',
         res?.status,
+        errorText.slice(0, 1000),
       );
       return 0;
     }
@@ -166,7 +179,10 @@ class VectorStoreService {
     const result = data?.result;
     if (!Array.isArray(result)) return [];
     return result.map((r: any) => ({
-      id: String(r.id),
+      // Возвращаем НЕ qdrant point id (UUID), а Mongo chunk _id из
+      // payload — это то, чем оперирует Retrieval/dedupe слой. Fallback
+      // на qdrant id оставлен на случай старых точек без payload.chunkId.
+      id: String(r?.payload?.chunkId ?? r.id),
       score: typeof r.score === 'number' ? r.score : 0,
       payload: r.payload || {},
     }));

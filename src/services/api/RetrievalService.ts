@@ -32,7 +32,14 @@ export interface RetrievedChunk {
   rowRange?: string;
   url?: string;
   score: number;
-  via: 'vector' | 'keyword' | 'rerank';
+  /**
+   * vector / keyword / rerank — обычные стадии гибридного поиска.
+   * project_fallback — последние chunks проекта, когда vector и keyword
+   * пустые (например на вопрос «расскажи про моё резюме» — в тексте
+   * документа слова «резюме» нет, regex ничего не находит, а Qdrant
+   * был выключен/упал). Это страховка от «LLM не видит документ».
+   */
+  via: 'vector' | 'keyword' | 'rerank' | 'project_fallback';
 }
 
 interface RetrievalOpts {
@@ -146,7 +153,45 @@ class RetrievalService {
       seen.add(h._id);
       merged.push(h);
     }
-    if (!merged.length) return [];
+
+    // ── 3.5) Project-level fallback ─────────────────────────────
+    // Если оба стадии не дали попаданий, но в проекте РЕАЛЬНО есть
+    // chunks (источник загружен), возвращаем самые свежие. Запрос
+    // «расскажи про моё резюме» не содержит слов из текста документа —
+    // regex даёт 0, vector мог отсутствовать (Qdrant 400). Без этого
+    // LLM отвечает «не вижу документ».
+    //
+    // Фильтр строго scoped по project+userEmail — cross-tenant
+    // утечек тут быть не может.
+    if (!merged.length) {
+      try {
+        const recent = await ProjectChunk.find({
+          project: projectId,
+          userEmail,
+        })
+          .sort({ createdAt: -1, chunkIndex: 1 })
+          .limit(topFinal)
+          .lean();
+        if (recent.length > 0) {
+          return recent.map((d: any) => ({
+            _id: String(d._id),
+            sourceId: String(d.source),
+            projectId: String(d.project),
+            text: String(d.text || ''),
+            page: d.page,
+            sectionTitle: d.sectionTitle,
+            sheet: d.sheet,
+            rowRange: d.rowRange,
+            url: d.url,
+            score: 0.25, // ниже keyword (0.5) и vector — это «последний рубеж»
+            via: 'project_fallback',
+          }));
+        }
+      } catch (e) {
+        console.error('[RETRIEVAL] project fallback failed', e);
+      }
+      return [];
+    }
 
     // ── 4) Rerank top 30 ───────────────────────────────────────
     let reranked: RetrievedChunk[] = merged;
