@@ -15,11 +15,11 @@ services:
 
     labels:
       - "traefik.enable=true"
-      - "traefik.http.routers.app.rule=Host(`${HOST}`)"
+      - "traefik.http.routers.app.rule=Host(`iiset.io`)"
       - "traefik.http.routers.app.entrypoints=websecure"
       - "traefik.http.routers.app.tls.certresolver=myresolver"
 
-      - "traefik.http.routers.app-http.rule=Host(`${HOST}`)"
+      - "traefik.http.routers.app-http.rule=Host(`iiset.io`)"
       - "traefik.http.routers.app-http.entrypoints=web"
       - "traefik.http.routers.app-http.middlewares=redirect-to-https"
       - "traefik.http.services.app.loadbalancer.server.port=3000"
