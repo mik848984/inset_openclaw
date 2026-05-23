@@ -77,6 +77,63 @@ export interface IProjectBlueprint {
   primaryDocumentTitle?: string;
 }
 
+// ── Agent State — реальное состояние проекта (intake + tracker) ────
+// В отличие от blueprint (статичная классификация цели), agentState —
+// это динамическое состояние: что пользователь ввёл, что измеряет,
+// какой текущий шаг. Хранится в одном subdoc и обновляется через
+// PATCH /api/projects/[id] (агрегированно) или через специализированные
+// endpoint'ы (atomically: tracker entries, intake).
+export interface IProjectIntake {
+  // health_fitness:
+  sex?: string;
+  age?: number;
+  heightCm?: number;
+  startWeightKg?: number;
+  targetWeightKg?: number;
+  targetLossKg?: number;
+  targetDays?: number;
+  activityLevel?: string;
+  currentTraining?: string;
+  currentNutrition?: string;
+  healthRestrictions?: string;
+  sleep?: string;
+  // shared fields:
+  outcome?: string;
+  deadline?: string;
+  constraints?: string;
+  context?: string;
+  comment?: string;
+  updatedAt?: string;
+  [key: string]: any;
+}
+
+export interface IProjectTrackerEntry {
+  id: string;
+  date: string; // ISO yyyy-mm-dd
+  weightKg?: number;
+  waistCm?: number;
+  training?: string;
+  calories?: number;
+  wellbeing?: string;
+  comment?: string;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export interface IProjectTracker {
+  type: string; // 'weight_progress' | …
+  baseline?: { date?: string; weightKg?: number; waistCm?: number };
+  entries: IProjectTrackerEntry[];
+  createdAt?: string;
+}
+
+export interface IProjectAgentState {
+  intake?: IProjectIntake;
+  tracker?: IProjectTracker;
+  currentStepId?: string;
+  updatedAt?: string;
+}
+
 export interface IProject {
   user: Types.ObjectId;
   title: string;
@@ -87,6 +144,7 @@ export interface IProject {
   suggestedActions: string[];
   memoryItems: IProjectMemoryItem[];
   blueprint?: IProjectBlueprint;
+  agentState?: IProjectAgentState;
 }
 
 const memoryItemSchema = new Schema<IProjectMemoryItem>(
@@ -111,9 +169,13 @@ const projectSchema = new Schema<IProject>(
     nextStep: { type: String, default: '' },
     suggestedActions: { type: [String], default: [] },
     memoryItems: { type: [memoryItemSchema], default: [] },
-    // Agent blueprint — гибкий JSON-subdoc. Mixed-тип, чтобы не
-    // привязываться к жёсткой схеме на MVP-этапе.
+    // Agent blueprint — статичная классификация цели (domain, mechanics,
+    // план, будущие документы). Mixed-тип, гибкий MVP-формат.
     blueprint: { type: Schema.Types.Mixed, default: undefined },
+    // Agent state — динамическое состояние: intake (baseline) и tracker
+    // (entries). Обновляется через PATCH /api/projects/[id] или
+    // специализированные endpoint'ы для атомарных push операций.
+    agentState: { type: Schema.Types.Mixed, default: undefined },
     user: {
       type: mongoose.Schema.Types.ObjectId,
       ref: 'User',

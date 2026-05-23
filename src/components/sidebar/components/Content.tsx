@@ -25,7 +25,6 @@ import {
   Icon,
   Stack,
   Text,
-  useColorModeValue,
 } from '@chakra-ui/react';
 import { NextAvatar } from '@/components/image/Avatar';
 import Brand from '@/components/sidebar/components/Brand';
@@ -36,8 +35,6 @@ import {
   FiLogOut,
   FiChevronDown,
   FiChevronRight,
-  FiSearch,
-  FiImage,
   FiMessageCircle,
   FiClock,
   FiPlus,
@@ -58,16 +55,13 @@ const FONT_TEXT = `'SF Pro Text', -apple-system, BlinkMacSystemFont, system-ui, 
 
 const ACCENT_BLUE = '#0066cc';
 const ACCENT_BLUE_HOVER = '#0071e3';
-const ACCENT_BLUE_ON_DARK = '#2997ff';
 
 // ── Primary nav items ────────────────────────────────────────────
-// Чат/Поиск/Картинки все ведут в /chat (там в composer есть toggle'ы
-// webSearch / image-mode). Отдельные пункты помогают пользователю
-// «зайти» с понятного входа, не ломая существующий роутинг.
+// Только Чат и История — поиск и картинки это РЕЖИМЫ внутри composer'а
+// одного чата, а не отдельная навигация. Раньше показывали их как
+// отдельные пункты — это вводило пользователя в заблуждение.
 const PRIMARY_NAV = [
   { label: 'Чат', icon: FiMessageCircle, href: '/chat' },
-  { label: 'Поиск', icon: FiSearch, href: '/chat' },
-  { label: 'Картинки', icon: FiImage, href: '/chat' },
   { label: 'История', icon: FiClock, href: '/dialogs' },
 ];
 
@@ -83,35 +77,20 @@ function SidebarContent(props: SidebarContent) {
   const { session, isAnonymous } = useAppSession();
   const { setSideBarOpen } = useContext(ModalContext);
 
-  // ── Tokens ────────────────────────────────────────────────────
-  const surface = useColorModeValue('#ffffff', '#15171c');
-  const surfaceSoft = useColorModeValue('#fafafb', 'rgba(255,255,255,0.04)');
-  const hairline = useColorModeValue(
-    'rgba(15,23,42,0.08)',
-    'rgba(255,255,255,0.10)',
-  );
-  const hairlineSoft = useColorModeValue(
-    'rgba(15,23,42,0.05)',
-    'rgba(255,255,255,0.06)',
-  );
-  const itemHoverBg = useColorModeValue(
-    'rgba(0,0,0,0.04)',
-    'rgba(255,255,255,0.06)',
-  );
-  const activeBg = useColorModeValue(
-    'rgba(0,102,204,0.08)',
-    'rgba(41,151,255,0.14)',
-  );
-  const textPrimary = useColorModeValue('#1d1d1f', '#f5f5f7');
-  const textSecondary = useColorModeValue(
-    '#6e6e73',
-    'rgba(245,245,247,0.65)',
-  );
-  const textTertiary = useColorModeValue(
-    '#86868b',
-    'rgba(245,245,247,0.45)',
-  );
-  const accent = useColorModeValue(ACCENT_BLUE, ACCENT_BLUE_ON_DARK);
+  // ── Tokens (фиксированно light) ─────────────────────────────
+  // useColorModeValue убран сознательно: sidebar/drawer должны быть
+  // светлым Apple-like premium UI независимо от system dark mode.
+  // Раньше dark mode превращал sidebar в navy admin-панель.
+  const surface = '#ffffff';
+  const surfaceSoft = '#f7f8fb';
+  const hairline = 'rgba(15,23,42,0.08)';
+  const hairlineSoft = 'rgba(15,23,42,0.05)';
+  const itemHoverBg = 'rgba(15,23,42,0.04)';
+  const activeBg = 'rgba(0,113,227,0.08)'; // soft Apple-blue tint
+  const textPrimary = '#111827';
+  const textSecondary = '#6b7280';
+  const textTertiary = '#9ca3af';
+  const accent = ACCENT_BLUE;
 
   // ── Categorize received routes ────────────────────────────────
   const { secondaryRoutes, adminRoutes } = useMemo(() => {

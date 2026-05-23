@@ -1,19 +1,27 @@
 'use client';
 
 /**
- * Project Command Center — главный экран проекта.
+ * Project Command Center — workflow-страница проекта.
  *
- * Рендерится в /chat?projectId=… когда нет ни одного сообщения. Цель —
- * показать проект как «рабочую комнату», а не как пустой чат:
- *   • цель и следующий шаг;
- *   • счётчики (источники / ветки / артефакты / заметки);
- *   • быстрые действия (выполнить шаг / добавить источник / новая ветка);
- *   • мини-блок источников с per-source quick actions;
- *   • генерация артефактов (план / риски / brief / faq);
- *   • «Что ИИСеть знает» — memory items проекта.
+ * Это НЕ копия чата с baseline-карточкой сверху. Это:
+ *   • один header без дублирования;
+ *   • NextStepCard — реальное действие из roadmap (открывает widget,
+ *     НЕ создаёт chat thread «выполни следующий шаг»);
+ *   • BaselineCard — summary анкеты (intake state), редактируется и
+ *     сбрасывается без создания новых документов;
+ *   • TrackerWidget (для health_fitness) — старт/цель/текущий/изменение
+ *     + таблица замеров + кнопка «Добавить замер»;
+ *   • RoadmapCard — stateful шаги (locked/todo/active/done), клик
+ *     открывает соответствующий widget;
+ *   • MaterialsCard — sources;
+ *   • DocumentsCard — артефакты, отфильтрованные от intake/tracker
+ *     (это state, не документы), с чистым preview без сырого markdown.
  *
- * Apple-like подача: light surface, hairline borders, мягкие тени, без
- * перегруженности. Хорошо работает с любой шириной chat-area.
+ * intake (анкета) и tracker (замеры) — разные сущности:
+ *   intake = единая baseline, обновляется как одно целое (PATCH
+ *           /api/projects/[id]/intake).
+ *   tracker.entries = массив, новые замеры добавляются $push
+ *           (POST /api/projects/[id]/tracker/entries).
  */
 
 import {
@@ -24,38 +32,51 @@ import {
   HStack,
   Icon,
   IconButton,
+  Input,
+  Modal,
+  ModalBody,
+  ModalCloseButton,
+  ModalContent,
+  ModalFooter,
+  ModalHeader,
+  ModalOverlay,
+  Select,
   SimpleGrid,
   Spinner,
   Text,
+  Textarea,
   useColorModeValue,
   useToast,
   VStack,
 } from '@chakra-ui/react';
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   MdAdd,
   MdAutoAwesome,
+  MdCheck,
+  MdCheckCircle,
   MdDescription,
+  MdEdit,
   MdFolderOpen,
   MdInsertDriveFile,
   MdLink as MdLinkIcon,
+  MdLock,
   MdNoteAlt,
-  MdOutlineChecklist,
-  MdOutlineLightbulb,
-  MdOutlineWarningAmber,
+  MdRadioButtonUnchecked,
   MdRefresh,
-  MdTask,
+  MdRestartAlt,
   MdTrendingUp,
 } from 'react-icons/md';
 import {
   projectsService,
   IProjectUI,
   IProjectSourceUI,
-  IProjectThreadUI,
   IProjectArtifactUI,
   ProjectArtifactKind,
-  IProjectMemoryItemUI,
-  IProjectBlueprintUI,
+  IProjectAgentStateUI,
+  IProjectIntakeUI,
+  IProjectTrackerEntryUI,
+  IRoadmapStepUI,
   RU_DOMAIN_LABELS_UI,
 } from '@/services/ui/ProjectsService';
 import ProjectIntakeForm from '@/components/chat/components/ProjectIntakeForm';
@@ -70,79 +91,177 @@ const ACCENT_BLUE_ON_DARK = '#2997ff';
 interface Props {
   projectId: string;
   onOpenSources: () => void;
-  onCreateThread: () => void;
-  /** Отправить готовую команду в чат (Send → агенту). */
+  /** Сохранён для совместимости; теперь в основном workflow не нужен. */
+  onCreateThread?: () => void;
+  /** Для шагов, которые честно нужно делегировать в LLM (web_research,
+   *  document_generation). Не используется для intake/tracker — те
+   *  работают локально. */
   onSendAction: (text: string) => void;
 }
 
-interface ArtifactSpec {
-  kind: ProjectArtifactKind;
-  title: string;
-  icon: any;
-  hint: string;
+// ── Health-fitness roadmap (state-driven) ──────────────────────
+function buildHealthRoadmap(
+  agentState: IProjectAgentStateUI | undefined,
+  artifacts: IProjectArtifactUI[],
+): IRoadmapStepUI[] {
+  const intake = agentState?.intake;
+  const tracker = agentState?.tracker;
+  const hasIntake = !!(intake && intake.startWeightKg);
+  const hasTracker = !!tracker;
+  const entries = tracker?.entries || [];
+  const hasEntries = entries.length > 0;
+  const hasCalculation = artifacts.some(
+    (a) => a.title?.toLowerCase().includes('калори') || a.title?.toLowerCase().includes('бжу'),
+  );
+  const hasNutritionPlan = artifacts.some(
+    (a) => a.title?.toLowerCase().includes('план питания'),
+  );
+  const hasTrainingPlan = artifacts.some(
+    (a) => a.title?.toLowerCase().includes('план трениров'),
+  );
+
+  return [
+    {
+      id: 'intake',
+      title: 'Заполнить исходные данные',
+      widgetType: 'intake_form',
+      actionLabel: hasIntake ? 'Изменить анкету' : 'Заполнить анкету',
+      status: hasIntake ? 'done' : 'active',
+      hint: hasIntake
+        ? 'Anкета заполнена — можно изменить, если данные обновились.'
+        : 'Базовые вводные: рост, вес, цель, активность, ограничения.',
+    },
+    {
+      id: 'tracker_create',
+      title: 'Создать трекер прогресса',
+      widgetType: 'tracker',
+      actionLabel: hasTracker ? 'Открыть трекер' : 'Создать трекер',
+      status: !hasIntake ? 'locked' : hasTracker ? 'done' : 'active',
+      hint: 'Трекер сравнивает факт с исходной точкой во времени.',
+    },
+    {
+      id: 'tracker_entry',
+      title: 'Добавить замер',
+      widgetType: 'tracker',
+      actionLabel: 'Добавить замер',
+      status: !hasTracker ? 'locked' : hasEntries ? 'done' : 'active',
+      hint: 'Вес, талия, тренировка, самочувствие — раз в несколько дней.',
+    },
+    {
+      id: 'calorie_calc',
+      title: 'Рассчитать калории и БЖУ',
+      widgetType: 'calculator',
+      actionLabel: hasCalculation ? 'Пересчитать' : 'Рассчитать',
+      status: !hasIntake ? 'locked' : hasCalculation ? 'done' : 'todo',
+      hint: 'Дневная норма калорий и БЖУ под цель.',
+    },
+    {
+      id: 'nutrition_plan',
+      title: 'Сформировать план питания',
+      widgetType: 'document',
+      actionLabel: hasNutritionPlan ? 'Открыть план' : 'Создать план',
+      status:
+        !hasCalculation ? 'locked' : hasNutritionPlan ? 'done' : 'todo',
+      hint: 'Примерный рацион под бюджет калорий.',
+    },
+    {
+      id: 'training_plan',
+      title: 'Сформировать план тренировок',
+      widgetType: 'document',
+      actionLabel: hasTrainingPlan ? 'Открыть план' : 'Создать план',
+      status: !hasIntake ? 'locked' : hasTrainingPlan ? 'done' : 'todo',
+      hint: 'Недельный сплит под уровень активности.',
+    },
+    {
+      id: 'review',
+      title: 'Раз в неделю сверять факт с планом',
+      widgetType: 'review',
+      actionLabel: 'Сделать сверку',
+      status: entries.length < 3 ? 'locked' : 'todo',
+      hint: 'Корректировка калорий/тренировок по динамике веса.',
+    },
+  ];
 }
 
-const ARTIFACT_SPECS: ArtifactSpec[] = [
-  {
-    kind: 'plan',
-    title: 'План',
-    icon: MdOutlineChecklist,
-    hint: 'Пошаговый план действий с критериями успеха',
-  },
-  {
-    kind: 'risks',
-    title: 'Риски',
-    icon: MdOutlineWarningAmber,
-    hint: 'Карта рисков и шагов для митигации',
-  },
-  {
-    kind: 'brief',
-    title: 'Brief',
-    icon: MdDescription,
-    hint: 'Короткий обзор: цель, ключевые факты, контекст',
-  },
-  {
-    kind: 'faq',
-    title: 'FAQ',
-    icon: MdOutlineLightbulb,
-    hint: '6–10 вопросов и ответов по проекту',
-  },
-];
+// Generic roadmap для не-health доменов: пока используем blueprint.steps
+// как plain список (legacy), но с stateful intake-шагом.
+function buildGenericRoadmap(
+  project: IProjectUI,
+): IRoadmapStepUI[] {
+  const intake = project.agentState?.intake;
+  const hasIntake = !!(intake && Object.keys(intake).some((k) => k !== 'updatedAt'));
+  const bpSteps = project.blueprint?.steps || [];
+  const firstStepType = project.blueprint?.firstStep?.type;
+  const widgetForFirst: IRoadmapStepUI['widgetType'] =
+    firstStepType === 'intake_form'
+      ? 'intake_form'
+      : firstStepType === 'upload_sources'
+        ? 'document'
+        : firstStepType === 'web_research'
+          ? 'web_research'
+          : 'intake_form';
+  return bpSteps.map((title, i) => {
+    if (i === 0) {
+      return {
+        id: `step_${i}`,
+        title,
+        widgetType: widgetForFirst,
+        actionLabel:
+          widgetForFirst === 'intake_form'
+            ? hasIntake
+              ? 'Изменить'
+              : 'Заполнить'
+            : widgetForFirst === 'document'
+              ? 'Загрузить'
+              : 'Запустить',
+        status: hasIntake ? 'done' : 'active',
+      };
+    }
+    return {
+      id: `step_${i}`,
+      title,
+      widgetType: 'review',
+      actionLabel: 'Открыть',
+      status: !hasIntake ? 'locked' : i === 1 ? 'active' : 'todo',
+    };
+  });
+}
 
-const MEMORY_GROUPS: Array<{
-  key: IProjectMemoryItemUI['type'];
-  label: string;
-  icon: any;
-}> = [
-  { key: 'fact', label: 'Факты', icon: MdOutlineLightbulb },
-  { key: 'decision', label: 'Решения', icon: MdTrendingUp },
-  { key: 'risk', label: 'Риски', icon: MdOutlineWarningAmber },
-  { key: 'task', label: 'Задачи', icon: MdTask },
-  { key: 'note', label: 'Заметки', icon: MdNoteAlt },
-];
+// ── Pretty preview for documents (no raw markdown) ──────────────
+function cleanPreview(text: string, maxChars = 220): string {
+  if (!text) return '';
+  // Удаляем разметку таблиц, заголовки, символы выделения.
+  const cleaned = text
+    .replace(/^[#>\-*\s]+/gm, '')
+    .replace(/\|/g, ' · ')
+    .replace(/[*_`]/g, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+  return cleaned.length > maxChars
+    ? cleaned.slice(0, maxChars - 1).trimEnd() + '…'
+    : cleaned;
+}
 
+// ─────────────────────────────────────────────────────────────────
 function ProjectCommandCenter({
   projectId,
   onOpenSources,
-  onCreateThread,
   onSendAction,
 }: Props) {
   const toast = useToast();
 
   const [project, setProject] = useState<IProjectUI | null>(null);
   const [sources, setSources] = useState<IProjectSourceUI[]>([]);
-  const [threads, setThreads] = useState<IProjectThreadUI[]>([]);
   const [artifacts, setArtifacts] = useState<IProjectArtifactUI[]>([]);
   const [isLoading, setIsLoading] = useState(true);
-  const [generatingArtifact, setGeneratingArtifact] =
-    useState<ProjectArtifactKind | null>(null);
-  // Blueprint-driven UI
-  const [intakeOpen, setIntakeOpen] = useState(false);
-  const [creatingLivingDoc, setCreatingLivingDoc] = useState(false);
-  const [creatingTracker, setCreatingTracker] = useState(false);
 
-  // ── Tokens ────────────────────────────────────────────────────
-  const surface = useColorModeValue('#ffffff', 'rgba(28,28,32,0.78)');
+  const [intakeOpen, setIntakeOpen] = useState(false);
+  const [entryOpen, setEntryOpen] = useState(false);
+  const [creatingTracker, setCreatingTracker] = useState(false);
+  const [resettingIntake, setResettingIntake] = useState(false);
+
+  // ── Tokens ───────────────────────────────────────────────────
+  const surface = useColorModeValue('#ffffff', 'rgba(28,28,32,0.92)');
   const surfaceSoft = useColorModeValue('#fafafb', 'rgba(255,255,255,0.04)');
   const hairline = useColorModeValue(
     'rgba(15,23,42,0.08)',
@@ -163,19 +282,17 @@ function ProjectCommandCenter({
   );
   const accent = useColorModeValue(ACCENT_BLUE, ACCENT_BLUE_ON_DARK);
 
-  // ── Load everything ────────────────────────────────────────────
+  // ── Load ──────────────────────────────────────────────────────
   const load = useCallback(async () => {
     setIsLoading(true);
     try {
-      const [p, src, thr, art] = await Promise.all([
+      const [p, src, art] = await Promise.all([
         projectsService.get(projectId),
         projectsService.listSources(projectId),
-        projectsService.listThreads(projectId),
         projectsService.listArtifacts(projectId),
       ]);
       setProject(p);
       setSources(src);
-      setThreads(thr);
       setArtifacts(art);
     } catch (e) {
       console.error('[ProjectCommandCenter] load failed', e);
@@ -183,127 +300,109 @@ function ProjectCommandCenter({
       setIsLoading(false);
     }
   }, [projectId]);
-
   useEffect(() => {
     void load();
   }, [load]);
 
-  const handleGenerateArtifact = async (kind: ProjectArtifactKind) => {
-    setGeneratingArtifact(kind);
-    try {
-      const artifact = await projectsService.createArtifact(projectId, kind);
-      if (!artifact) throw new Error('null artifact');
-      setArtifacts((prev) => [artifact, ...prev]);
+  const domain = project?.blueprint?.domain;
+  const isHealth = domain === 'health_fitness';
+
+  // Roadmap depends on state. Active step = first non-locked non-done.
+  const roadmap: IRoadmapStepUI[] = useMemo(() => {
+    if (!project) return [];
+    if (isHealth) return buildHealthRoadmap(project.agentState, artifacts);
+    return buildGenericRoadmap(project);
+  }, [project, artifacts, isHealth]);
+
+  const activeStep =
+    roadmap.find((s) => s.status === 'active') ||
+    roadmap.find((s) => s.status === 'todo') ||
+    null;
+
+  // ── Step action dispatcher ────────────────────────────────────
+  const handleStepAction = (step: IRoadmapStepUI) => {
+    if (step.status === 'locked') {
       toast({
-        title: 'Документ создан',
-        description: artifact.title,
-        status: 'success',
-        duration: 2500,
+        title: 'Шаг пока заблокирован',
+        description: 'Сначала закройте предыдущий шаг.',
+        status: 'info',
+        duration: 2200,
         isClosable: true,
       });
-    } catch (e) {
-      console.error(e);
-      toast({
-        title: 'Не удалось создать документ',
-        description: 'Попробуйте ещё раз или добавьте источники.',
-        status: 'error',
-        duration: 3000,
-        isClosable: true,
-      });
-    } finally {
-      setGeneratingArtifact(null);
+      return;
     }
-  };
-
-  const handleNextStep = () => {
-    const goal = project?.goal || project?.title || 'этого проекта';
-    const nextStep = project?.nextStep;
-    const prompt = nextStep
-      ? `Выполни следующий шаг проекта «${project?.title || ''}»: «${nextStep}». ` +
-        `Опирайся на цель («${goal}»), источники и историю проекта. ` +
-        `Сохрани ключевые выводы и предложи обновление nextStep.`
-      : `Помоги двигаться в проекте «${project?.title || ''}». ` +
-        `Цель: «${goal}». Предложи конкретный следующий шаг с критерием успеха ` +
-        `и начни его выполнять на основе источников проекта.`;
-    onSendAction(prompt);
-  };
-
-  // ── Blueprint-driven first step ──────────────────────────────
-  const handleFirstStep = async () => {
-    const bp = project?.blueprint;
-    if (!bp) return handleNextStep();
-    const fs = bp.firstStep;
-    switch (fs?.type) {
+    switch (step.widgetType) {
       case 'intake_form':
         setIntakeOpen(true);
         return;
-      case 'upload_sources':
-        onOpenSources();
+      case 'tracker':
+        if (!project?.agentState?.tracker) {
+          void handleCreateTracker(true);
+        } else {
+          setEntryOpen(true);
+        }
         return;
-      case 'web_research': {
-        const goal = project?.goal || project?.title || '';
+      case 'calculator':
+        void handleCalculator();
+        return;
+      case 'document':
+        void handleDocument(step);
+        return;
+      case 'web_research':
         onSendAction(
-          `Запусти веб-исследование под цель проекта «${project?.title || ''}»: ${goal}. ` +
-            `Используй интернет-поиск, обязательно приведи источники [1], [2] для ключевых утверждений. ` +
-            `В конце предложи 3 следующих шага.`,
+          `Запусти веб-исследование под цель проекта «${project?.title || ''}». ` +
+            `Используй интернет-поиск, обязательно приведи источники [1], [2] для ключевых утверждений.`,
         );
         return;
-      }
-      case 'create_living_document': {
-        await handleCreateLivingDoc();
+      case 'review':
+        onSendAction(
+          `Сделай еженедельную сверку прогресса. Сравни последние замеры из трекера ` +
+            `с целью и предложи корректировки калорий / тренировок, если нужно.`,
+        );
         return;
-      }
-      default:
-        return handleNextStep();
     }
   };
 
-  const handleCreateLivingDoc = async () => {
-    setCreatingLivingDoc(true);
-    try {
-      const a = await projectsService.createArtifact(
-        projectId,
-        'living_document' as ProjectArtifactKind,
-      );
-      if (a) {
-        setArtifacts((prev) => [a, ...prev]);
-        toast({
-          title: 'Главный документ создан',
-          description: a.title,
-          status: 'success',
-          duration: 2500,
-          isClosable: true,
-        });
-      }
-    } catch (e) {
-      console.error(e);
+  // ── Tracker handlers ─────────────────────────────────────────
+  const handleCreateTracker = async (openEntryAfter = false) => {
+    if (!project) return;
+    if (project.agentState?.tracker) {
+      if (openEntryAfter) setEntryOpen(true);
+      return;
+    }
+    const intake = project.agentState?.intake;
+    if (!intake?.startWeightKg) {
       toast({
-        title: 'Не удалось создать документ',
-        status: 'error',
+        title: 'Сначала заполните исходные данные',
+        description:
+          'Стартовый вес нужен, чтобы трекер мог считать прогресс.',
+        status: 'warning',
         duration: 3000,
         isClosable: true,
       });
-    } finally {
-      setCreatingLivingDoc(false);
+      setIntakeOpen(true);
+      return;
     }
-  };
-
-  const handleCreateTracker = async () => {
     setCreatingTracker(true);
     try {
-      const a = await projectsService.createArtifact(
-        projectId,
-        'tracker' as ProjectArtifactKind,
-      );
-      if (a) {
-        setArtifacts((prev) => [a, ...prev]);
+      // Создаём tracker с одним baseline-entry — стартовая точка
+      // из intake. Дальше пользователь добавляет реальные замеры.
+      const today = new Date().toISOString().slice(0, 10);
+      const result = await projectsService.addTrackerEntry(projectId, {
+        date: today,
+        weightKg: intake.startWeightKg,
+        comment: 'Стартовая точка из анкеты',
+      });
+      if (result?.project) {
+        setProject(result.project);
         toast({
           title: 'Трекер создан',
-          description: a.title,
+          description: 'Добавлена стартовая запись из анкеты.',
           status: 'success',
-          duration: 2500,
+          duration: 2200,
           isClosable: true,
         });
+        if (openEntryAfter) setEntryOpen(true);
       }
     } catch (e) {
       console.error(e);
@@ -318,23 +417,131 @@ function ProjectCommandCenter({
     }
   };
 
-  // ── Memory grouped by type ────────────────────────────────────
-  const memoryByType = (project?.memoryItems || []).reduce<
-    Record<string, IProjectMemoryItemUI[]>
-  >((acc, item) => {
-    const k = item?.type || 'note';
-    (acc[k] = acc[k] || []).push(item);
-    return acc;
-  }, {});
+  const handleAddEntry = async (
+    entry: Omit<IProjectTrackerEntryUI, 'id' | 'createdAt'>,
+  ) => {
+    const result = await projectsService.addTrackerEntry(projectId, entry);
+    if (result?.project) {
+      setProject(result.project);
+      toast({
+        title: 'Замер добавлен',
+        status: 'success',
+        duration: 1800,
+        isClosable: true,
+      });
+      return true;
+    }
+    toast({
+      title: 'Не удалось сохранить замер',
+      status: 'error',
+      duration: 2500,
+      isClosable: true,
+    });
+    return false;
+  };
 
+  const handleDeleteEntry = async (entryId: string) => {
+    const ok = await projectsService.deleteTrackerEntry(projectId, entryId);
+    if (ok) {
+      setProject(ok);
+      toast({
+        title: 'Замер удалён',
+        status: 'success',
+        duration: 1500,
+      });
+    }
+  };
+
+  // ── Intake handlers ──────────────────────────────────────────
+  const handleResetIntake = async () => {
+    if (typeof window !== 'undefined') {
+      const ok = window.confirm(
+        'Сбросить исходные данные? Tracker и документы останутся.',
+      );
+      if (!ok) return;
+    }
+    setResettingIntake(true);
+    try {
+      const updated = await projectsService.resetIntake(projectId);
+      if (updated) {
+        setProject(updated);
+        toast({
+          title: 'Исходные данные сброшены',
+          status: 'success',
+          duration: 2000,
+        });
+      }
+    } finally {
+      setResettingIntake(false);
+    }
+  };
+
+  // ── Calculator / document step (delegate to LLM via chat) ──
+  const handleCalculator = async () => {
+    if (!project?.agentState?.intake) {
+      toast({
+        title: 'Нет исходных данных',
+        description: 'Сначала заполните анкету.',
+        status: 'warning',
+        duration: 2500,
+      });
+      setIntakeOpen(true);
+      return;
+    }
+    // Создаём calculation artifact через существующий route. Для MVP
+    // это даёт чистый markdown-доку с расчётом БЖУ, видимый в
+    // Documents. Не дублируем intake — это другой type.
+    try {
+      const a = await projectsService.createArtifact(
+        projectId,
+        'brief' as ProjectArtifactKind, // 'brief' — short overview; будет показан без сырого markdown
+      );
+      if (a) {
+        setArtifacts((prev) => [a, ...prev]);
+        toast({
+          title: 'Расчёт создан',
+          description: 'Готово в блоке «Документы».',
+          status: 'success',
+          duration: 2200,
+        });
+      }
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
+  const handleDocument = async (step: IRoadmapStepUI) => {
+    // Простой mapping: nutrition_plan → plan, training_plan → plan,
+    // generic → brief. Документ создаётся через существующий artifacts
+    // API, появляется в блоке Documents с чистым preview.
+    const kind: ProjectArtifactKind =
+      step.id === 'nutrition_plan' || step.id === 'training_plan'
+        ? 'plan'
+        : 'brief';
+    try {
+      const a = await projectsService.createArtifact(projectId, kind);
+      if (a) {
+        setArtifacts((prev) => [a, ...prev]);
+        toast({
+          title: 'Документ создан',
+          description: a.title,
+          status: 'success',
+          duration: 2200,
+        });
+      }
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
+  // ── Render guards ────────────────────────────────────────────
   if (isLoading && !project) {
     return (
-      <Flex justify="center" align="center" py="64px">
+      <Flex justify="center" py="64px">
         <Spinner color={accent} />
       </Flex>
     );
   }
-
   if (!project) {
     return (
       <Box py="24px">
@@ -345,21 +552,15 @@ function ProjectCommandCenter({
     );
   }
 
-  const sourceCount = sources.length;
-  const threadCount = threads.length;
-  const artifactCount = artifacts.length;
-  const memoryCount = project.memoryItems?.length || 0;
+  const intake = project.agentState?.intake;
+  const tracker = project.agentState?.tracker;
+  const visibleArtifacts = artifacts.filter(
+    (a) => a.type !== 'intake' && a.type !== 'tracker',
+  );
 
   return (
-    <Flex
-      direction="column"
-      gap="20px"
-      width="100%"
-      maxW="100%"
-      minW={0}
-      px={{ base: '4px', md: '0' }}
-    >
-      {/* ── Header card ───────────────────────────────────────── */}
+    <Flex direction="column" gap="20px" width="100%" maxW="100%" minW={0}>
+      {/* ── Header ─────────────────────────────────────────── */}
       <Box
         bg={surface}
         border="1px solid"
@@ -368,30 +569,25 @@ function ProjectCommandCenter({
         p={{ base: '20px', md: '28px' }}
         boxShadow="0 1px 2px rgba(15,23,42,0.04), 0 12px 32px -16px rgba(15,23,42,0.12)"
       >
-        <Flex align="center" gap="8px" mb="10px">
+        <Flex align="center" gap="8px" mb="10px" flexWrap="wrap">
           <Box
-            boxSize="22px"
-            borderRadius="6px"
+            px="10px"
+            py="4px"
+            borderRadius="9999px"
             bg={accentSoftBg}
-            display="flex"
-            alignItems="center"
-            justifyContent="center"
-            flexShrink={0}
-          >
-            <Icon as={MdAutoAwesome} boxSize="13px" color={accent} />
-          </Box>
-          <Text
-            fontFamily={FONT_TEXT}
-            fontSize="11px"
-            fontWeight="700"
-            letterSpacing="0.5px"
-            textTransform="uppercase"
             color={accent}
           >
-            Рабочая комната
-          </Text>
+            <Text
+              fontFamily={FONT_TEXT}
+              fontSize="11px"
+              fontWeight="700"
+              letterSpacing="0.4px"
+              textTransform="uppercase"
+            >
+              {(domain && RU_DOMAIN_LABELS_UI[domain]) || 'Рабочая комната'}
+            </Text>
+          </Box>
         </Flex>
-
         <Heading
           as="h1"
           fontFamily={FONT_DISPLAY}
@@ -404,419 +600,158 @@ function ProjectCommandCenter({
         >
           {project.title}
         </Heading>
-
         {project.goal && (
           <Text
             fontFamily={FONT_TEXT}
             fontSize={{ base: '15px', md: '17px' }}
             color={textSecondary}
             lineHeight="1.5"
-            mb={project.nextStep ? '16px' : '0'}
           >
             Цель: {project.goal}
           </Text>
         )}
-
-        {project.nextStep && (
-          <Box
-            mt="6px"
-            bg={surfaceSoft}
-            border="1px solid"
-            borderColor={hairline}
-            borderRadius="14px"
-            p={{ base: '14px', md: '16px' }}
-          >
-            <Text
-              fontFamily={FONT_TEXT}
-              fontSize="11px"
-              fontWeight="600"
-              letterSpacing="0.4px"
-              textTransform="uppercase"
-              color={textTertiary}
-              mb="6px"
-            >
-              Следующий шаг
-            </Text>
-            <Text
-              fontFamily={FONT_TEXT}
-              fontSize={{ base: '14px', md: '15px' }}
-              color={textPrimary}
-              lineHeight="1.45"
-              mb="12px"
-            >
-              {project.nextStep}
-            </Text>
-            <Button
-              onClick={handleNextStep}
-              bg={accent}
-              color="white"
-              borderRadius="9999px"
-              h="34px"
-              px="16px"
-              fontFamily={FONT_TEXT}
-              fontWeight="500"
-              fontSize="13px"
-              _hover={{ bg: ACCENT_BLUE_HOVER }}
-              _active={{ transform: 'scale(0.98)' }}
-              transition="background-color 0.15s ease, transform 0.15s ease"
-            >
-              Выполнить шаг
-            </Button>
-          </Box>
-        )}
       </Box>
 
-      {/* ── Agent Blueprint block (показывается, если есть) ───── */}
-      {project.blueprint && (
-        <BlueprintBlock
-          blueprint={project.blueprint}
+      {/* ── Next step action card ────────────────────────── */}
+      {activeStep && (
+        <Box
+          bg={surface}
+          border="1px solid"
+          borderColor={hairline}
+          borderRadius={{ base: '18px', md: '22px' }}
+          p={{ base: '20px', md: '24px' }}
+          boxShadow="0 1px 2px rgba(15,23,42,0.04), 0 8px 24px -14px rgba(15,23,42,0.10)"
+        >
+          <Text
+            fontFamily={FONT_TEXT}
+            fontSize="11px"
+            fontWeight="700"
+            letterSpacing="0.4px"
+            textTransform="uppercase"
+            color={textTertiary}
+            mb="6px"
+          >
+            Следующий шаг
+          </Text>
+          <Heading
+            as="h2"
+            fontFamily={FONT_DISPLAY}
+            fontSize={{ base: '20px', md: '22px' }}
+            fontWeight="600"
+            letterSpacing="-0.018em"
+            color={textPrimary}
+            mb="6px"
+            lineHeight="1.25"
+          >
+            {activeStep.title}
+          </Heading>
+          {activeStep.hint && (
+            <Text
+              fontFamily={FONT_TEXT}
+              fontSize="14px"
+              color={textSecondary}
+              lineHeight="1.45"
+              mb="14px"
+              maxW="640px"
+            >
+              {activeStep.hint}
+            </Text>
+          )}
+          <Button
+            onClick={() => handleStepAction(activeStep)}
+            bg={accent}
+            color="white"
+            borderRadius="9999px"
+            h="38px"
+            px="20px"
+            fontFamily={FONT_TEXT}
+            fontWeight="500"
+            fontSize="14px"
+            _hover={{ bg: ACCENT_BLUE_HOVER }}
+            _active={{ transform: 'scale(0.98)' }}
+            transition="background-color 0.15s ease, transform 0.15s ease"
+          >
+            {activeStep.actionLabel}
+          </Button>
+        </Box>
+      )}
+
+      {/* ── Baseline (intake) ──────────────────────────────── */}
+      <BaselineCard
+        intake={intake}
+        domain={domain}
+        surface={surface}
+        surfaceSoft={surfaceSoft}
+        hairline={hairline}
+        accent={accent}
+        textPrimary={textPrimary}
+        textSecondary={textSecondary}
+        textTertiary={textTertiary}
+        onEdit={() => setIntakeOpen(true)}
+        onReset={handleResetIntake}
+        resetting={resettingIntake}
+      />
+
+      {/* ── Tracker (health only) ──────────────────────────── */}
+      {isHealth && (
+        <TrackerWidget
+          tracker={tracker}
+          intake={intake}
           surface={surface}
           surfaceSoft={surfaceSoft}
           hairline={hairline}
-          accentSoftBg={accentSoftBg}
           accent={accent}
           textPrimary={textPrimary}
           textSecondary={textSecondary}
           textTertiary={textTertiary}
-          onFirstStep={handleFirstStep}
-          onCreateLivingDoc={handleCreateLivingDoc}
-          onCreateTracker={handleCreateTracker}
-          creatingLivingDoc={creatingLivingDoc}
           creatingTracker={creatingTracker}
+          onCreateTracker={() => handleCreateTracker(false)}
+          onAddEntry={() => setEntryOpen(true)}
+          onDeleteEntry={handleDeleteEntry}
         />
       )}
 
-      {/* ── Stats + quick actions ────────────────────────────── */}
-      <SimpleGrid columns={{ base: 2, md: 4 }} spacing="8px">
-        <StatCard
-          label="Источники"
-          value={sourceCount}
-          icon={MdFolderOpen}
+      {/* ── Roadmap ─────────────────────────────────────── */}
+      {roadmap.length > 0 && (
+        <RoadmapCard
+          steps={roadmap}
           surface={surface}
           surfaceSoft={surfaceSoft}
           hairline={hairline}
           accent={accent}
-          accentSoftBg={accentSoftBg}
           textPrimary={textPrimary}
           textSecondary={textSecondary}
-          onClick={onOpenSources}
+          textTertiary={textTertiary}
+          onStep={handleStepAction}
         />
-        <StatCard
-          label="Ветки"
-          value={threadCount}
-          icon={MdOutlineChecklist}
-          surface={surface}
-          surfaceSoft={surfaceSoft}
-          hairline={hairline}
-          accent={accent}
-          accentSoftBg={accentSoftBg}
-          textPrimary={textPrimary}
-          textSecondary={textSecondary}
-          onClick={onCreateThread}
-        />
-        <StatCard
-          label="Документы"
-          value={artifactCount}
-          icon={MdDescription}
-          surface={surface}
-          surfaceSoft={surfaceSoft}
-          hairline={hairline}
-          accent={accent}
-          accentSoftBg={accentSoftBg}
-          textPrimary={textPrimary}
-          textSecondary={textSecondary}
-        />
-        <StatCard
-          label="Заметки"
-          value={memoryCount}
-          icon={MdNoteAlt}
-          surface={surface}
-          surfaceSoft={surfaceSoft}
-          hairline={hairline}
-          accent={accent}
-          accentSoftBg={accentSoftBg}
-          textPrimary={textPrimary}
-          textSecondary={textSecondary}
-        />
-      </SimpleGrid>
+      )}
 
-      {/* ── Primary CTAs ─────────────────────────────────────── */}
-      <Flex gap="8px" flexWrap="wrap">
-        <Button
-          onClick={onOpenSources}
-          bg="transparent"
-          color={textPrimary}
-          border="1px solid"
-          borderColor={hairline}
-          borderRadius="9999px"
-          h="34px"
-          px="14px"
-          fontFamily={FONT_TEXT}
-          fontWeight="500"
-          fontSize="13px"
-          leftIcon={<Icon as={MdAdd} boxSize="14px" />}
-          _hover={{ borderColor: accent, color: accent }}
-        >
-          Добавить источник
-        </Button>
-        <Button
-          onClick={onCreateThread}
-          bg="transparent"
-          color={textPrimary}
-          border="1px solid"
-          borderColor={hairline}
-          borderRadius="9999px"
-          h="34px"
-          px="14px"
-          fontFamily={FONT_TEXT}
-          fontWeight="500"
-          fontSize="13px"
-          leftIcon={<Icon as={MdAdd} boxSize="14px" />}
-          _hover={{ borderColor: accent, color: accent }}
-        >
-          Новая ветка
-        </Button>
-      </Flex>
-
-      {/* ── Sources mini-list ────────────────────────────────── */}
-      <SectionCard
-        title="Источники"
-        subtitle={
-          sourceCount === 0
-            ? 'Добавьте файл, ссылку или заметку — ИИСеть будет отвечать с учётом ваших материалов.'
-            : `${sourceCount}`
-        }
-        action={
-          <Button
-            onClick={onOpenSources}
-            variant="ghost"
-            size="sm"
-            color={accent}
-            _hover={{ bg: 'transparent', textDecoration: 'underline' }}
-            fontSize="13px"
-            fontWeight="500"
-            h="28px"
-            px="6px"
-          >
-            Открыть{sourceCount > 0 ? ' все' : ''}
-          </Button>
-        }
+      {/* ── Materials (sources) ────────────────────────── */}
+      <MaterialsCard
+        sources={sources}
         surface={surface}
+        surfaceSoft={surfaceSoft}
         hairline={hairline}
+        accent={accent}
         textPrimary={textPrimary}
         textSecondary={textSecondary}
-      >
-        {sourceCount === 0 ? (
-          <Button
-            onClick={onOpenSources}
-            bg={accent}
-            color="white"
-            borderRadius="9999px"
-            h="34px"
-            px="16px"
-            fontFamily={FONT_TEXT}
-            fontWeight="500"
-            fontSize="13px"
-            leftIcon={<Icon as={MdAdd} boxSize="14px" />}
-            _hover={{ bg: ACCENT_BLUE_HOVER }}
-            alignSelf="flex-start"
-          >
-            Добавить источник
-          </Button>
-        ) : (
-          <Flex direction="column" gap="6px">
-            {sources.slice(0, 4).map((s) => (
-              <SourceMiniCard
-                key={s._id}
-                source={s}
-                surfaceSoft={surfaceSoft}
-                hairline={hairline}
-                accent={accent}
-                textPrimary={textPrimary}
-                textSecondary={textSecondary}
-                textTertiary={textTertiary}
-                onAction={(text) => onSendAction(text)}
-              />
-            ))}
-          </Flex>
-        )}
-      </SectionCard>
+        textTertiary={textTertiary}
+        onOpenAll={onOpenSources}
+      />
 
-      {/* ── Artifacts ────────────────────────────────────────── */}
-      <SectionCard
-        title="Документы проекта"
-        subtitle={
-          artifactCount === 0
-            ? 'Сохранённые выводы и сводки. Создайте план, brief или карту рисков — они появятся здесь.'
-            : `${artifactCount}`
-        }
+      {/* ── Documents (filtered, clean preview) ────────── */}
+      <DocumentsCard
+        artifacts={visibleArtifacts}
         surface={surface}
+        surfaceSoft={surfaceSoft}
         hairline={hairline}
+        accent={accent}
         textPrimary={textPrimary}
         textSecondary={textSecondary}
-      >
-        {/* Generators */}
-        <SimpleGrid columns={{ base: 2, md: 4 }} spacing="6px" mb="12px">
-          {ARTIFACT_SPECS.map((spec) => {
-            const isGenerating = generatingArtifact === spec.kind;
-            return (
-              <Box
-                key={spec.kind}
-                as="button"
-                type="button"
-                onClick={() => handleGenerateArtifact(spec.kind)}
-                disabled={!!generatingArtifact}
-                title={spec.hint}
-                aria-label={`Сгенерировать: ${spec.title}`}
-                bg={surfaceSoft}
-                border="1px solid"
-                borderColor={hairline}
-                borderRadius="12px"
-                px="10px"
-                py="10px"
-                textAlign="left"
-                cursor={generatingArtifact ? 'wait' : 'pointer'}
-                opacity={generatingArtifact && !isGenerating ? 0.55 : 1}
-                _hover={
-                  generatingArtifact
-                    ? undefined
-                    : { borderColor: accent, color: accent }
-                }
-                transition="border-color 0.15s ease, color 0.15s ease"
-                sx={{ WebkitTapHighlightColor: 'transparent' }}
-                color={textPrimary}
-              >
-                <Flex align="center" gap="6px" mb="2px">
-                  {isGenerating ? (
-                    <Spinner size="xs" color={accent} />
-                  ) : (
-                    <Icon as={spec.icon} boxSize="14px" color={accent} />
-                  )}
-                  <Text
-                    fontFamily={FONT_TEXT}
-                    fontSize="12px"
-                    fontWeight="600"
-                    letterSpacing="-0.1px"
-                  >
-                    {spec.title}
-                  </Text>
-                </Flex>
-                <Text
-                  fontSize="11px"
-                  color={textTertiary}
-                  lineHeight="1.35"
-                  noOfLines={2}
-                >
-                  {spec.hint}
-                </Text>
-              </Box>
-            );
-          })}
-        </SimpleGrid>
+        textTertiary={textTertiary}
+      />
 
-        {artifactCount > 0 && (
-          <Flex direction="column" gap="6px">
-            {artifacts.slice(0, 4).map((a) => (
-              <Box
-                key={a._id}
-                bg={surfaceSoft}
-                border="1px solid"
-                borderColor={hairline}
-                borderRadius="11px"
-                p="10px 12px"
-              >
-                <Text
-                  fontFamily={FONT_TEXT}
-                  fontSize="13px"
-                  fontWeight="600"
-                  color={textPrimary}
-                  noOfLines={1}
-                >
-                  {a.title}
-                </Text>
-                <Text
-                  fontFamily={FONT_TEXT}
-                  fontSize="12px"
-                  color={textSecondary}
-                  noOfLines={2}
-                  lineHeight="1.4"
-                  mt="2px"
-                >
-                  {(a.content || '').slice(0, 240)}
-                </Text>
-              </Box>
-            ))}
-          </Flex>
-        )}
-      </SectionCard>
-
-      {/* ── What ИИСеть knows ────────────────────────────────── */}
-      <SectionCard
-        title="Что ИИСеть знает"
-        subtitle={
-          memoryCount === 0
-            ? 'Память проекта пополнится автоматически по мере работы — факты, решения, риски и задачи.'
-            : `${memoryCount}`
-        }
-        surface={surface}
-        hairline={hairline}
-        textPrimary={textPrimary}
-        textSecondary={textSecondary}
-      >
-        {memoryCount === 0 ? (
-          <Text fontSize="13px" color={textSecondary} lineHeight="1.45">
-            Сейчас память пустая. Попросите ИИ сделать выводы по источнику —
-            и они появятся здесь.
-          </Text>
-        ) : (
-          <SimpleGrid columns={{ base: 1, md: 2 }} spacing="8px">
-            {MEMORY_GROUPS.filter(
-              (g) => (memoryByType[g.key] || []).length > 0,
-            ).map((g) => {
-              const items = memoryByType[g.key] || [];
-              return (
-                <Box
-                  key={g.key}
-                  bg={surfaceSoft}
-                  border="1px solid"
-                  borderColor={hairline}
-                  borderRadius="11px"
-                  p="10px 12px"
-                >
-                  <Flex align="center" gap="6px" mb="6px">
-                    <Icon as={g.icon} boxSize="13px" color={accent} />
-                    <Text
-                      fontFamily={FONT_TEXT}
-                      fontSize="11px"
-                      fontWeight="700"
-                      letterSpacing="0.4px"
-                      textTransform="uppercase"
-                      color={textTertiary}
-                    >
-                      {g.label} · {items.length}
-                    </Text>
-                  </Flex>
-                  <VStack align="stretch" spacing="4px">
-                    {items.slice(0, 3).map((it, i) => (
-                      <Text
-                        key={i}
-                        fontSize="12px"
-                        color={textPrimary}
-                        lineHeight="1.4"
-                        noOfLines={2}
-                      >
-                        — {it.text}
-                      </Text>
-                    ))}
-                  </VStack>
-                </Box>
-              );
-            })}
-          </SimpleGrid>
-        )}
-      </SectionCard>
-
-      {/* Footer: refresh */}
+      {/* Refresh */}
       <Flex justify="flex-end">
         <IconButton
           onClick={() => void load()}
@@ -830,216 +765,482 @@ function ProjectCommandCenter({
         />
       </Flex>
 
-      {/* Intake form — модалка анкеты, открывается при firstStep.type==='intake_form' */}
-      {project.blueprint?.firstStep?.type === 'intake_form' && (
-        <ProjectIntakeForm
-          projectId={projectId}
-          formKind={project.blueprint.firstStep.formKind || 'general'}
-          open={intakeOpen}
-          onClose={() => setIntakeOpen(false)}
-          onSubmitted={(msg) => {
-            void load();
-            onSendAction(msg);
-          }}
+      {/* ── Modals ────────────────────────────────────── */}
+      <ProjectIntakeForm
+        projectId={projectId}
+        formKind={
+          project.blueprint?.firstStep?.formKind ||
+          (domain === 'health_fitness'
+            ? 'health'
+            : domain === 'business'
+              ? 'business'
+              : domain === 'career'
+                ? 'career'
+                : domain === 'academic_writing'
+                  ? 'academic'
+                  : 'general')
+        }
+        open={intakeOpen}
+        initial={intake}
+        onClose={() => setIntakeOpen(false)}
+        onSaved={(p) => setProject(p)}
+      />
+
+      {isHealth && (
+        <AddEntryModal
+          open={entryOpen}
+          onClose={() => setEntryOpen(false)}
+          onSubmit={handleAddEntry}
+          baselineWeight={intake?.startWeightKg}
         />
       )}
     </Flex>
   );
 }
 
-// ── StatCard ───────────────────────────────────────────────────
-function StatCard({
-  label,
-  value,
-  icon,
+// ────────────────────────────────────────────────────────────────
+// ── BaselineCard ─────────────────────────────────────────────
+function BaselineCard({
+  intake,
+  domain,
   surface,
-  surfaceSoft,
-  hairline,
-  accent,
-  accentSoftBg,
-  textPrimary,
-  textSecondary,
-  onClick,
-}: {
-  label: string;
-  value: number;
-  icon: any;
-  surface: string;
-  surfaceSoft: string;
-  hairline: string;
-  accent: string;
-  accentSoftBg: string;
-  textPrimary: string;
-  textSecondary: string;
-  onClick?: () => void;
-}) {
-  return (
-    <Box
-      as={onClick ? 'button' : 'div'}
-      type={onClick ? ('button' as any) : undefined}
-      onClick={onClick}
-      bg={surface}
-      border="1px solid"
-      borderColor={hairline}
-      borderRadius="14px"
-      p="12px 14px"
-      textAlign="left"
-      cursor={onClick ? 'pointer' : 'default'}
-      _hover={onClick ? { borderColor: accent } : undefined}
-      transition="border-color 0.15s ease"
-      sx={{ WebkitTapHighlightColor: 'transparent' }}
-    >
-      <Flex align="center" gap="6px" mb="4px">
-        <Box
-          boxSize="20px"
-          borderRadius="6px"
-          bg={accentSoftBg}
-          display="flex"
-          alignItems="center"
-          justifyContent="center"
-        >
-          <Icon as={icon} boxSize="12px" color={accent} />
-        </Box>
-        <Text
-          fontFamily={FONT_TEXT}
-          fontSize="11px"
-          fontWeight="600"
-          letterSpacing="0.4px"
-          textTransform="uppercase"
-          color={textSecondary}
-          noOfLines={1}
-        >
-          {label}
-        </Text>
-      </Flex>
-      <Text
-        fontFamily={FONT_DISPLAY}
-        fontSize="22px"
-        fontWeight="600"
-        letterSpacing="-0.02em"
-        color={textPrimary}
-        sx={{ fontVariantNumeric: 'tabular-nums' }}
-      >
-        {value}
-      </Text>
-    </Box>
-  );
-}
-
-// ── SectionCard ───────────────────────────────────────────────
-function SectionCard({
-  title,
-  subtitle,
-  action,
-  children,
-  surface,
-  hairline,
-  textPrimary,
-  textSecondary,
-}: {
-  title: string;
-  subtitle?: string;
-  action?: React.ReactNode;
-  children: React.ReactNode;
-  surface: string;
-  hairline: string;
-  textPrimary: string;
-  textSecondary: string;
-}) {
-  return (
-    <Box
-      bg={surface}
-      border="1px solid"
-      borderColor={hairline}
-      borderRadius="18px"
-      p={{ base: '14px', md: '18px' }}
-      boxShadow="0 1px 2px rgba(15,23,42,0.04), 0 8px 24px -14px rgba(15,23,42,0.10)"
-    >
-      <Flex
-        align={{ base: 'flex-start', md: 'center' }}
-        justify="space-between"
-        gap="10px"
-        mb="12px"
-        direction={{ base: 'column', md: 'row' }}
-      >
-        <Box minW={0}>
-          <Text
-            fontFamily={FONT_DISPLAY}
-            fontSize="16px"
-            fontWeight="600"
-            letterSpacing="-0.014em"
-            color={textPrimary}
-          >
-            {title}
-          </Text>
-          {subtitle && (
-            <Text
-              fontFamily={FONT_TEXT}
-              fontSize="12px"
-              color={textSecondary}
-              lineHeight="1.4"
-              mt="2px"
-            >
-              {subtitle}
-            </Text>
-          )}
-        </Box>
-        {action}
-      </Flex>
-      {children}
-    </Box>
-  );
-}
-
-// ── SourceMiniCard ─────────────────────────────────────────────
-function SourceMiniCard({
-  source,
   surfaceSoft,
   hairline,
   accent,
   textPrimary,
   textSecondary,
   textTertiary,
-  onAction,
-}: {
-  source: IProjectSourceUI;
-  surfaceSoft: string;
-  hairline: string;
-  accent: string;
-  textPrimary: string;
-  textSecondary: string;
-  textTertiary: string;
-  onAction: (text: string) => void;
-}) {
-  const titleForPrompt = source.title || 'этому источнику';
-  const QUICK_ACTIONS: Array<{ label: string; prompt: string }> = [
-    {
-      label: 'Summary',
-      prompt: `Сделай короткое summary источника «${titleForPrompt}»: 5 пунктов, опираясь на сам документ.`,
-    },
-    {
-      label: 'Ключевые факты',
-      prompt: `Выпиши 5–8 ключевых фактов из источника «${titleForPrompt}». Каждый факт — одной строкой.`,
-    },
-    {
-      label: 'Риски',
-      prompt: `Найди риски и слабые места в источнике «${titleForPrompt}». На каждый — короткий шаг для митигации.`,
-    },
-    {
-      label: 'Сравнить с интернетом',
-      prompt: `Сравни выводы источника «${titleForPrompt}» с тем, что есть в интернете: где совпадает, где расходится, что важно проверить.`,
-    },
-  ];
+  onEdit,
+  onReset,
+  resetting,
+}: any) {
+  const hasData = !!(intake && Object.keys(intake).some((k) => k !== 'updatedAt'));
 
-  const icon =
-    source.type === 'file'
-      ? MdInsertDriveFile
-      : source.type === 'link'
-      ? MdLinkIcon
-      : source.type === 'note'
-      ? MdNoteAlt
-      : MdInsertDriveFile;
+  // Compose summary fields per domain.
+  const summary: Array<{ label: string; value: string }> = [];
+  if (intake) {
+    if (domain === 'health_fitness') {
+      if (intake.startWeightKg !== undefined)
+        summary.push({ label: 'Стартовый вес', value: `${intake.startWeightKg} кг` });
+      if (intake.targetWeightKg !== undefined)
+        summary.push({ label: 'Цель', value: `${intake.targetWeightKg} кг` });
+      if (intake.targetDays !== undefined)
+        summary.push({ label: 'Срок', value: `${intake.targetDays} дней` });
+      if (intake.heightCm !== undefined)
+        summary.push({ label: 'Рост', value: `${intake.heightCm} см` });
+      if (intake.activityLevel)
+        summary.push({ label: 'Активность', value: String(intake.activityLevel) });
+    } else {
+      // Generic — показываем первые 4 непустых string/number поля
+      for (const [k, v] of Object.entries(intake)) {
+        if (k === 'updatedAt') continue;
+        if (typeof v === 'string' || typeof v === 'number') {
+          if (String(v).trim()) summary.push({ label: k, value: String(v) });
+        }
+        if (summary.length >= 4) break;
+      }
+    }
+  }
 
+  return (
+    <Box
+      bg={surface}
+      border="1px solid"
+      borderColor={hairline}
+      borderRadius={{ base: '18px', md: '22px' }}
+      p={{ base: '20px', md: '24px' }}
+      boxShadow="0 1px 2px rgba(15,23,42,0.04), 0 8px 24px -14px rgba(15,23,42,0.10)"
+    >
+      <Flex justify="space-between" align="flex-start" gap="10px" mb="10px" flexWrap="wrap">
+        <Box>
+          <Text
+            fontFamily={FONT_TEXT}
+            fontSize="11px"
+            fontWeight="700"
+            letterSpacing="0.4px"
+            textTransform="uppercase"
+            color={textTertiary}
+            mb="4px"
+          >
+            Исходные данные
+          </Text>
+          <Heading
+            as="h3"
+            fontFamily={FONT_DISPLAY}
+            fontSize={{ base: '18px', md: '20px' }}
+            fontWeight="600"
+            color={textPrimary}
+            letterSpacing="-0.014em"
+          >
+            {hasData ? 'Анкета заполнена' : 'Анкета не заполнена'}
+          </Heading>
+        </Box>
+        <HStack spacing="6px">
+          <Button
+            onClick={onEdit}
+            variant="ghost"
+            size="sm"
+            color={accent}
+            leftIcon={<Icon as={MdEdit} boxSize="14px" />}
+            _hover={{ bg: surfaceSoft }}
+            borderRadius="9999px"
+            fontFamily={FONT_TEXT}
+            fontSize="13px"
+            fontWeight="500"
+            h="32px"
+          >
+            {hasData ? 'Изменить' : 'Заполнить'}
+          </Button>
+          {hasData && (
+            <Button
+              onClick={onReset}
+              variant="ghost"
+              size="sm"
+              color={textSecondary}
+              isLoading={resetting}
+              leftIcon={<Icon as={MdRestartAlt} boxSize="14px" />}
+              _hover={{ bg: surfaceSoft, color: 'red.500' }}
+              borderRadius="9999px"
+              fontFamily={FONT_TEXT}
+              fontSize="13px"
+              fontWeight="500"
+              h="32px"
+            >
+              Сбросить
+            </Button>
+          )}
+        </HStack>
+      </Flex>
+
+      {hasData ? (
+        <SimpleGrid columns={{ base: 2, md: 4 }} spacing="8px">
+          {summary.map((s) => (
+            <Box
+              key={s.label}
+              bg={surfaceSoft}
+              border="1px solid"
+              borderColor={hairline}
+              borderRadius="12px"
+              p="10px 12px"
+            >
+              <Text
+                fontFamily={FONT_TEXT}
+                fontSize="11px"
+                color={textTertiary}
+                fontWeight="600"
+                letterSpacing="0.2px"
+                textTransform="uppercase"
+                mb="2px"
+                noOfLines={1}
+              >
+                {s.label}
+              </Text>
+              <Text
+                fontFamily={FONT_TEXT}
+                fontSize="14px"
+                fontWeight="600"
+                color={textPrimary}
+                letterSpacing="-0.1px"
+                noOfLines={1}
+              >
+                {s.value}
+              </Text>
+            </Box>
+          ))}
+        </SimpleGrid>
+      ) : (
+        <Text
+          fontFamily={FONT_TEXT}
+          fontSize="14px"
+          color={textSecondary}
+          lineHeight="1.45"
+        >
+          Расскажите о цели, стартовой точке и ограничениях — это нужно, чтобы
+          ИИСеть строила план под вас.
+        </Text>
+      )}
+    </Box>
+  );
+}
+
+// ── TrackerWidget ───────────────────────────────────────────────
+function TrackerWidget({
+  tracker,
+  intake,
+  surface,
+  surfaceSoft,
+  hairline,
+  accent,
+  textPrimary,
+  textSecondary,
+  textTertiary,
+  creatingTracker,
+  onCreateTracker,
+  onAddEntry,
+  onDeleteEntry,
+}: any) {
+  const startWeight = intake?.startWeightKg;
+  const targetWeight = intake?.targetWeightKg;
+  const targetDays = intake?.targetDays;
+  const entries: IProjectTrackerEntryUI[] = tracker?.entries || [];
+  const sorted = [...entries].sort((a, b) => (a.date < b.date ? -1 : 1));
+  const currentWeight =
+    [...sorted].reverse().find((e) => typeof e.weightKg === 'number')?.weightKg ?? undefined;
+  const startDate =
+    tracker?.createdAt?.slice(0, 10) ||
+    sorted[0]?.date ||
+    new Date().toISOString().slice(0, 10);
+  const daysPassed = (() => {
+    if (!startDate) return undefined;
+    const a = new Date(startDate);
+    const b = new Date();
+    return Math.max(0, Math.floor((b.getTime() - a.getTime()) / 86400000));
+  })();
+  const daysLeft =
+    typeof targetDays === 'number' && typeof daysPassed === 'number'
+      ? Math.max(0, targetDays - daysPassed)
+      : undefined;
+  const delta =
+    typeof startWeight === 'number' && typeof currentWeight === 'number'
+      ? currentWeight - startWeight
+      : undefined;
+  const toGoal =
+    typeof targetWeight === 'number' && typeof currentWeight === 'number'
+      ? currentWeight - targetWeight
+      : undefined;
+
+  return (
+    <Box
+      bg={surface}
+      border="1px solid"
+      borderColor={hairline}
+      borderRadius={{ base: '18px', md: '22px' }}
+      p={{ base: '20px', md: '24px' }}
+      boxShadow="0 1px 2px rgba(15,23,42,0.04), 0 8px 24px -14px rgba(15,23,42,0.10)"
+    >
+      <Flex justify="space-between" align="flex-start" gap="10px" mb="12px" flexWrap="wrap">
+        <Box>
+          <Text
+            fontFamily={FONT_TEXT}
+            fontSize="11px"
+            fontWeight="700"
+            letterSpacing="0.4px"
+            textTransform="uppercase"
+            color={textTertiary}
+            mb="4px"
+          >
+            Трекер прогресса
+          </Text>
+          <Heading
+            as="h3"
+            fontFamily={FONT_DISPLAY}
+            fontSize={{ base: '18px', md: '20px' }}
+            fontWeight="600"
+            color={textPrimary}
+            letterSpacing="-0.014em"
+          >
+            {tracker ? 'Динамика веса' : 'Трекер не создан'}
+          </Heading>
+        </Box>
+        {tracker ? (
+          <Button
+            onClick={onAddEntry}
+            bg={accent}
+            color="white"
+            borderRadius="9999px"
+            h="32px"
+            px="14px"
+            fontFamily={FONT_TEXT}
+            fontSize="13px"
+            fontWeight="500"
+            leftIcon={<Icon as={MdAdd} boxSize="14px" />}
+            _hover={{ bg: ACCENT_BLUE_HOVER }}
+          >
+            Добавить замер
+          </Button>
+        ) : (
+          <Button
+            onClick={onCreateTracker}
+            isLoading={creatingTracker}
+            bg={accent}
+            color="white"
+            borderRadius="9999px"
+            h="32px"
+            px="14px"
+            fontFamily={FONT_TEXT}
+            fontSize="13px"
+            fontWeight="500"
+            leftIcon={<Icon as={MdTrendingUp} boxSize="14px" />}
+            _hover={{ bg: ACCENT_BLUE_HOVER }}
+          >
+            Создать трекер
+          </Button>
+        )}
+      </Flex>
+
+      {!tracker ? (
+        <Text fontFamily={FONT_TEXT} fontSize="14px" color={textSecondary} lineHeight="1.45">
+          Трекер нужен, чтобы сравнивать факт с исходной точкой и видеть динамику.
+        </Text>
+      ) : (
+        <>
+          {/* Stats row */}
+          <SimpleGrid columns={{ base: 2, md: 4 }} spacing="8px" mb="14px">
+            <StatBox
+              label="Старт"
+              value={typeof startWeight === 'number' ? `${startWeight} кг` : '—'}
+              hint={startDate ? new Date(startDate).toLocaleDateString('ru-RU') : ''}
+              surfaceSoft={surfaceSoft}
+              hairline={hairline}
+              textPrimary={textPrimary}
+              textTertiary={textTertiary}
+            />
+            <StatBox
+              label="Сейчас"
+              value={typeof currentWeight === 'number' ? `${currentWeight} кг` : '—'}
+              hint={delta !== undefined ? `${delta > 0 ? '+' : ''}${delta.toFixed(1)} от старта` : ''}
+              surfaceSoft={surfaceSoft}
+              hairline={hairline}
+              textPrimary={textPrimary}
+              textTertiary={textTertiary}
+              accentValue={typeof delta === 'number' && delta < 0 ? accent : undefined}
+            />
+            <StatBox
+              label="Цель"
+              value={typeof targetWeight === 'number' ? `${targetWeight} кг` : '—'}
+              hint={
+                typeof toGoal === 'number' && toGoal > 0
+                  ? `до цели ${toGoal.toFixed(1)} кг`
+                  : typeof toGoal === 'number' && toGoal <= 0
+                    ? 'цель достигнута'
+                    : ''
+              }
+              surfaceSoft={surfaceSoft}
+              hairline={hairline}
+              textPrimary={textPrimary}
+              textTertiary={textTertiary}
+            />
+            <StatBox
+              label="Дней"
+              value={
+                typeof daysPassed === 'number'
+                  ? `${daysPassed}${typeof daysLeft === 'number' ? ' / ' + (daysPassed + daysLeft) : ''}`
+                  : '—'
+              }
+              hint={typeof daysLeft === 'number' ? `осталось ${daysLeft}` : ''}
+              surfaceSoft={surfaceSoft}
+              hairline={hairline}
+              textPrimary={textPrimary}
+              textTertiary={textTertiary}
+            />
+          </SimpleGrid>
+
+          {/* Entries list */}
+          {sorted.length === 0 ? (
+            <Text
+              fontFamily={FONT_TEXT}
+              fontSize="13px"
+              color={textSecondary}
+            >
+              Замеров пока нет. Добавьте первый — и сразу увидите динамику.
+            </Text>
+          ) : (
+            <Box
+              border="1px solid"
+              borderColor={hairline}
+              borderRadius="14px"
+              overflow="hidden"
+            >
+              {/* Header — desktop only */}
+              <Flex
+                display={{ base: 'none', md: 'flex' }}
+                px="12px"
+                py="8px"
+                bg={surfaceSoft}
+                color={textTertiary}
+                fontFamily={FONT_TEXT}
+                fontSize="11px"
+                fontWeight="700"
+                letterSpacing="0.3px"
+                textTransform="uppercase"
+                gap="10px"
+              >
+                <Box flex="0 0 100px">Дата</Box>
+                <Box flex="0 0 90px">Вес, кг</Box>
+                <Box flex="0 0 90px">Талия</Box>
+                <Box flex="1 1 0">Тренировка / Заметка</Box>
+                <Box flex="0 0 32px" />
+              </Flex>
+              {[...sorted].reverse().map((e) => (
+                <Flex
+                  key={e.id}
+                  direction={{ base: 'column', md: 'row' }}
+                  px="12px"
+                  py="10px"
+                  borderTop="1px solid"
+                  borderColor={hairline}
+                  gap="6px"
+                  align={{ base: 'flex-start', md: 'center' }}
+                >
+                  <Box flex={{ md: '0 0 100px' }}>
+                    <Text fontFamily={FONT_TEXT} fontSize="13px" fontWeight="600" color={textPrimary}>
+                      {new Date(e.date).toLocaleDateString('ru-RU', { day: '2-digit', month: 'short' })}
+                    </Text>
+                  </Box>
+                  <Box flex={{ md: '0 0 90px' }}>
+                    <Text fontFamily={FONT_TEXT} fontSize="13px" color={textPrimary}>
+                      {typeof e.weightKg === 'number' ? `${e.weightKg} кг` : '—'}
+                    </Text>
+                  </Box>
+                  <Box flex={{ md: '0 0 90px' }}>
+                    <Text fontFamily={FONT_TEXT} fontSize="13px" color={textSecondary}>
+                      {typeof e.waistCm === 'number' ? `${e.waistCm} см` : '—'}
+                    </Text>
+                  </Box>
+                  <Box flex={{ md: '1 1 0' }} minW={0}>
+                    <Text
+                      fontFamily={FONT_TEXT}
+                      fontSize="12px"
+                      color={textSecondary}
+                      noOfLines={2}
+                    >
+                      {[e.training, e.calories ? `${e.calories} ккал` : '', e.wellbeing, e.comment]
+                        .filter(Boolean)
+                        .join(' · ')}
+                    </Text>
+                  </Box>
+                  <Box flex={{ md: '0 0 32px' }}>
+                    <IconButton
+                      onClick={() => onDeleteEntry(e.id)}
+                      icon={<Icon as={MdRestartAlt} boxSize="14px" />}
+                      aria-label="Удалить замер"
+                      size="xs"
+                      variant="ghost"
+                      color={textTertiary}
+                      _hover={{ color: 'red.500' }}
+                    />
+                  </Box>
+                </Flex>
+              ))}
+            </Box>
+          )}
+        </>
+      )}
+    </Box>
+  );
+}
+
+// ── StatBox helper ──────────────────────────────────────────────
+function StatBox({
+  label,
+  value,
+  hint,
+  surfaceSoft,
+  hairline,
+  textPrimary,
+  textTertiary,
+  accentValue,
+}: any) {
   return (
     <Box
       bg={surfaceSoft}
@@ -1048,170 +1249,168 @@ function SourceMiniCard({
       borderRadius="12px"
       p="10px 12px"
     >
-      <Flex align="center" gap="8px" mb="6px" minW={0}>
-        <Icon as={icon} boxSize="14px" color={accent} flexShrink={0} />
-        <Text
-          fontFamily={FONT_TEXT}
-          fontSize="13px"
-          fontWeight="600"
-          color={textPrimary}
-          noOfLines={1}
-          flex="1 1 0"
-          minW={0}
-        >
-          {source.title || source.originalName || 'Источник'}
+      <Text
+        fontFamily={FONT_TEXT}
+        fontSize="11px"
+        color={textTertiary}
+        fontWeight="600"
+        letterSpacing="0.3px"
+        textTransform="uppercase"
+        mb="2px"
+      >
+        {label}
+      </Text>
+      <Text
+        fontFamily={FONT_DISPLAY}
+        fontSize="20px"
+        fontWeight="600"
+        color={accentValue || textPrimary}
+        letterSpacing="-0.014em"
+        sx={{ fontVariantNumeric: 'tabular-nums' }}
+      >
+        {value}
+      </Text>
+      {hint && (
+        <Text fontFamily={FONT_TEXT} fontSize="11px" color={textTertiary} mt="2px">
+          {hint}
         </Text>
-        <Text fontSize="11px" color={textTertiary} flexShrink={0}>
-          {source.status === 'ready' ? 'готов' : source.status}
-        </Text>
-      </Flex>
-      <Flex gap="4px" flexWrap="wrap">
-        {QUICK_ACTIONS.map((a) => (
-          <Box
-            key={a.label}
-            as="button"
-            type="button"
-            onClick={() => onAction(a.prompt)}
-            px="8px"
-            py="3px"
-            borderRadius="9999px"
-            bg="transparent"
-            border="1px solid"
-            borderColor={hairline}
-            color={textSecondary}
-            fontFamily={FONT_TEXT}
-            fontSize="11px"
-            fontWeight="500"
-            cursor="pointer"
-            _hover={{ borderColor: accent, color: accent }}
-            transition="border-color 0.14s ease, color 0.14s ease"
-            sx={{ WebkitTapHighlightColor: 'transparent' }}
-          >
-            {a.label}
-          </Box>
-        ))}
-      </Flex>
+      )}
     </Box>
   );
 }
 
-// ── BlueprintBlock ────────────────────────────────────────────
-// Показывает agent-blueprint: домен, недостающие вводные, первый шаг
-// как action card, план, будущие артефакты, главный документ, трекер.
-function BlueprintBlock({
-  blueprint,
+// ── RoadmapCard ─────────────────────────────────────────────────
+function RoadmapCard({
+  steps,
   surface,
   surfaceSoft,
   hairline,
-  accentSoftBg,
   accent,
   textPrimary,
   textSecondary,
   textTertiary,
-  onFirstStep,
-  onCreateLivingDoc,
-  onCreateTracker,
-  creatingLivingDoc,
-  creatingTracker,
-}: {
-  blueprint: IProjectBlueprintUI;
-  surface: string;
-  surfaceSoft: string;
-  hairline: string;
-  accentSoftBg: string;
-  accent: string;
-  textPrimary: string;
-  textSecondary: string;
-  textTertiary: string;
-  onFirstStep: () => void;
-  onCreateLivingDoc: () => void;
-  onCreateTracker: () => void;
-  creatingLivingDoc: boolean;
-  creatingTracker: boolean;
-}) {
-  const domainLabel = RU_DOMAIN_LABELS_UI[blueprint.domain] || 'Общая задача';
-  const fs = blueprint.firstStep;
-  const hasTracker =
-    blueprint.mechanics?.includes('progress_tracking') ||
-    blueprint.mechanics?.includes('metric_tracking');
-  const hasLivingDoc = blueprint.mechanics?.includes('single_living_document');
-  const firstStepCta =
-    fs?.type === 'intake_form'
-      ? 'Заполнить анкету'
-      : fs?.type === 'upload_sources'
-        ? 'Загрузить документы'
-        : fs?.type === 'web_research'
-          ? 'Запустить исследование'
-          : fs?.type === 'create_living_document'
-            ? 'Создать главный документ'
-            : 'Сделать шаг';
-
+  onStep,
+}: any) {
   return (
     <Box
       bg={surface}
       border="1px solid"
       borderColor={hairline}
       borderRadius={{ base: '18px', md: '22px' }}
-      p={{ base: '20px', md: '28px' }}
-      boxShadow="0 1px 2px rgba(15,23,42,0.04), 0 12px 32px -16px rgba(15,23,42,0.12)"
+      p={{ base: '18px', md: '22px' }}
+      boxShadow="0 1px 2px rgba(15,23,42,0.04), 0 8px 24px -14px rgba(15,23,42,0.10)"
     >
-      {/* Domain pill */}
-      <Flex align="center" gap="8px" mb="14px" flexWrap="wrap">
-        <Box
-          px="10px"
-          py="4px"
-          borderRadius="9999px"
-          bg={accentSoftBg}
-          color={accent}
-        >
-          <Text
-            fontFamily={FONT_TEXT}
-            fontSize="11px"
-            fontWeight="700"
-            letterSpacing="0.4px"
-            textTransform="uppercase"
-          >
-            {domainLabel}
-          </Text>
-        </Box>
-        {(blueprint.mechanics || []).slice(0, 3).map((m) => (
-          <Text
-            key={m}
-            fontFamily={FONT_TEXT}
-            fontSize="10px"
-            fontWeight="600"
-            color={textTertiary}
-            letterSpacing="0.3px"
-            textTransform="uppercase"
-          >
-            {ruMechanicLabel(m)}
-          </Text>
-        ))}
-      </Flex>
-
+      <Text
+        fontFamily={FONT_TEXT}
+        fontSize="11px"
+        fontWeight="700"
+        letterSpacing="0.4px"
+        textTransform="uppercase"
+        color={textTertiary}
+        mb="6px"
+      >
+        Маршрут
+      </Text>
       <Heading
         as="h3"
         fontFamily={FONT_DISPLAY}
-        fontSize={{ base: '20px', md: '24px' }}
+        fontSize={{ base: '18px', md: '20px' }}
         fontWeight="600"
-        letterSpacing="-0.018em"
-        lineHeight="1.18"
         color={textPrimary}
-        mb="10px"
+        letterSpacing="-0.014em"
+        mb="14px"
       >
-        Маршрут к результату
+        К результату
       </Heading>
+      <VStack align="stretch" spacing="6px">
+        {steps.map((s: IRoadmapStepUI, i: number) => {
+          const statusIcon =
+            s.status === 'done'
+              ? MdCheckCircle
+              : s.status === 'locked'
+                ? MdLock
+                : MdRadioButtonUnchecked;
+          const statusColor =
+            s.status === 'done'
+              ? accent
+              : s.status === 'locked'
+                ? textTertiary
+                : s.status === 'active'
+                  ? accent
+                  : textSecondary;
+          const isClickable = s.status !== 'locked';
+          return (
+            <Flex
+              key={s.id}
+              align="center"
+              gap="10px"
+              p="10px 12px"
+              borderRadius="12px"
+              bg={s.status === 'active' ? accent + '10' : surfaceSoft}
+              border="1px solid"
+              borderColor={s.status === 'active' ? accent + '60' : hairline}
+              opacity={s.status === 'locked' ? 0.55 : 1}
+              cursor={isClickable ? 'pointer' : 'default'}
+              onClick={() => isClickable && onStep(s)}
+              transition="background-color 0.15s ease, border-color 0.15s ease"
+              _hover={isClickable ? { borderColor: accent } : undefined}
+            >
+              <Icon as={statusIcon} boxSize="18px" color={statusColor} flexShrink={0} />
+              <Box flex="1 1 0" minW={0}>
+                <Text
+                  fontFamily={FONT_TEXT}
+                  fontSize="14px"
+                  fontWeight={s.status === 'done' ? 500 : 600}
+                  color={s.status === 'done' ? textSecondary : textPrimary}
+                  letterSpacing="-0.1px"
+                  textDecoration={s.status === 'done' ? 'line-through' : 'none'}
+                  noOfLines={1}
+                >
+                  {String(i + 1).padStart(2, '0')} · {s.title}
+                </Text>
+              </Box>
+              {s.status !== 'locked' && s.status !== 'done' && (
+                <Text
+                  fontFamily={FONT_TEXT}
+                  fontSize="12px"
+                  color={accent}
+                  fontWeight="500"
+                  flexShrink={0}
+                >
+                  {s.actionLabel}
+                </Text>
+              )}
+            </Flex>
+          );
+        })}
+      </VStack>
+    </Box>
+  );
+}
 
-      {/* First step action card */}
-      {fs && (
-        <Box
-          bg={surfaceSoft}
-          border="1px solid"
-          borderColor={hairline}
-          borderRadius="14px"
-          p={{ base: '14px', md: '16px' }}
-          mb="16px"
-        >
+// ── MaterialsCard ───────────────────────────────────────────────
+function MaterialsCard({
+  sources,
+  surface,
+  surfaceSoft,
+  hairline,
+  accent,
+  textPrimary,
+  textSecondary,
+  textTertiary,
+  onOpenAll,
+}: any) {
+  return (
+    <Box
+      bg={surface}
+      border="1px solid"
+      borderColor={hairline}
+      borderRadius={{ base: '18px', md: '22px' }}
+      p={{ base: '18px', md: '22px' }}
+      boxShadow="0 1px 2px rgba(15,23,42,0.04), 0 8px 24px -14px rgba(15,23,42,0.10)"
+    >
+      <Flex justify="space-between" align="center" mb="12px" gap="10px">
+        <Box>
           <Text
             fontFamily={FONT_TEXT}
             fontSize="11px"
@@ -1219,247 +1418,371 @@ function BlueprintBlock({
             letterSpacing="0.4px"
             textTransform="uppercase"
             color={textTertiary}
-            mb="6px"
+            mb="2px"
           >
-            Шаг 1
+            Материалы
           </Text>
-          <Text
+          <Heading
+            as="h3"
             fontFamily={FONT_DISPLAY}
-            fontSize={{ base: '16px', md: '18px' }}
+            fontSize="18px"
             fontWeight="600"
             color={textPrimary}
             letterSpacing="-0.014em"
-            mb="6px"
-            lineHeight="1.3"
           >
-            {fs.title}
-          </Text>
-          {fs.hint && (
-            <Text
-              fontFamily={FONT_TEXT}
-              fontSize="13px"
-              color={textSecondary}
-              lineHeight="1.45"
-              mb="12px"
-            >
-              {fs.hint}
-            </Text>
-          )}
-          <Button
-            onClick={onFirstStep}
-            bg={accent}
-            color="white"
-            borderRadius="9999px"
-            h="34px"
-            px="16px"
-            fontFamily={FONT_TEXT}
-            fontWeight="500"
-            fontSize="13px"
-            _hover={{ bg: '#0071e3' }}
-            _active={{ transform: 'scale(0.98)' }}
-            transition="background-color 0.15s ease, transform 0.15s ease"
-          >
-            {firstStepCta}
-          </Button>
+            {sources.length} {pluralize(sources.length, 'источник', 'источника', 'источников')}
+          </Heading>
         </Box>
-      )}
-
-      {/* Missing inputs */}
-      {Array.isArray(blueprint.missingInputs) &&
-        blueprint.missingInputs.length > 0 && (
-          <Box mb="16px">
-            <Text
-              fontFamily={FONT_TEXT}
-              fontSize="11px"
-              fontWeight="700"
-              letterSpacing="0.4px"
-              textTransform="uppercase"
-              color={textTertiary}
-              mb="8px"
-            >
-              Что нужно собрать
-            </Text>
-            <Flex gap="6px" flexWrap="wrap">
-              {blueprint.missingInputs.slice(0, 10).map((mi) => (
-                <Box
-                  key={mi}
-                  px="10px"
-                  py="4px"
-                  borderRadius="9999px"
-                  bg="transparent"
-                  border="1px solid"
-                  borderColor={hairline}
-                >
-                  <Text
-                    fontFamily={FONT_TEXT}
-                    fontSize="12px"
-                    color={textSecondary}
-                  >
-                    {mi}
-                  </Text>
-                </Box>
-              ))}
-            </Flex>
-          </Box>
-        )}
-
-      {/* Plan steps */}
-      {Array.isArray(blueprint.steps) && blueprint.steps.length > 0 && (
-        <Box mb="16px">
-          <Text
-            fontFamily={FONT_TEXT}
-            fontSize="11px"
-            fontWeight="700"
-            letterSpacing="0.4px"
-            textTransform="uppercase"
-            color={textTertiary}
-            mb="8px"
-          >
-            План
-          </Text>
-          <VStack align="stretch" spacing="6px">
-            {blueprint.steps.slice(0, 8).map((s, i) => (
+        <Button
+          onClick={onOpenAll}
+          variant="ghost"
+          size="sm"
+          color={accent}
+          leftIcon={<Icon as={MdAdd} boxSize="14px" />}
+          _hover={{ bg: surfaceSoft }}
+          borderRadius="9999px"
+          fontFamily={FONT_TEXT}
+          fontSize="13px"
+          fontWeight="500"
+          h="32px"
+        >
+          Добавить
+        </Button>
+      </Flex>
+      {sources.length === 0 ? (
+        <Text
+          fontFamily={FONT_TEXT}
+          fontSize="13px"
+          color={textSecondary}
+          lineHeight="1.45"
+        >
+          Загрузите PDF, DOCX, ссылку или заметку — ИИСеть будет учитывать
+          их в ответах.
+        </Text>
+      ) : (
+        <VStack align="stretch" spacing="6px">
+          {sources.slice(0, 4).map((s: IProjectSourceUI) => {
+            const icon =
+              s.type === 'file'
+                ? MdInsertDriveFile
+                : s.type === 'link'
+                  ? MdLinkIcon
+                  : MdNoteAlt;
+            return (
               <Flex
-                key={`${i}-${s}`}
+                key={s._id}
+                align="center"
                 gap="10px"
-                align="flex-start"
-                p="8px 10px"
-                borderRadius="10px"
                 bg={surfaceSoft}
                 border="1px solid"
                 borderColor={hairline}
+                borderRadius="11px"
+                p="9px 12px"
+                minW={0}
               >
-                <Text
-                  fontFamily={FONT_TEXT}
-                  fontSize="11px"
-                  fontWeight="700"
-                  letterSpacing="0.4px"
-                  color={textTertiary}
-                  flexShrink={0}
-                  pt="1px"
-                  sx={{ fontVariantNumeric: 'tabular-nums' }}
-                >
-                  {String(i + 1).padStart(2, '0')}
-                </Text>
+                <Icon as={icon} boxSize="15px" color={accent} flexShrink={0} />
                 <Text
                   fontFamily={FONT_TEXT}
                   fontSize="13px"
+                  fontWeight="600"
                   color={textPrimary}
-                  lineHeight="1.45"
+                  noOfLines={1}
+                  flex="1 1 0"
+                  minW={0}
                 >
-                  {s}
+                  {s.title || s.originalName || 'Источник'}
+                </Text>
+                <Text
+                  fontFamily={FONT_TEXT}
+                  fontSize="11px"
+                  color={textTertiary}
+                  flexShrink={0}
+                >
+                  {s.status === 'ready' && s.chunksCount > 0
+                    ? `${s.chunksCount} фрагм.`
+                    : s.status}
                 </Text>
               </Flex>
-            ))}
-          </VStack>
-        </Box>
-      )}
-
-      {/* Future artifacts plan */}
-      {Array.isArray(blueprint.artifactPlans) &&
-        blueprint.artifactPlans.length > 0 && (
-          <Box mb={hasLivingDoc || hasTracker ? '16px' : '0'}>
-            <Text
-              fontFamily={FONT_TEXT}
-              fontSize="11px"
-              fontWeight="700"
-              letterSpacing="0.4px"
-              textTransform="uppercase"
-              color={textTertiary}
-              mb="8px"
-            >
-              Будущие документы
-            </Text>
-            <Flex gap="6px" flexWrap="wrap">
-              {blueprint.artifactPlans.map((ap) => (
-                <Box
-                  key={ap.title}
-                  px="10px"
-                  py="6px"
-                  borderRadius="9999px"
-                  bg={surfaceSoft}
-                  border="1px solid"
-                  borderColor={hairline}
-                  title={ap.hint}
-                >
-                  <Text
-                    fontFamily={FONT_TEXT}
-                    fontSize="12px"
-                    fontWeight="500"
-                    color={textPrimary}
-                  >
-                    {ap.title}
-                  </Text>
-                </Box>
-              ))}
-            </Flex>
-          </Box>
-        )}
-
-      {/* Primary living document + tracker quick actions */}
-      {(hasLivingDoc || hasTracker) && (
-        <Flex gap="8px" flexWrap="wrap" mt="6px">
-          {hasLivingDoc && (
-            <Button
-              onClick={onCreateLivingDoc}
-              isLoading={creatingLivingDoc}
-              bg="transparent"
-              color={textPrimary}
-              border="1px solid"
-              borderColor={hairline}
-              borderRadius="9999px"
-              h="32px"
-              px="14px"
-              fontFamily={FONT_TEXT}
-              fontWeight="500"
-              fontSize="12px"
-              _hover={{ borderColor: accent, color: accent }}
-            >
-              Создать «{blueprint.primaryDocumentTitle || 'Главный документ'}»
-            </Button>
-          )}
-          {hasTracker && (
-            <Button
-              onClick={onCreateTracker}
-              isLoading={creatingTracker}
-              bg="transparent"
-              color={textPrimary}
-              border="1px solid"
-              borderColor={hairline}
-              borderRadius="9999px"
-              h="32px"
-              px="14px"
-              fontFamily={FONT_TEXT}
-              fontWeight="500"
-              fontSize="12px"
-              _hover={{ borderColor: accent, color: accent }}
-            >
-              Завести трекер
-            </Button>
-          )}
-        </Flex>
+            );
+          })}
+        </VStack>
       )}
     </Box>
   );
 }
 
-const RU_MECHANIC_LABELS: Record<string, string> = {
-  intake_required: 'Анкета',
-  file_required: 'Файлы',
-  web_research_required: 'Веб-поиск',
-  single_living_document: 'Гл. документ',
-  multi_artifact_workspace: 'Несколько артефактов',
-  progress_tracking: 'Прогресс',
-  metric_tracking: 'Метрики',
-  deadline_tracking: 'Дедлайны',
-  calculator_required: 'Расчёт',
-  comparison_required: 'Сравнение',
-  source_citation_required: 'Источники',
-  recurring_checkins: 'Регулярные сверки',
-  risk_sensitive: 'Риски',
-};
-function ruMechanicLabel(m: string): string {
-  return RU_MECHANIC_LABELS[m] || m;
+// ── DocumentsCard ───────────────────────────────────────────────
+function DocumentsCard({
+  artifacts,
+  surface,
+  surfaceSoft,
+  hairline,
+  accent,
+  textPrimary,
+  textSecondary,
+  textTertiary,
+}: any) {
+  if (artifacts.length === 0) {
+    return null;
+  }
+  return (
+    <Box
+      bg={surface}
+      border="1px solid"
+      borderColor={hairline}
+      borderRadius={{ base: '18px', md: '22px' }}
+      p={{ base: '18px', md: '22px' }}
+      boxShadow="0 1px 2px rgba(15,23,42,0.04), 0 8px 24px -14px rgba(15,23,42,0.10)"
+    >
+      <Text
+        fontFamily={FONT_TEXT}
+        fontSize="11px"
+        fontWeight="700"
+        letterSpacing="0.4px"
+        textTransform="uppercase"
+        color={textTertiary}
+        mb="2px"
+      >
+        Документы проекта
+      </Text>
+      <Heading
+        as="h3"
+        fontFamily={FONT_DISPLAY}
+        fontSize="18px"
+        fontWeight="600"
+        color={textPrimary}
+        letterSpacing="-0.014em"
+        mb="14px"
+      >
+        {artifacts.length} {pluralize(artifacts.length, 'документ', 'документа', 'документов')}
+      </Heading>
+      <VStack align="stretch" spacing="6px">
+        {artifacts.slice(0, 6).map((a: IProjectArtifactUI) => (
+          <Box
+            key={a._id}
+            bg={surfaceSoft}
+            border="1px solid"
+            borderColor={hairline}
+            borderRadius="11px"
+            p="10px 12px"
+          >
+            <Flex align="center" gap="8px" mb="2px">
+              <Icon as={MdDescription} boxSize="14px" color={accent} />
+              <Text
+                fontFamily={FONT_TEXT}
+                fontSize="13px"
+                fontWeight="600"
+                color={textPrimary}
+                noOfLines={1}
+                flex="1 1 0"
+                minW={0}
+              >
+                {a.title}
+              </Text>
+              <Text fontSize="11px" color={textTertiary} flexShrink={0}>
+                {new Date(a.createdAt).toLocaleDateString('ru-RU', { day: '2-digit', month: 'short' })}
+              </Text>
+            </Flex>
+            <Text
+              fontFamily={FONT_TEXT}
+              fontSize="12px"
+              color={textSecondary}
+              lineHeight="1.45"
+              noOfLines={2}
+            >
+              {cleanPreview(a.content || '', 200)}
+            </Text>
+          </Box>
+        ))}
+      </VStack>
+    </Box>
+  );
+}
+
+// ── AddEntryModal ───────────────────────────────────────────────
+function AddEntryModal({
+  open,
+  onClose,
+  onSubmit,
+  baselineWeight,
+}: {
+  open: boolean;
+  onClose: () => void;
+  onSubmit: (entry: Omit<IProjectTrackerEntryUI, 'id' | 'createdAt'>) => Promise<boolean>;
+  baselineWeight?: number;
+}) {
+  const today = useMemo(() => new Date().toISOString().slice(0, 10), []);
+  const [date, setDate] = useState(today);
+  const [weight, setWeight] = useState('');
+  const [waist, setWaist] = useState('');
+  const [training, setTraining] = useState('');
+  const [calories, setCalories] = useState('');
+  const [wellbeing, setWellbeing] = useState('');
+  const [comment, setComment] = useState('');
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
+  const surface = useColorModeValue('#ffffff', '#1c1c1f');
+  const hairline = useColorModeValue('rgba(15,23,42,0.08)', 'rgba(255,255,255,0.10)');
+  const inputBg = useColorModeValue('#fafafb', 'rgba(255,255,255,0.04)');
+  const textPrimary = useColorModeValue('#1d1d1f', '#f5f5f7');
+  const textSecondary = useColorModeValue('#6e6e73', 'rgba(245,245,247,0.65)');
+
+  useEffect(() => {
+    if (!open) return;
+    setDate(today);
+    setWeight('');
+    setWaist('');
+    setTraining('');
+    setCalories('');
+    setWellbeing('');
+    setComment('');
+  }, [open, today]);
+
+  const handleSubmit = async () => {
+    setIsSubmitting(true);
+    const num = (s: string) => {
+      const n = Number(s);
+      return Number.isFinite(n) ? n : undefined;
+    };
+    const ok = await onSubmit({
+      date,
+      weightKg: num(weight),
+      waistCm: num(waist),
+      training: training.trim() || undefined,
+      calories: num(calories),
+      wellbeing: wellbeing.trim() || undefined,
+      comment: comment.trim() || undefined,
+    });
+    setIsSubmitting(false);
+    if (ok) onClose();
+  };
+
+  return (
+    <Modal
+      isOpen={open}
+      onClose={onClose}
+      isCentered
+      size={{ base: 'full', md: 'md' } as any}
+      motionPreset="slideInBottom"
+      closeOnOverlayClick
+      closeOnEsc
+      autoFocus
+      portalProps={{ appendToParentPortal: false }}
+    >
+      <ModalOverlay
+        bg="rgba(0,0,0,0.48)"
+        sx={{
+          backdropFilter: 'blur(14px) saturate(160%)',
+          WebkitBackdropFilter: 'blur(14px) saturate(160%)',
+        }}
+      />
+      <ModalContent
+        mx={{ base: '16px', md: 'auto' }}
+        my={{ base: '16px', md: 'auto' }}
+        maxW={{ base: 'calc(100vw - 32px)', md: '560px' }}
+        borderRadius={{ base: '22px', md: '24px' }}
+        border="1px solid"
+        borderColor={hairline}
+        bg={surface}
+        boxShadow="0 1px 2px rgba(15,23,42,0.04), 0 32px 64px -16px rgba(15,23,42,0.30)"
+        overflow="hidden"
+      >
+        <ModalHeader
+          px={{ base: '20px', md: '24px' }}
+          pt={{ base: '20px', md: '22px' }}
+          pb="4px"
+          fontFamily={FONT_DISPLAY}
+          fontSize={{ base: '18px', md: '20px' }}
+          fontWeight="600"
+          letterSpacing="-0.018em"
+          color={textPrimary}
+        >
+          Новый замер
+        </ModalHeader>
+        <ModalCloseButton borderRadius="9999px" top={{ base: '12px', md: '14px' }} right={{ base: '12px', md: '14px' }} />
+        <ModalBody px={{ base: '20px', md: '24px' }} pt="6px" pb="12px">
+          {baselineWeight && (
+            <Text
+              fontFamily={FONT_TEXT}
+              fontSize="12px"
+              color={textSecondary}
+              mb="12px"
+            >
+              Стартовый вес из анкеты: <b>{baselineWeight} кг</b>
+            </Text>
+          )}
+          <VStack align="stretch" spacing="10px">
+            <Field label="Дата" hairline={hairline} inputBg={inputBg} textPrimary={textPrimary} textSecondary={textSecondary}>
+              <Input type="date" value={date} onChange={(e) => setDate(e.target.value)} bg={inputBg} borderColor={hairline} borderRadius="10px" fontFamily={FONT_TEXT} fontSize="14px" color={textPrimary} />
+            </Field>
+            <SimpleGrid columns={2} spacing="10px">
+              <Field label="Вес (кг)" hairline={hairline} inputBg={inputBg} textPrimary={textPrimary} textSecondary={textSecondary}>
+                <Input type="number" step="0.1" value={weight} onChange={(e) => setWeight(e.target.value)} placeholder="85.0" bg={inputBg} borderColor={hairline} borderRadius="10px" fontFamily={FONT_TEXT} fontSize="14px" color={textPrimary} />
+              </Field>
+              <Field label="Талия (см)" hairline={hairline} inputBg={inputBg} textPrimary={textPrimary} textSecondary={textSecondary}>
+                <Input type="number" step="0.5" value={waist} onChange={(e) => setWaist(e.target.value)} placeholder="92" bg={inputBg} borderColor={hairline} borderRadius="10px" fontFamily={FONT_TEXT} fontSize="14px" color={textPrimary} />
+              </Field>
+            </SimpleGrid>
+            <Field label="Тренировка" hairline={hairline} inputBg={inputBg} textPrimary={textPrimary} textSecondary={textSecondary}>
+              <Input value={training} onChange={(e) => setTraining(e.target.value)} placeholder="бег 30 мин, силовая…" bg={inputBg} borderColor={hairline} borderRadius="10px" fontFamily={FONT_TEXT} fontSize="14px" color={textPrimary} />
+            </Field>
+            <SimpleGrid columns={2} spacing="10px">
+              <Field label="Калории" hairline={hairline} inputBg={inputBg} textPrimary={textPrimary} textSecondary={textSecondary}>
+                <Input type="number" value={calories} onChange={(e) => setCalories(e.target.value)} placeholder="1800" bg={inputBg} borderColor={hairline} borderRadius="10px" fontFamily={FONT_TEXT} fontSize="14px" color={textPrimary} />
+              </Field>
+              <Field label="Самочувствие" hairline={hairline} inputBg={inputBg} textPrimary={textPrimary} textSecondary={textSecondary}>
+                <Select value={wellbeing} onChange={(e) => setWellbeing(e.target.value)} bg={inputBg} borderColor={hairline} borderRadius="10px" fontFamily={FONT_TEXT} fontSize="14px" color={textPrimary} placeholder="—">
+                  <option value="отличное">отличное</option>
+                  <option value="хорошее">хорошее</option>
+                  <option value="нормальное">нормальное</option>
+                  <option value="устал">устал</option>
+                  <option value="плохо">плохо</option>
+                </Select>
+              </Field>
+            </SimpleGrid>
+            <Field label="Комментарий" hairline={hairline} inputBg={inputBg} textPrimary={textPrimary} textSecondary={textSecondary}>
+              <Textarea value={comment} onChange={(e) => setComment(e.target.value)} placeholder="что важно отметить" bg={inputBg} borderColor={hairline} borderRadius="10px" rows={2} fontFamily={FONT_TEXT} fontSize="14px" color={textPrimary} />
+            </Field>
+          </VStack>
+        </ModalBody>
+        <ModalFooter px={{ base: '20px', md: '24px' }} pt="6px" pb={{ base: 'calc(20px + env(safe-area-inset-bottom))', md: '20px' }} borderTop="1px solid" borderColor={hairline} gap="8px">
+          <Button onClick={onClose} variant="ghost" borderRadius="9999px" h="36px" px="16px" fontFamily={FONT_TEXT} fontSize="13px" fontWeight="500" color={textPrimary} _hover={{ bg: 'rgba(0,0,0,0.04)' }}>
+            Отмена
+          </Button>
+          <Button onClick={handleSubmit} isLoading={isSubmitting} bg={ACCENT_BLUE} color="white" borderRadius="9999px" h="36px" px="18px" fontFamily={FONT_TEXT} fontSize="13px" fontWeight="600" _hover={{ bg: ACCENT_BLUE_HOVER }} leftIcon={<Icon as={MdCheck} boxSize="14px" />}>
+            Сохранить
+          </Button>
+        </ModalFooter>
+      </ModalContent>
+    </Modal>
+  );
+}
+
+function Field({ label, children, textSecondary }: any) {
+  return (
+    <Box>
+      <Text
+        fontFamily={FONT_TEXT}
+        fontSize="11px"
+        fontWeight="600"
+        color={textSecondary}
+        mb="4px"
+        letterSpacing="0.1px"
+      >
+        {label}
+      </Text>
+      {children}
+    </Box>
+  );
+}
+
+// ── helpers ─────────────────────────────────────────────────────
+function pluralize(n: number, one: string, few: string, many: string): string {
+  const mod10 = n % 10;
+  const mod100 = n % 100;
+  if (mod10 === 1 && mod100 !== 11) return one;
+  if ([2, 3, 4].includes(mod10) && ![12, 13, 14].includes(mod100)) return few;
+  return many;
 }
 
 export default ProjectCommandCenter;

@@ -91,6 +91,78 @@ export const RU_DOMAIN_LABELS_UI: Record<ProjectDomainUI, string> = {
   general: 'Общая задача',
 };
 
+// ── Agent State (dynamic) ───────────────────────────────────────
+// intake = baseline (стартовые данные, одна сущность, перезаписывается).
+// tracker = entries во времени (новые замеры добавляются как push).
+// Это НЕ то же самое, что blueprint — blueprint классификация цели.
+export interface IProjectIntakeUI {
+  sex?: string;
+  age?: number;
+  heightCm?: number;
+  startWeightKg?: number;
+  targetWeightKg?: number;
+  targetLossKg?: number;
+  targetDays?: number;
+  activityLevel?: string;
+  currentTraining?: string;
+  currentNutrition?: string;
+  healthRestrictions?: string;
+  sleep?: string;
+  outcome?: string;
+  deadline?: string;
+  constraints?: string;
+  context?: string;
+  comment?: string;
+  updatedAt?: string;
+  [key: string]: any;
+}
+
+export interface IProjectTrackerEntryUI {
+  id: string;
+  date: string;
+  weightKg?: number;
+  waistCm?: number;
+  training?: string;
+  calories?: number;
+  wellbeing?: string;
+  comment?: string;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export interface IProjectTrackerUI {
+  type: string;
+  baseline?: { date?: string; weightKg?: number; waistCm?: number };
+  entries: IProjectTrackerEntryUI[];
+  createdAt?: string;
+}
+
+export interface IProjectAgentStateUI {
+  intake?: IProjectIntakeUI;
+  tracker?: IProjectTrackerUI;
+  currentStepId?: string;
+  updatedAt?: string;
+}
+
+// ── Roadmap step (computed UI-side from agent state) ────────────
+export type RoadmapStepStatusUI = 'locked' | 'todo' | 'active' | 'done';
+export type RoadmapWidgetTypeUI =
+  | 'intake_form'
+  | 'tracker'
+  | 'calculator'
+  | 'document'
+  | 'web_research'
+  | 'review';
+
+export interface IRoadmapStepUI {
+  id: string;
+  title: string;
+  widgetType: RoadmapWidgetTypeUI;
+  status: RoadmapStepStatusUI;
+  actionLabel: string;
+  hint?: string;
+}
+
 export interface IProjectUI {
   _id: string;
   title: string;
@@ -101,6 +173,7 @@ export interface IProjectUI {
   suggestedActions: string[];
   memoryItems: IProjectMemoryItemUI[];
   blueprint?: IProjectBlueprintUI;
+  agentState?: IProjectAgentStateUI;
   createdAt: string;
   updatedAt: string;
 }
@@ -330,6 +403,84 @@ class ProjectsService {
         body: JSON.stringify(payload),
       },
     );
+    if (!res.ok) return null;
+    return await res.json();
+  }
+
+  // ─── Agent state: intake (baseline) ──────────────────────────
+  // Анкета — единая baseline-сущность. Каждый PATCH перезаписывает
+  // её целиком, НЕ создаёт новый artifact.
+  async updateIntake(
+    projectId: string,
+    intake: IProjectIntakeUI,
+  ): Promise<IProjectUI | null> {
+    const res = await fetch(
+      `/api/projects/${encodeURIComponent(projectId)}/intake`,
+      {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(intake),
+      },
+    );
+    if (!res.ok) return null;
+    const data = await res.json();
+    return data?.project as IProjectUI;
+  }
+
+  async resetIntake(projectId: string): Promise<IProjectUI | null> {
+    const res = await fetch(
+      `/api/projects/${encodeURIComponent(projectId)}/intake`,
+      { method: 'DELETE' },
+    );
+    if (!res.ok) return null;
+    const data = await res.json();
+    return data?.project as IProjectUI;
+  }
+
+  // ─── Agent state: tracker entries ────────────────────────────
+  // Каждый замер — новая запись через атомарный $push. Tracker
+  // создаётся автоматически на первом push, если его ещё не было.
+  async addTrackerEntry(
+    projectId: string,
+    entry: Omit<IProjectTrackerEntryUI, 'id' | 'createdAt'>,
+  ): Promise<{ entry: IProjectTrackerEntryUI; project: IProjectUI } | null> {
+    const res = await fetch(
+      `/api/projects/${encodeURIComponent(projectId)}/tracker/entries`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(entry),
+      },
+    );
+    if (!res.ok) return null;
+    return await res.json();
+  }
+
+  async deleteTrackerEntry(
+    projectId: string,
+    entryId: string,
+  ): Promise<IProjectUI | null> {
+    const res = await fetch(
+      `/api/projects/${encodeURIComponent(projectId)}/tracker/entries?entryId=${encodeURIComponent(entryId)}`,
+      { method: 'DELETE' },
+    );
+    if (!res.ok) return null;
+    const data = await res.json();
+    return data?.project as IProjectUI;
+  }
+
+  // ─── Agent state: generic patch (currentStepId, etc.) ────────
+  async patchAgentState(
+    projectId: string,
+    patch: Partial<IProjectAgentStateUI>,
+  ): Promise<IProjectUI | null> {
+    const project = await this.get(projectId);
+    const next = { ...(project?.agentState || {}), ...patch };
+    const res = await fetch(`/api/projects/${encodeURIComponent(projectId)}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ agentState: next }),
+    });
     if (!res.ok) return null;
     return await res.json();
   }

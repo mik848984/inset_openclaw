@@ -16,7 +16,6 @@ import {
   Spinner,
   Text,
   Textarea,
-  useColorModeValue,
   useToast,
 } from '@chakra-ui/react';
 import React, {
@@ -104,47 +103,24 @@ function ProjectSidebarSection() {
     }
   }, [activeProjectId, expandedProjectId]);
 
-  const headerColor = useColorModeValue('gray.500', 'gray.500');
-  const sectionTitleColor = useColorModeValue('navy.700', 'white');
-  const itemBg = useColorModeValue(
-    'rgba(0,0,0,0.00)',
-    'rgba(255,255,255,0.00)',
-  );
-  const itemHoverBg = useColorModeValue(
-    'rgba(0,0,0,0.04)',
-    'rgba(255,255,255,0.06)',
-  );
-  const activeBg = useColorModeValue(
-    'rgba(0,102,204,0.08)',
-    'rgba(41,151,255,0.14)',
-  );
-  const activeBorder = useColorModeValue(
-    'rgba(0,102,204,0.32)',
-    'rgba(41,151,255,0.36)',
-  );
-  const titleColor = useColorModeValue('navy.700', 'white');
-  const hintColor = useColorModeValue('gray.500', 'whiteAlpha.700');
-  // Solid Apple-like sheet surface. Translucent + backdrop-blur контента
-  // приводил к ситуации «blur есть, окна нет», если overlay побеждал по
-  // z-index — surface блюрила overlay и сливалась с ним.
-  const modalSurface = useColorModeValue('#ffffff', '#1c1c1f');
-  const modalBorder = useColorModeValue(
-    'rgba(0,0,0,0.08)',
-    'rgba(255,255,255,0.10)',
-  );
-  const modalText = useColorModeValue('#1d1d1f', '#f5f5f7');
-  const modalMuted = useColorModeValue(
-    '#6e6e73',
-    'rgba(245,245,247,0.65)',
-  );
-  const inputBg = useColorModeValue(
-    'rgba(255,255,255,0.92)',
-    'rgba(13,18,34,0.62)',
-  );
-  const inputBorder = useColorModeValue(
-    'rgba(0,0,0,0.08)',
-    'rgba(255,255,255,0.12)',
-  );
+  // ── Light tokens (фиксированно) ───────────────────────────────
+  // Sidebar и create-modal всегда светлые. useColorModeValue убран
+  // сознательно — system dark mode не должен превращать sidebar
+  // в navy-админку.
+  const headerColor = '#9ca3af';
+  const sectionTitleColor = '#111827';
+  const itemBg = 'transparent';
+  const itemHoverBg = 'rgba(15,23,42,0.04)';
+  const activeBg = 'rgba(0,113,227,0.08)';
+  const activeBorder = 'rgba(0,113,227,0.30)';
+  const titleColor = '#111827';
+  const hintColor = '#6b7280';
+  const modalSurface = '#ffffff';
+  const modalBorder = 'rgba(15,23,42,0.08)';
+  const modalText = '#111827';
+  const modalMuted = '#6b7280';
+  const inputBg = '#f7f8fb';
+  const inputBorder = 'rgba(15,23,42,0.08)';
 
   const loadProjects = useCallback(async () => {
     setIsLoading(true);

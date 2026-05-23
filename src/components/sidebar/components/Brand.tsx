@@ -1,13 +1,15 @@
 'use client';
 // Chakra imports
-import { Flex, Link, useColorModeValue } from '@chakra-ui/react';
+import { Flex, Link } from '@chakra-ui/react';
 
 import { HorizonLogo } from '@/components/icons/Icons';
 import { HSeparator } from '@/components/separator/Separator';
 
 export function SidebarBrand() {
-  //   Chakra color mode
-  let logoColor = useColorModeValue('navy.700', 'white');
+  // Sidebar всегда light — фиксированный тёмный цвет лого, без
+  // useColorModeValue, чтобы system dark mode не делал лого белым
+  // на белом фоне.
+  const logoColor = 'navy.700';
 
   return (
     <Flex alignItems="center" flexDirection="column">

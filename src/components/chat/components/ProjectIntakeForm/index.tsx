@@ -39,7 +39,11 @@ import {
 } from '@chakra-ui/react';
 import React, { useMemo, useState } from 'react';
 import { MdAutoAwesome } from 'react-icons/md';
-import { projectsService } from '@/services/ui/ProjectsService';
+import {
+  projectsService,
+  IProjectIntakeUI,
+  IProjectUI,
+} from '@/services/ui/ProjectsService';
 
 const FONT_DISPLAY = `'SF Pro Display', -apple-system, BlinkMacSystemFont, system-ui, sans-serif`;
 const FONT_TEXT = `'SF Pro Text', -apple-system, BlinkMacSystemFont, system-ui, sans-serif`;
@@ -91,17 +95,19 @@ const FORMS: Record<string, { title: string; hint: string; fields: IntakeField[]
   health: {
     title: 'Анкета исходных данных',
     hint: 'Соберём отправную точку — ИИСеть рассчитает калории и составит план под цель.',
+    // Имена полей = intake-схема, чтобы prefill/save были атомарными.
     fields: [
-      { name: 'gender', label: 'Пол', kind: 'select', options: ['Мужской', 'Женский'] },
+      { name: 'sex', label: 'Пол', kind: 'select', options: ['Мужской', 'Женский'] },
       { name: 'age', label: 'Возраст', kind: 'number', placeholder: '30' },
-      { name: 'height', label: 'Рост (см)', kind: 'number', placeholder: '178' },
-      { name: 'weight', label: 'Текущий вес (кг)', kind: 'number', placeholder: '82' },
-      { name: 'targetWeight', label: 'Цель по весу (кг)', kind: 'number', placeholder: '74' },
-      { name: 'deadline', label: 'Целевой срок', kind: 'text', placeholder: 'к 1 июня' },
-      { name: 'activity', label: 'Уровень активности', kind: 'select', options: ['Низкий', 'Лёгкий (1–2 трен./нед.)', 'Средний (3–4)', 'Высокий (5+)'] },
-      { name: 'limitations', label: 'Ограничения по здоровью', kind: 'textarea', placeholder: 'Травмы, хронические, аллергии — что важно учесть.' },
-      { name: 'eating', label: 'Питание сейчас', kind: 'textarea', placeholder: 'Кратко: режим, что нравится/не любите.' },
-      { name: 'training', label: 'Тренировки сейчас', kind: 'textarea', placeholder: 'Что и как часто.' },
+      { name: 'heightCm', label: 'Рост (см)', kind: 'number', placeholder: '178', required: true },
+      { name: 'startWeightKg', label: 'Текущий вес (кг)', kind: 'number', placeholder: '82', required: true },
+      { name: 'targetWeightKg', label: 'Цель по весу (кг)', kind: 'number', placeholder: '78' },
+      { name: 'targetDays', label: 'Срок (дней)', kind: 'number', placeholder: '30' },
+      { name: 'deadline', label: 'Целевая дата (если есть)', kind: 'text', placeholder: 'к 1 июня' },
+      { name: 'activityLevel', label: 'Уровень активности', kind: 'select', options: ['Низкий', 'Лёгкий (1–2 трен./нед.)', 'Средний (3–4)', 'Высокий (5+)'] },
+      { name: 'healthRestrictions', label: 'Ограничения по здоровью', kind: 'textarea', placeholder: 'Травмы, хронические, аллергии — что важно учесть.' },
+      { name: 'currentNutrition', label: 'Питание сейчас', kind: 'textarea', placeholder: 'Кратко: режим, что нравится/не любите.' },
+      { name: 'currentTraining', label: 'Тренировки сейчас', kind: 'textarea', placeholder: 'Что и как часто.' },
       { name: 'sleep', label: 'Качество сна', kind: 'text', placeholder: '6–7 часов, рваный, …' },
     ],
   },
@@ -135,8 +141,18 @@ interface Props {
   formKind: string;
   open: boolean;
   onClose: () => void;
-  /** После submit вернём сообщение для отправки в чат — родитель пусть решает, что с ним сделать. */
-  onSubmitted?: (chatMessage: string) => void;
+  /** Существующая intake-state для pre-fill, если анкета уже была заполнена. */
+  initial?: IProjectIntakeUI | null;
+  /** Callback с обновлённым проектом после сохранения. Родитель должен
+   *  закрыть форму и обновить локальный state. НЕ создаём новый
+   *  artifact и НЕ шлём ничего в чат. */
+  onSaved?: (project: IProjectUI) => void;
+}
+
+function valueToString(v: any): string {
+  if (v === undefined || v === null) return '';
+  if (typeof v === 'number') return Number.isFinite(v) ? String(v) : '';
+  return String(v);
 }
 
 function ProjectIntakeForm({
@@ -144,12 +160,28 @@ function ProjectIntakeForm({
   formKind,
   open,
   onClose,
-  onSubmitted,
+  initial,
+  onSaved,
 }: Props) {
   const toast = useToast();
   const spec = useMemo(() => FORMS[formKind] || FORMS.general, [formKind]);
   const [values, setValues] = useState<Record<string, string>>({});
   const [isSubmitting, setIsSubmitting] = useState(false);
+
+  // Pre-fill из existing intake при открытии формы.
+  React.useEffect(() => {
+    if (!open) return;
+    const next: Record<string, string> = {};
+    if (initial) {
+      for (const f of spec.fields) {
+        const v = (initial as any)[f.name];
+        if (v !== undefined && v !== null && v !== '') {
+          next[f.name] = valueToString(v);
+        }
+      }
+    }
+    setValues(next);
+  }, [open, initial, spec]);
 
   const surface = useColorModeValue('#ffffff', '#1c1c1f');
   const hairline = useColorModeValue(
@@ -166,24 +198,21 @@ function ProjectIntakeForm({
   const setField = (name: string, v: string) =>
     setValues((prev) => ({ ...prev, [name]: v }));
 
-  const buildMarkdown = (): string => {
-    const lines: string[] = [`# ${spec.title}`, ''];
+  // Поля типа number конвертируем перед отправкой; intake endpoint
+  // дополнительно валидирует и обрезает строки.
+  const buildIntakePayload = (): IProjectIntakeUI => {
+    const out: IProjectIntakeUI = {};
     for (const f of spec.fields) {
-      const v = (values[f.name] || '').trim();
-      if (!v) continue;
-      lines.push(`**${f.label}:** ${v}`);
+      const raw = (values[f.name] || '').trim();
+      if (!raw) continue;
+      if (f.kind === 'number') {
+        const n = Number(raw);
+        if (Number.isFinite(n)) out[f.name] = n;
+      } else {
+        out[f.name] = raw;
+      }
     }
-    return lines.join('\n');
-  };
-
-  const buildChatMessage = (): string => {
-    const md = buildMarkdown();
-    return (
-      'Я заполнил анкету проекта. Учти эти вводные и предложи следующий ' +
-      'конкретный шаг — а если для шага нужны ещё данные, спроси одним ' +
-      'списком, что добавить.\n\n' +
-      md
-    );
+    return out;
   };
 
   const handleSubmit = async () => {
@@ -202,36 +231,28 @@ function ProjectIntakeForm({
 
     setIsSubmitting(true);
     try {
-      // ── 1) Сохраняем как artifact ────────────────────────────
-      // Используем существующий artifacts API. Backend сам сделает
-      // LLM-summary анкеты и положит в storage. Не критично, если
-      // упадёт — продолжим к чату с тем же markdown.
-      try {
-        await fetch(
-          `/api/projects/${encodeURIComponent(projectId)}/artifacts`,
-          {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ type: 'intake' }),
-          },
-        );
-      } catch (e) {
-        console.warn('[IntakeForm] artifact save failed', e);
+      const payload = buildIntakePayload();
+      const updated = await projectsService.updateIntake(projectId, payload);
+      if (!updated) {
+        throw new Error('intake update failed');
       }
-
-      // ── 2) Сообщение в чат ───────────────────────────────────
-      const chatMsg = buildChatMessage();
-      onSubmitted?.(chatMsg);
-
+      onSaved?.(updated);
       toast({
-        title: 'Анкета сохранена',
-        description: 'ИИСеть учтёт её в ответах и в следующих шагах.',
+        title: initial ? 'Исходные данные обновлены' : 'Исходные данные сохранены',
         status: 'success',
-        duration: 2500,
+        duration: 2200,
         isClosable: true,
       });
       onClose();
-      setValues({});
+    } catch (e) {
+      console.error('[IntakeForm] save failed', e);
+      toast({
+        title: 'Не удалось сохранить',
+        description: 'Попробуйте ещё раз.',
+        status: 'error',
+        duration: 3000,
+        isClosable: true,
+      });
     } finally {
       setIsSubmitting(false);
     }

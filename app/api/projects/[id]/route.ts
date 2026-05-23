@@ -73,6 +73,21 @@ export async function PATCH(req: NextRequest, { params }: Params) {
         .filter((s: any) => typeof s === 'string')
         .slice(0, 8);
     }
+    // agentState — целиком гибкий JSON. Сохраняем как есть, валидируем
+    // только что это объект и не разрастается до абсурда (cap 32KB).
+    if (body.agentState && typeof body.agentState === 'object') {
+      try {
+        const serialized = JSON.stringify(body.agentState);
+        if (serialized.length <= 32 * 1024) {
+          allowed.agentState = {
+            ...body.agentState,
+            updatedAt: new Date().toISOString(),
+          };
+        }
+      } catch {
+        // silently skip — agentState не критичен
+      }
+    }
 
     const project = await Project.findOneAndUpdate(
       { _id: params.id, user: userId },
