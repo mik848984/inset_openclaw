@@ -1,4 +1,11 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, {
+  Suspense,
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+} from 'react';
+import { useSearchParams } from 'next/navigation';
 import {
   ChatAiContext,
   IMessage,
@@ -87,31 +94,19 @@ function ChatAiContextProvider({ children }: IProps) {
     if (!id) setActiveProjectChip(null);
   };
 
-  // Sync с ?projectId= URL — клиентский SPA-роутинг сам не дёргает
-  // провайдер при изменении query, поэтому слушаем popstate/pushstate.
-  useEffect(() => {
-    if (typeof window === 'undefined') return;
-
-    const readFromUrl = () => {
-      try {
-        const u = new URL(window.location.href);
-        const next = u.searchParams.get('projectId') || null;
-        if (next !== activeProjectIdRef.current) {
-          setActiveProjectIdState(next);
-          if (!next) setActiveProjectChip(null);
-        }
-      } catch {
-        /* noop */
-      }
-    };
-
-    readFromUrl();
-    window.addEventListener('popstate', readFromUrl);
-    // Next.js `router.push` issues a custom event in some setups; в любом
-    // случае polling-fallback тут не нужен — компонент сам set'ит chip.
-    return () => {
-      window.removeEventListener('popstate', readFromUrl);
-    };
+  // Реактивная синхронизация ?projectId=<id> → context. Раньше слушали
+  // popstate, но Next.js `router.push` его не выбрасывает — поэтому
+  // при клике на проект в сайдбаре URL менялся, а активный проект
+  // подхватывался только после полного reload. Через useSearchParams
+  // обновление приходит синхронно, без дополнительных событий.
+  //
+  // useSearchParams требует Suspense boundary в App Router, поэтому
+  // вынесен в отдельный child-компонент, обёрнутый ниже в <Suspense />.
+  const handleProjectIdFromUrl = useCallback((next: string | null) => {
+    if (next !== activeProjectIdRef.current) {
+      setActiveProjectIdState(next);
+      if (!next) setActiveProjectChip(null);
+    }
   }, []);
 
   const setModel = (modelValue: string) => {
@@ -580,9 +575,29 @@ function ChatAiContextProvider({ children }: IProps) {
         setActiveProjectChip,
       }}
     >
+      {/* URL → state sync. Render-free, обёрнут в Suspense, потому что
+          useSearchParams в App Router требует boundary. */}
+      <Suspense fallback={null}>
+        <ProjectIdUrlSync onChange={handleProjectIdFromUrl} />
+      </Suspense>
       {children}
     </ChatAiContext.Provider>
   );
+}
+
+// Невидимый bridge: читает ?projectId= и пушит его в context.
+// Реактивно отрабатывает router.push/back/forward без reload.
+function ProjectIdUrlSync({
+  onChange,
+}: {
+  onChange: (id: string | null) => void;
+}) {
+  const searchParams = useSearchParams();
+  const projectIdFromUrl = searchParams?.get('projectId') || null;
+  useEffect(() => {
+    onChange(projectIdFromUrl);
+  }, [projectIdFromUrl, onChange]);
+  return null;
 }
 
 export default ChatAiContextProvider;

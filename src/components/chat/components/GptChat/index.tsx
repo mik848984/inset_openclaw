@@ -26,6 +26,8 @@ import {
 import {
   MdAutoAwesome,
   MdDelete,
+  MdImage,
+  MdPsychology,
   MdSend,
   MdSearch,
   MdSmartToy,
@@ -391,6 +393,13 @@ function GptChat() {
     { color: 'rgba(245,245,247,0.45)' },
   );
 
+  // Floating composer card surface — поднято из JSX, чтобы не нарушать
+  // rules-of-hooks (useColorModeValue нельзя вызывать внутри рендера).
+  const composerCardBg = useColorModeValue(
+    'rgba(255,255,255,0.86)',
+    'rgba(22,24,33,0.78)',
+  );
+
   const handleChange = (Event: any) => {
     setInputCode(Event.target.value);
   };
@@ -607,48 +616,8 @@ const handleSend = async (messageOverride?: string) => {
       minWidth={0}
       overflowX="hidden"
     >
-      {/* ── Floating stop button — glass pill ───────────────────── */}
-      <Flex
-        onClick={abortRequest}
-        borderRadius="9999px"
-        position="fixed"
-        bg={surfaceGlass}
-        backdropFilter="blur(14px) saturate(160%)"
-        border="1px solid"
-        borderColor={borderSubtle}
-        boxShadow="0 4px 16px rgba(0,0,0,0.06)"
-        bottom={{ base: '140px', md: '180px' }}
-        left="50%"
-        zIndex={30}
-        transform={{ base: 'translate(-50%, 0)', xl: 'translate(45%, 0)' }}
-        transition="opacity 0.2s ease, transform 0.18s ease"
-        opacity={loading ? '1' : '0'}
-        pointerEvents={loading ? 'all' : 'none'}
-        cursor="pointer"
-        _hover={{
-          transform: {
-            base: 'translate(-50%, -1px)',
-            xl: 'translate(45%, -1px)',
-          },
-        }}
-        px="2px"
-        maxWidth="calc(100% - 24px)"
-      >
-        <Button
-          disabled={!loading}
-          variant="ghost"
-          color="red.500"
-          borderRadius="9999px"
-          fontSize="14px"
-          fontWeight="500"
-          letterSpacing="-0.2px"
-          h="34px"
-          _hover={{ bg: 'transparent' }}
-          leftIcon={<Icon as={FaStopCircle} width="15px" height="15px" />}
-        >
-          Остановить
-        </Button>
-      </Flex>
+      {/* Stop generation теперь живёт прямо в send-кнопке composer'а:
+          никакой отдельной плавающей таблетки посреди экрана. */}
 
       {/* ── Content row (1fr) — centered column ────────────────── */}
       <Box
@@ -914,52 +883,69 @@ const handleSend = async (messageOverride?: string) => {
         </Box>
       </Box>
 
-      {/* ── Composer (sticky) — Liquid Glass dock ─────────────────── */}
+      {/* ── Composer — floating card (Apple/Claude/DeepSeek-style) ──
+          Sticky-wrapper прозрачен. Внутри:
+          – pointer-events:none fade-overlay, через который текст ответа
+            элегантно уезжает под composer при скролле;
+          – единая центрированная floating card с моделью, режимами,
+            input'ом и send/stop в одной поверхности. */}
       <Box
         position="sticky"
         bottom="0"
         zIndex={20}
-        bg={surfaceGlass}
-        backdropFilter="blur(22px) saturate(180%)"
-        borderTop="1px solid"
-        borderColor={borderGlass}
-        boxShadow={composerShadow}
-        marginBottom="-30px"
         width="100%"
         maxWidth="100%"
         minWidth={0}
         overflowX="hidden"
-        sx={{
-          WebkitBackdropFilter: 'blur(22px) saturate(180%)',
-          position: 'sticky',
-          // Top-light highlight (Apple dock material)
-          '&::before': {
-            content: '""',
-            position: 'absolute',
-            top: '0',
-            left: '0',
-            right: '0',
-            height: '40%',
-            pointerEvents: 'none',
-            background: glassShine,
-            opacity: 0.65,
-            zIndex: 0,
-          },
-          '& > *': { position: 'relative', zIndex: 1 },
-        }}
+        pointerEvents="none"
       >
+        {/* Soft top fade — text scrolls under */}
         <Box
-          maxWidth="980px"
+          position="absolute"
+          left="0"
+          right="0"
+          bottom="100%"
+          h={{ base: '64px', md: '88px' }}
+          pointerEvents="none"
+          bgGradient={`linear(to-t, ${pageBg} 0%, ${pageBg} 25%, transparent 100%)`}
+          aria-hidden
+        />
+        <Box
+          maxWidth="820px"
           mx="auto"
           width="100%"
           minWidth={0}
-          px={{ base: '12px', md: '16px' }}
-          pt={{ base: '10px', md: '14px' }}
+          px={{ base: '12px', md: '20px' }}
+          pt={{ base: '6px', md: '8px' }}
           pb={{
             base: 'calc(10px + env(safe-area-inset-bottom))',
-            md: '14px',
+            md: '18px',
           }}
+          pointerEvents="auto"
         >
+          {/* ── Floating composer card ──────────────────────────────
+              Один скруглённый surface объединяет attachments, режимы и
+              input. Тонкая hairline + двухслойная мягкая тень + лёгкий
+              backdrop-blur — премиальный «не-футер» материал. */}
+          <Box
+            bg={composerCardBg}
+            border="1px solid"
+            borderColor={borderSubtle}
+            borderRadius={{ base: '20px', md: '24px' }}
+            boxShadow="0 1px 2px rgba(15,23,42,0.05), 0 12px 36px -16px rgba(15,23,42,0.18)"
+            backdropFilter="blur(14px) saturate(160%)"
+            sx={{
+              WebkitBackdropFilter: 'blur(14px) saturate(160%)',
+            }}
+            px={{ base: '10px', md: '14px' }}
+            py={{ base: '8px', md: '10px' }}
+            transition="border-color 0.16s ease, box-shadow 0.16s ease"
+            _focusWithin={{
+              borderColor: borderActive,
+              boxShadow:
+                '0 1px 2px rgba(15,23,42,0.06), 0 12px 36px -14px rgba(0,102,204,0.18), 0 0 0 3px rgba(0,102,204,0.08)',
+            }}
+          >
           {/* Attachments accordion (Gemini only) */}
           {model?.includes('gemini') && attachmentsService.hasAttachments() && (
             <Accordion
@@ -1039,342 +1025,337 @@ const handleSend = async (messageOverride?: string) => {
             </Accordion>
           )}
 
-          {/* Chips — uniform 32px height, horizontally scrollable on overflow */}
+          {/* ── Top control row: model + mode toggles + delete ──── */}
           <Flex
-            className="models"
-            overflowX="auto"
-            overflowY="hidden"
+            align="center"
             gap="6px"
-            mb="10px"
             width="100%"
-            maxWidth="100%"
             minWidth={0}
-            sx={{
-              '::-webkit-scrollbar': { display: 'none' },
-              scrollbarWidth: 'none',
-              WebkitOverflowScrolling: 'touch',
-            }}
+            mb="6px"
           >
-            {/* Model selector chip — opens ModelsModal.
-                Not a toggle: leading robot icon + model name + chevron. */}
             <Flex
-              as="button"
-              type="button"
-              onClick={() => setModelsModalOpen!(true)}
-              aria-label="Выбрать модель"
-              title="Выбрать модель"
+              className="models"
+              overflowX="auto"
+              overflowY="hidden"
               gap="6px"
-              align="center"
-              h="32px"
-              bg={surface}
-              border="1px solid"
-              borderColor={border}
-              borderRadius="9999px"
-              pl="12px"
-              pr="8px"
-              transition="background 0.14s ease, border-color 0.14s ease, transform 0.12s ease"
-              cursor="pointer"
-              flexShrink={0}
-              minW={0}
-              maxW={{ base: '220px', sm: '260px', md: '320px' }}
-              _hover={{
-                bg: surfaceActive,
-                borderColor: borderActive,
+              flex="1 1 0"
+              minWidth={0}
+              sx={{
+                '::-webkit-scrollbar': { display: 'none' },
+                scrollbarWidth: 'none',
+                WebkitOverflowScrolling: 'touch',
               }}
-              _active={{ transform: 'scale(0.98)' }}
-              sx={{ WebkitTapHighlightColor: 'transparent' }}
             >
-              <Icon
-                as={MdSmartToy}
-                width="15px"
-                height="15px"
-                color={accentBlue}
+              {/* Model selector — opens ModelsModal. Not a toggle. */}
+              <Flex
+                as="button"
+                type="button"
+                onClick={() => setModelsModalOpen!(true)}
+                aria-label="Выбрать модель"
+                title="Выбрать модель"
+                gap="6px"
+                align="center"
+                h="28px"
+                bg="transparent"
+                border="1px solid"
+                borderColor={borderSubtle}
+                borderRadius="9999px"
+                pl="10px"
+                pr="6px"
+                cursor="pointer"
                 flexShrink={0}
-              />
-              <Text
-                fontSize="13px"
-                fontWeight="500"
-                letterSpacing="-0.2px"
-                color={textPrimary}
-                noOfLines={1}
-                overflow="hidden"
-                textOverflow="ellipsis"
-                whiteSpace="nowrap"
                 minW={0}
+                maxW={{ base: '180px', sm: '220px', md: '280px' }}
+                _hover={{ bg: surfaceElevated, borderColor: borderActive }}
+                _active={{ transform: 'scale(0.98)' }}
+                transition="background-color 0.14s ease, border-color 0.14s ease, transform 0.12s ease"
+                sx={{ WebkitTapHighlightColor: 'transparent' }}
               >
-                {getModelTitle(model)}
-              </Text>
-              <Icon
-                as={MdKeyboardArrowDown}
-                width="16px"
-                height="16px"
-                color={textSecondary}
+                <Icon
+                  as={MdSmartToy}
+                  boxSize="13px"
+                  color={accentBlue}
+                  flexShrink={0}
+                />
+                <Text
+                  as="span"
+                  fontSize="12px"
+                  fontWeight="500"
+                  letterSpacing="-0.1px"
+                  color={textPrimary}
+                  noOfLines={1}
+                  overflow="hidden"
+                  textOverflow="ellipsis"
+                  whiteSpace="nowrap"
+                  minW={0}
+                >
+                  {getModelTitle(model)}
+                </Text>
+                <Icon
+                  as={MdKeyboardArrowDown}
+                  boxSize="14px"
+                  color={textSecondary}
+                  flexShrink={0}
+                  ml="-2px"
+                />
+              </Flex>
+
+              {/* Toggle: Web search */}
+              <Box
+                as="button"
+                type="button"
+                onClick={handleToggleWebSearch}
+                aria-label="Веб-поиск с источниками"
+                aria-pressed={webSearch}
+                title="Веб-поиск с источниками"
+                display="inline-flex"
+                alignItems="center"
+                gap="6px"
+                h="28px"
+                px="10px"
+                borderRadius="9999px"
+                bg={webSearch ? surfaceActive : 'transparent'}
+                border="1px solid"
+                borderColor={webSearch ? borderActive : borderSubtle}
+                color={webSearch ? accentBlue : textSecondary}
+                fontSize="12px"
+                fontWeight="500"
+                letterSpacing="-0.1px"
+                cursor="pointer"
                 flexShrink={0}
-                ml="-2px"
-              />
-            </Flex>
+                _hover={{
+                  bg: webSearch ? surfaceActive : surfaceElevated,
+                  color: webSearch ? accentBlue : textPrimary,
+                }}
+                _active={{ transform: 'scale(0.98)' }}
+                transition="background-color 0.14s ease, color 0.14s ease, border-color 0.14s ease, transform 0.12s ease"
+                sx={{ WebkitTapHighlightColor: 'transparent' }}
+              >
+                <Icon as={MdSearch} boxSize="13px" />
+                <Text as="span">Поиск</Text>
+              </Box>
 
-            {/* Web Search chip */}
-            <Flex
-              onClick={handleToggleWebSearch}
-              gap="6px"
-              align="center"
-              h="32px"
-              bg={webSearch ? surfaceActive : surface}
-              border="1px solid"
-              borderColor={webSearch ? borderActive : border}
-              borderRadius="9999px"
-              pl="10px"
-              pr="4px"
-              transition="background 0.14s ease, border-color 0.14s ease"
-              cursor="pointer"
-              flexShrink={0}
-            >
-              <Switch
-                size="sm"
-                style={{ pointerEvents: 'none' }}
-                isChecked={webSearch}
-              />
-              <Button
-                paddingLeft="8px"
-                paddingRight="12px"
-                variant="ghost"
-                size="sm"
-                h="26px"
-                fontSize="13px"
-                fontWeight="500"
-                letterSpacing="-0.2px"
-                color={webSearch ? accentBlue : textPrimary}
+              {/* Toggle: Image generation */}
+              <Box
+                as="button"
+                type="button"
+                onClick={() => setMode!('images')}
+                aria-label="Генерация изображений"
+                aria-pressed={mode === 'images'}
+                title="Генерация изображений"
+                display="inline-flex"
+                alignItems="center"
+                gap="6px"
+                h="28px"
+                px="10px"
                 borderRadius="9999px"
-                _hover={{ bg: 'transparent' }}
-                leftIcon={
-                  <Icon
-                    as={MdSearch}
-                    width="15px"
-                    height="15px"
-                    color={webSearch ? accentBlue : textPrimary}
-                  />
+                bg={mode === 'images' ? surfaceActive : 'transparent'}
+                border="1px solid"
+                borderColor={
+                  mode === 'images' ? borderActive : borderSubtle
                 }
+                color={mode === 'images' ? accentBlue : textSecondary}
+                fontSize="12px"
+                fontWeight="500"
+                letterSpacing="-0.1px"
+                cursor="pointer"
+                flexShrink={0}
+                _hover={{
+                  bg: mode === 'images' ? surfaceActive : surfaceElevated,
+                  color: mode === 'images' ? accentBlue : textPrimary,
+                }}
+                _active={{ transform: 'scale(0.98)' }}
+                transition="background-color 0.14s ease, color 0.14s ease, border-color 0.14s ease, transform 0.12s ease"
+                sx={{ WebkitTapHighlightColor: 'transparent' }}
               >
-                Поиск
-                {webSearch && (
-                  <Text
-                    as="span"
-                    ml="6px"
-                    fontSize="11px"
-                    fontWeight="500"
-                    opacity={0.78}
-                    letterSpacing="-0.1px"
-                  >
-                    · с источниками
-                  </Text>
-                )}
-              </Button>
+                <Icon as={MdImage} boxSize="13px" />
+                <Text
+                  as="span"
+                  display={{ base: 'none', sm: 'inline' }}
+                >
+                  Картинки
+                </Text>
+                <Text
+                  as="span"
+                  display={{ base: 'inline', sm: 'none' }}
+                >
+                  Арт
+                </Text>
+              </Box>
+
+              {/* Toggle: Reasoning */}
+              <Box
+                as="button"
+                type="button"
+                onClick={() =>
+                  setReasoningEnabled!(!reasoningEnabled)
+                }
+                aria-label="Показывать ход мысли модели"
+                aria-pressed={!!reasoningEnabled}
+                title="Размышление"
+                display="inline-flex"
+                alignItems="center"
+                gap="6px"
+                h="28px"
+                px="10px"
+                borderRadius="9999px"
+                bg={reasoningEnabled ? surfaceActive : 'transparent'}
+                border="1px solid"
+                borderColor={
+                  reasoningEnabled ? borderActive : borderSubtle
+                }
+                color={reasoningEnabled ? accentBlue : textSecondary}
+                fontSize="12px"
+                fontWeight="500"
+                letterSpacing="-0.1px"
+                cursor="pointer"
+                flexShrink={0}
+                _hover={{
+                  bg: reasoningEnabled ? surfaceActive : surfaceElevated,
+                  color: reasoningEnabled ? accentBlue : textPrimary,
+                }}
+                _active={{ transform: 'scale(0.98)' }}
+                transition="background-color 0.14s ease, color 0.14s ease, border-color 0.14s ease, transform 0.12s ease"
+                sx={{ WebkitTapHighlightColor: 'transparent' }}
+              >
+                <Icon as={MdPsychology} boxSize="13px" />
+                <Text as="span">Размышление</Text>
+              </Box>
             </Flex>
 
-            {/* Image gen chip */}
-            <Flex
-              gap="6px"
-              align="center"
-              h="32px"
-              bg={mode === 'images' ? surfaceActive : surface}
-              border="1px solid"
-              borderColor={mode === 'images' ? borderActive : border}
-              borderRadius="9999px"
-              pl="10px"
-              pr="4px"
-              transition="background 0.14s ease, border-color 0.14s ease"
-              flexShrink={0}
-            >
-              <Switch
-                size="sm"
-                onChange={() => setMode!('images')}
-                isChecked={mode === 'images'}
-              />
-              <Button
-                paddingLeft="8px"
-                paddingRight="12px"
-                variant="ghost"
-                size="sm"
-                h="26px"
-                fontSize="13px"
-                fontWeight="500"
-                letterSpacing="-0.2px"
-                color={mode === 'images' ? accentBlue : textPrimary}
+            {/* Right: clear-chat — tiny muted icon, prevailing surface */}
+            {!!messages?.length && (
+              <Box
+                as="button"
+                type="button"
+                onClick={() => {
+                  if (loading) return;
+                  messagesService.currentDialog = '';
+                  setMessages!([]);
+                }}
+                aria-label="Очистить диалог"
+                title="Очистить диалог"
+                display="inline-flex"
+                alignItems="center"
+                justifyContent="center"
+                boxSize="28px"
                 borderRadius="9999px"
-                _hover={{ bg: 'transparent' }}
+                bg="transparent"
+                color={textSecondary}
+                cursor={loading ? 'not-allowed' : 'pointer'}
+                flexShrink={0}
+                opacity={loading ? 0.4 : 1}
+                pointerEvents={loading ? 'none' : 'auto'}
+                _hover={{ bg: surfaceElevated, color: 'red.400' }}
+                transition="background-color 0.14s ease, color 0.14s ease"
+                sx={{ WebkitTapHighlightColor: 'transparent' }}
               >
-                🖼️ Генерация изображений
-              </Button>
-            </Flex>
-
-            {/* Reasoning chip — controls visibility of model <think> blocks.
-                OFF by default. Persisted via useLocalStorageState in provider. */}
-            <Flex
-              onClick={() => setReasoningEnabled!(!reasoningEnabled)}
-              gap="6px"
-              align="center"
-              h="32px"
-              bg={reasoningEnabled ? surfaceActive : surface}
-              border="1px solid"
-              borderColor={reasoningEnabled ? borderActive : border}
-              borderRadius="9999px"
-              pl="10px"
-              pr="4px"
-              transition="background 0.14s ease, border-color 0.14s ease"
-              cursor="pointer"
-              flexShrink={0}
-            >
-              <Switch
-                size="sm"
-                style={{ pointerEvents: 'none' }}
-                isChecked={!!reasoningEnabled}
-              />
-              <Button
-                paddingLeft="8px"
-                paddingRight="12px"
-                variant="ghost"
-                size="sm"
-                h="26px"
-                fontSize="13px"
-                fontWeight="500"
-                letterSpacing="-0.2px"
-                color={reasoningEnabled ? accentBlue : textPrimary}
-                borderRadius="9999px"
-                _hover={{ bg: 'transparent' }}
-              >
-                🧩 Размышление
-              </Button>
-            </Flex>
+                <Icon as={MdDelete} boxSize="15px" />
+              </Box>
+            )}
           </Flex>
 
-          {/* Input + buttons row */}
+          {/* ── Input row — textarea + send/stop ───────────────── */}
           <Flex
             w="100%"
             maxWidth="100%"
             minWidth={0}
             alignItems="end"
-            gap={{ base: '6px', md: '8px' }}
+            gap="6px"
           >
-            <Flex
-              flex="1 1 0"
+            <Box flexShrink={0} pb="2px">
+              <Attachment />
+            </Box>
+            <Textarea
+              w="100%"
               minWidth={0}
-              alignItems="center"
-              gap="4px"
-              bg={pageBg}
-              border="1px solid"
-              borderColor={borderSubtle}
-              borderRadius="22px"
-              transition="border-color 0.16s ease, box-shadow 0.16s ease"
-              _focusWithin={{
-                borderColor: borderActive,
-                boxShadow: '0 0 0 3px rgba(0,102,204,0.10)',
+              onKeyDown={(event: any) => {
+                if (event.key !== 'Enter') return;
+                if (event.shiftKey) return;
+                event.preventDefault();
+                if (loading) return;
+                handleSend();
               }}
-              pl="6px"
-            >
-              <Box flexShrink={0}>
-                <Attachment />
-              </Box>
-              <Textarea
-                w="100%"
-                minWidth={0}
-                onKeyDown={(event: any) => {
-                  if (event.key !== 'Enter') return;
-                  if (event.shiftKey) return;
-
-                  event.preventDefault();
-                  handleSend();
-                }}
-                resize="none"
-                rows={1}
-                maxRows={8}
-                minH="44px"
-                border="none"
-                bg="transparent"
-                borderRadius="20px"
-                p={{ base: '11px 10px', md: '12px 16px' }}
-                pl="6px"
-                me="0"
-                overflowY="auto"
-                sx={{
-                  '::-webkit-scrollbar': {
-                    display: 'none',
-                  },
-                }}
-                fontSize={{ base: '14px', md: '15px' }}
-                fontWeight="400"
-                lineHeight="1.5"
-                letterSpacing="-0.2px"
-                _focus={{ borderColor: 'none', boxShadow: 'none' }}
-                _focusVisible={{ boxShadow: 'none' }}
-                color={textPrimary}
-                _placeholder={placeholderColor}
-                placeholder={
-                  webSearch
-                    ? 'Задайте вопрос — найду источники, изображения и контекст…'
-                    : 'Спросите ИИСеть…'
-                }
-                ref={ref}
-                minRows={1}
-                value={inputCode}
-                as={ResizeTextareaApp}
-                onChange={(e: any) => {
-                  handleChange(e);
-                }}
-              />
-            </Flex>
-
-            {/* Delete button — calm ghost pill */}
-            <Button
-              variant="ghost"
-              border="1px solid"
-              borderColor={borderSubtle}
-              bg={pageBg}
-              fontSize="sm"
-              borderRadius="9999px"
-              h={{ base: '40px', md: '44px' }}
-              w={{ base: '40px', md: '44px' }}
-              minW={{ base: '40px', md: '44px' }}
-              flexShrink={0}
-              p="0"
-              transition="border-color 0.16s ease, background 0.16s ease"
-              _hover={{
-                borderColor: 'rgba(239,68,68,0.30)',
-                bg: surfaceElevated,
+              resize="none"
+              rows={1}
+              maxRows={8}
+              minH="40px"
+              border="none"
+              bg="transparent"
+              borderRadius="14px"
+              px="6px"
+              py={{ base: '8px', md: '10px' }}
+              me="0"
+              overflowY="auto"
+              sx={{
+                '::-webkit-scrollbar': { display: 'none' },
               }}
-              _active={{ transform: 'scale(0.94)' }}
-              onClick={() => {
-                messagesService.currentDialog = '';
-                setMessages!([]);
+              fontSize={{ base: '15px', md: '16px' }}
+              fontWeight="400"
+              lineHeight="1.5"
+              letterSpacing="-0.2px"
+              _focus={{ borderColor: 'none', boxShadow: 'none' }}
+              _focusVisible={{ boxShadow: 'none' }}
+              color={textPrimary}
+              _placeholder={placeholderColor}
+              placeholder={
+                webSearch
+                  ? 'Задайте вопрос — найду источники…'
+                  : 'Спросите ИИСеть…'
+              }
+              ref={ref}
+              minRows={1}
+              value={inputCode}
+              as={ResizeTextareaApp}
+              onChange={(e: any) => {
+                handleChange(e);
               }}
-              isDisabled={loading || !messages?.length}
-              aria-label="Очистить диалог"
-            >
-              <Icon as={MdDelete} color="red.400" width="18px" height="18px" />
-            </Button>
+            />
 
-            {/* Send button — Apple Action Blue */}
+            {/* Send → Stop. Один аккуратный круг, морфит цветом/иконкой. */}
             <Button
               py="0"
               px="0"
               fontSize="sm"
               borderRadius="9999px"
-              w={{ base: '40px', md: '44px' }}
-              h={{ base: '40px', md: '44px' }}
-              minW={{ base: '40px', md: '44px' }}
+              w={{ base: '36px', md: '40px' }}
+              h={{ base: '36px', md: '40px' }}
+              minW={{ base: '36px', md: '40px' }}
               flexShrink={0}
-              bg={accentBlue}
-              color="white"
+              bg={loading ? 'transparent' : accentBlue}
+              color={loading ? 'red.500' : 'white'}
+              border={loading ? '1px solid' : '1px solid transparent'}
+              borderColor={loading ? 'rgba(239,68,68,0.32)' : 'transparent'}
               boxShadow="none"
-              transition="background 0.16s ease, transform 0.12s ease"
-              _hover={{ bg: accentBlueHover }}
+              transition="background-color 0.16s ease, color 0.12s ease, border-color 0.12s ease, transform 0.12s ease"
+              _hover={{
+                bg: loading
+                  ? 'rgba(239,68,68,0.08)'
+                  : accentBlueHover,
+                borderColor: loading
+                  ? 'rgba(239,68,68,0.55)'
+                  : 'transparent',
+              }}
               _active={{ transform: 'scale(0.94)' }}
-              onClick={() => handleSend()}
-              isLoading={loading}
+              _disabled={{
+                opacity: 0.4,
+                cursor: 'not-allowed',
+                bg: loading ? 'transparent' : accentBlue,
+              }}
+              onClick={() =>
+                loading ? abortRequest?.() : handleSend()
+              }
+              isDisabled={!loading && !inputCode.trim()}
+              aria-label={loading ? 'Остановить' : 'Отправить'}
+              title={loading ? 'Остановить' : 'Отправить'}
             >
-              <Icon as={MdSend} width="18px" height="18px" color="white" />
+              <Icon
+                as={loading ? FaStopCircle : MdSend}
+                boxSize={loading ? '16px' : '18px'}
+              />
             </Button>
           </Flex>
+          </Box>{/* ── /Floating composer card */}
         </Box>
       </Box>
     </Grid>
@@ -1439,22 +1420,22 @@ function ProjectChatBanner({
 
   const accentBlue = useColorModeValue('#0066cc', '#2997ff');
   const accentBlueHover = useColorModeValue('#0071e3', '#5fb1ff');
-  const surface = useColorModeValue(
-    'rgba(255,255,255,0.72)',
-    'rgba(13,18,34,0.62)',
-  );
-  const border = useColorModeValue(
-    'rgba(0,0,0,0.07)',
+  // Apple-like light surface — без backdrop-blur и тёмного glass,
+  // которые делали панель похожей на админ-dashboard и конфликтовали
+  // со скроллом чата.
+  const surface = useColorModeValue('#ffffff', 'rgba(28,28,32,0.78)');
+  const hairline = useColorModeValue(
+    'rgba(0,0,0,0.08)',
     'rgba(255,255,255,0.10)',
   );
-  const borderActive = useColorModeValue(
-    'rgba(0,102,204,0.32)',
-    'rgba(41,151,255,0.36)',
+  const accentSoftBg = useColorModeValue(
+    'rgba(0,102,204,0.10)',
+    'rgba(41,151,255,0.16)',
   );
   const textPrimary = useColorModeValue('#1d1d1f', '#f5f5f7');
   const textSecondary = useColorModeValue(
     '#6e6e73',
-    'rgba(245,245,247,0.65)',
+    'rgba(245,245,247,0.62)',
   );
 
   // Если project ещё не загружен, но есть chip (например, из стрима) —
@@ -1484,242 +1465,277 @@ function ProjectChatBanner({
     );
   };
 
+  // ── Apple-like project workspace panel ──────────────────────────
+  // Цели:
+  //   1) лёгкая светлая поверхность вместо glass/dark dashboard;
+  //   2) однозначный primary CTA для источников — главная скрытая
+  //      фича «Умных проектов»;
+  //   3) внятный empty-state, когда источников нет;
+  //   4) «Выйти из проекта» как тихий text-link, а не chip.
+  const hasZeroSources =
+    typeof sourceCount === 'number' && sourceCount === 0;
+  const FONT_TEXT =
+    "'SF Pro Text', -apple-system, BlinkMacSystemFont, system-ui, sans-serif";
+  const FONT_DISPLAY =
+    "'SF Pro Display', -apple-system, BlinkMacSystemFont, system-ui, sans-serif";
+
   return (
     <Flex
       direction="column"
-      gap="10px"
-      px={{ base: '14px', md: '16px' }}
-      py={{ base: '10px', md: '12px' }}
-      borderRadius={{ base: '14px', md: '16px' }}
       bg={surface}
       border="1px solid"
-      borderColor={borderActive}
-      backdropFilter="blur(18px) saturate(180%)"
-      sx={{ WebkitBackdropFilter: 'blur(18px) saturate(180%)' }}
+      borderColor={hairline}
+      borderRadius={{ base: '14px', md: '16px' }}
+      boxShadow="0 1px 2px rgba(15,23,42,0.04), 0 6px 20px -10px rgba(15,23,42,0.10)"
+      overflow="hidden"
       width="100%"
       maxW="100%"
       minW={0}
     >
-      {/* Top row: label + title + Отключить */}
+      {/* ── Header — eyebrow + title + Выйти из проекта ─────────── */}
       <Flex
-        align="center"
-        justify="space-between"
-        gap="10px"
-        minW={0}
-        flexWrap="wrap"
+        direction="column"
+        gap="6px"
+        px={{ base: '14px', md: '18px' }}
+        pt={{ base: '14px', md: '16px' }}
+        pb={{ base: '12px', md: '14px' }}
       >
-        <Box minW={0} flex="1 1 0">
-          <Flex align="center" gap="8px" minW={0} flexWrap="wrap">
-            <Box
-              px="8px"
-              py="2px"
-              borderRadius="9999px"
-              bg="rgba(0,102,204,0.10)"
-              color={accentBlue}
+        <Flex align="center" justify="space-between" gap="10px" minW={0}>
+          <Flex align="center" gap="8px" minW={0}>
+            <Flex
+              boxSize="22px"
+              borderRadius="6px"
+              bg={accentSoftBg}
+              align="center"
+              justify="center"
+              flexShrink={0}
             >
-              <Text
-                fontFamily="'SF Pro Text', -apple-system, system-ui, sans-serif"
-                fontSize="10px"
-                fontWeight="700"
-                letterSpacing="0.4px"
-                textTransform="uppercase"
-              >
-                Рабочая комната
-              </Text>
-            </Box>
+              <Icon as={MdAutoAwesome} boxSize="13px" color={accentBlue} />
+            </Flex>
             <Text
-              fontFamily="'SF Pro Display', -apple-system, system-ui, sans-serif"
-              fontSize={{ base: '13px', md: '14px' }}
-              fontWeight="600"
-              color={textPrimary}
-              letterSpacing="-0.15px"
+              fontFamily={FONT_TEXT}
+              fontSize="10px"
+              fontWeight="700"
+              letterSpacing="0.5px"
+              textTransform="uppercase"
+              color={accentBlue}
               noOfLines={1}
-              wordBreak="break-word"
-              minW={0}
             >
-              {title || (isLoading ? 'Загрузка…' : '')}
+              Рабочая комната
             </Text>
           </Flex>
-          {nextStep && (
-            <Text
-              mt="2px"
-              fontFamily="'SF Pro Text', -apple-system, system-ui, sans-serif"
-              fontSize="12px"
-              color={textSecondary}
-              lineHeight="1.4"
-              noOfLines={2}
-              wordBreak="break-word"
-            >
-              Следующий шаг: {nextStep}
-            </Text>
-          )}
-          {(typeof sourceCount === 'number' ||
-            typeof memoryCount === 'number') && (
-            <Text
-              mt="2px"
-              fontSize="11px"
-              color={textSecondary}
-              letterSpacing="-0.05px"
-            >
-              Источники: {sourceCount ?? 0} · Память: {memoryCount ?? 0}
-            </Text>
-          )}
-        </Box>
-        <Button
-          onClick={onDisable}
-          size="xs"
-          h="28px"
-          px="12px"
-          borderRadius="9999px"
-          bg="transparent"
+          <Box
+            as="button"
+            type="button"
+            onClick={onDisable}
+            fontFamily={FONT_TEXT}
+            fontSize="12px"
+            fontWeight="500"
+            color={textSecondary}
+            bg="transparent"
+            cursor="pointer"
+            sx={{ WebkitTapHighlightColor: 'transparent' }}
+            _hover={{ color: textPrimary }}
+            transition="color 0.15s ease"
+            flexShrink={0}
+            px="2px"
+            py="2px"
+            borderRadius="6px"
+            aria-label="Выйти из проекта"
+          >
+            Выйти из проекта
+          </Box>
+        </Flex>
+
+        <Text
+          fontFamily={FONT_DISPLAY}
+          fontSize={{ base: '17px', md: '20px' }}
+          fontWeight="600"
           color={textPrimary}
-          border="1px solid"
-          borderColor={border}
-          fontFamily="'SF Pro Text', -apple-system, system-ui, sans-serif"
-          fontWeight="500"
-          fontSize="11px"
-          _hover={{
-            borderColor: accentBlue,
-            bg: 'rgba(0,102,204,0.06)',
-            color: accentBlue,
-          }}
-          flexShrink={0}
+          letterSpacing="-0.32px"
+          lineHeight="1.2"
+          noOfLines={1}
+          wordBreak="break-word"
         >
-          Отключить
-        </Button>
+          {title || (isLoading ? 'Загрузка…' : '')}
+        </Text>
+
+        {nextStep && (
+          <Text
+            fontFamily={FONT_TEXT}
+            fontSize="13px"
+            color={textSecondary}
+            lineHeight="1.45"
+            noOfLines={2}
+            wordBreak="break-word"
+          >
+            Следующий шаг: {nextStep}
+          </Text>
+        )}
       </Flex>
 
-      {/* Project tool buttons row — открыть источники / сравнить с веб */}
-      {(onOpenSources || onCompareWithWeb) && (
-        <Flex
-          gap="6px"
-          flexWrap="wrap"
-          minW={0}
-          maxW="100%"
-        >
-          {onOpenSources && (
-            <Button
-              onClick={onOpenSources}
-              size="xs"
-              h="28px"
-              px="12px"
-              borderRadius="9999px"
-              bg="rgba(0,102,204,0.10)"
-              border="1px solid"
-              borderColor="rgba(0,102,204,0.32)"
-              color={accentBlue}
-              fontFamily="'SF Pro Text', -apple-system, system-ui, sans-serif"
-              fontWeight="600"
-              fontSize="11px"
-              _hover={{
-                bg: 'rgba(0,102,204,0.18)',
-                borderColor: accentBlue,
-              }}
-            >
-              Источники{typeof sourceCount === 'number' ? ` · ${sourceCount}` : ''}
-            </Button>
-          )}
-          {onCompareWithWeb && (
-            <Button
-              onClick={onCompareWithWeb}
-              size="xs"
-              h="28px"
-              px="12px"
-              borderRadius="9999px"
-              bg="transparent"
-              border="1px solid"
-              borderColor={border}
-              color={textPrimary}
-              fontFamily="'SF Pro Text', -apple-system, system-ui, sans-serif"
-              fontWeight="500"
-              fontSize="11px"
-              _hover={{
-                borderColor: accentBlue,
-                color: accentBlue,
-                bg: 'rgba(0,102,204,0.06)',
-              }}
-            >
-              Сравнить с интернетом
-            </Button>
-          )}
-        </Flex>
-      )}
+      {/* ── Divider ──────────────────────────────────────────────── */}
+      <Box h="1px" bg={hairline} />
 
-      {/* Quick-action chips row */}
-      {onSendAction && projectSuggested.length > 0 && (
-        <Flex
-          gap="6px"
-          flexWrap="wrap"
-          overflowX="auto"
-          minW={0}
-          maxW="100%"
-          sx={{
-            '::-webkit-scrollbar': { display: 'none' },
-            scrollbarWidth: 'none',
-          }}
-        >
-          {projectSuggested.map((act) => (
-            <Box
-              key={act}
-              as="button"
-              type="button"
-              onClick={() => sendForAction(act)}
-              px="10px"
-              py="5px"
-              borderRadius="9999px"
-              bg="rgba(0,102,204,0.06)"
-              border="1px solid"
-              borderColor={border}
-              color={accentBlue}
-              fontFamily="'SF Pro Text', -apple-system, system-ui, sans-serif"
-              fontSize="11px"
-              fontWeight="600"
-              letterSpacing="-0.1px"
-              lineHeight="1.3"
-              cursor="pointer"
-              sx={{ WebkitTapHighlightColor: 'transparent' }}
-              _hover={{
-                bg: 'rgba(0,102,204,0.14)',
-                borderColor: accentBlue,
-              }}
-              flexShrink={0}
-              maxW="100%"
-              whiteSpace="nowrap"
-            >
-              {act}
-            </Box>
-          ))}
-          {/* «Следующий шаг» — отдельный chip, который прямо просит ИИ
-              сделать nextStep. Если nextStep пустой, скрываем. */}
-          {nextStep && (
-            <Box
-              as="button"
-              type="button"
-              onClick={() => sendForAction(nextStep)}
-              px="10px"
-              py="5px"
-              borderRadius="9999px"
-              bg={accentBlue}
-              border="1px solid"
-              borderColor={accentBlue}
-              color="white"
-              fontFamily="'SF Pro Text', -apple-system, system-ui, sans-serif"
-              fontSize="11px"
-              fontWeight="600"
-              letterSpacing="-0.1px"
-              lineHeight="1.3"
-              cursor="pointer"
-              sx={{ WebkitTapHighlightColor: 'transparent' }}
-              _hover={{ bg: accentBlueHover, borderColor: accentBlueHover }}
-              flexShrink={0}
-              maxW="100%"
-              whiteSpace="nowrap"
-            >
-              Следующий шаг
-            </Box>
-          )}
-        </Flex>
-      )}
+      {/* ── Actions row ──────────────────────────────────────────── */}
+      <Flex
+        direction="column"
+        gap="10px"
+        px={{ base: '14px', md: '18px' }}
+        py={{ base: '12px', md: '14px' }}
+      >
+        {hasZeroSources && (
+          <Text
+            fontFamily={FONT_TEXT}
+            fontSize="12px"
+            color={textSecondary}
+            lineHeight="1.45"
+          >
+            Добавьте файл, ссылку или заметку — ИИСеть будет отвечать с
+            учётом ваших материалов.
+          </Text>
+        )}
+
+        {(onOpenSources || onCompareWithWeb) && (
+          <Flex gap="8px" flexWrap="wrap" align="center" minW={0}>
+            {onOpenSources && (
+              <Button
+                onClick={onOpenSources}
+                bg={accentBlue}
+                color="white"
+                borderRadius="9999px"
+                h="34px"
+                px="16px"
+                fontFamily={FONT_TEXT}
+                fontWeight="500"
+                fontSize="13px"
+                letterSpacing="-0.1px"
+                _hover={{ bg: accentBlueHover }}
+                _active={{ transform: 'scale(0.98)' }}
+                transition="background-color 0.15s ease, transform 0.15s ease"
+                flexShrink={0}
+              >
+                {hasZeroSources
+                  ? 'Добавить источники'
+                  : `Источники · ${sourceCount}`}
+              </Button>
+            )}
+            {onCompareWithWeb && !hasZeroSources && (
+              <Button
+                onClick={onCompareWithWeb}
+                bg="transparent"
+                color={textPrimary}
+                border="1px solid"
+                borderColor={hairline}
+                borderRadius="9999px"
+                h="34px"
+                px="14px"
+                fontFamily={FONT_TEXT}
+                fontWeight="500"
+                fontSize="13px"
+                _hover={{
+                  borderColor: accentBlue,
+                  color: accentBlue,
+                  bg: 'transparent',
+                }}
+                _active={{ transform: 'scale(0.98)' }}
+                transition="border-color 0.15s ease, color 0.15s ease, transform 0.15s ease"
+                flexShrink={0}
+              >
+                Сравнить с интернетом
+              </Button>
+            )}
+            {typeof memoryCount === 'number' && memoryCount > 0 && (
+              <Text
+                ml={{ base: '0', md: 'auto' }}
+                fontFamily={FONT_TEXT}
+                fontSize="12px"
+                color={textSecondary}
+                letterSpacing="-0.05px"
+                flexShrink={0}
+              >
+                Память: {memoryCount}
+              </Text>
+            )}
+          </Flex>
+        )}
+
+        {onSendAction && projectSuggested.length > 0 && (
+          <Flex
+            gap="6px"
+            flexWrap="wrap"
+            overflowX="auto"
+            minW={0}
+            maxW="100%"
+            sx={{
+              '::-webkit-scrollbar': { display: 'none' },
+              scrollbarWidth: 'none',
+            }}
+          >
+            {projectSuggested.map((act) => (
+              <Box
+                key={act}
+                as="button"
+                type="button"
+                onClick={() => sendForAction(act)}
+                px="10px"
+                py="5px"
+                borderRadius="9999px"
+                bg="transparent"
+                border="1px solid"
+                borderColor={hairline}
+                color={textSecondary}
+                fontFamily={FONT_TEXT}
+                fontSize="12px"
+                fontWeight="500"
+                letterSpacing="-0.1px"
+                lineHeight="1.3"
+                cursor="pointer"
+                sx={{ WebkitTapHighlightColor: 'transparent' }}
+                _hover={{
+                  borderColor: accentBlue,
+                  color: accentBlue,
+                  bg: 'rgba(0,102,204,0.04)',
+                }}
+                transition="border-color 0.15s ease, color 0.15s ease, background-color 0.15s ease"
+                flexShrink={0}
+                maxW="100%"
+                whiteSpace="nowrap"
+              >
+                {act}
+              </Box>
+            ))}
+            {nextStep && (
+              <Box
+                as="button"
+                type="button"
+                onClick={() => sendForAction(nextStep)}
+                px="10px"
+                py="5px"
+                borderRadius="9999px"
+                bg={accentSoftBg}
+                border="1px solid"
+                borderColor="transparent"
+                color={accentBlue}
+                fontFamily={FONT_TEXT}
+                fontSize="12px"
+                fontWeight="600"
+                letterSpacing="-0.1px"
+                lineHeight="1.3"
+                cursor="pointer"
+                sx={{ WebkitTapHighlightColor: 'transparent' }}
+                _hover={{ bg: 'rgba(0,102,204,0.18)' }}
+                transition="background-color 0.15s ease"
+                flexShrink={0}
+                maxW="100%"
+                whiteSpace="nowrap"
+              >
+                → Следующий шаг
+              </Box>
+            )}
+          </Flex>
+        )}
+      </Flex>
     </Flex>
   );
 }

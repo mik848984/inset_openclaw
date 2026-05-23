@@ -13,7 +13,7 @@ import {
 import { NextAvatar } from '@/components/image/Avatar';
 import Brand from '@/components/sidebar/components/Brand';
 import Links from '@/components/sidebar/components/Links';
-import React, { PropsWithChildren, useContext } from 'react';
+import React, { PropsWithChildren, Suspense, useContext } from 'react';
 import { IRoute } from '@/types/navigation';
 import { FiLogOut } from 'react-icons/fi';
 import { useAppSession } from '@/utils/hooks/useAppSession';
@@ -73,7 +73,11 @@ function SidebarContent(props: SidebarContent) {
         <Box ps="0px" pe={{ md: '0px', '2xl': '0px' }}>
           <Links routes={routes} />
         </Box>
-        <ProjectSidebarSection />
+        {/* Suspense — useSearchParams внутри ProjectSidebarSection требует
+            явного boundary в App Router. fallback=null, чтобы не было flash. */}
+        <Suspense fallback={null}>
+          <ProjectSidebarSection />
+        </Suspense>
       </Stack>
       <SidebarCard />
       <Box h="24px" />

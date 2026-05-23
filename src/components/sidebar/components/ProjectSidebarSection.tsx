@@ -13,7 +13,6 @@ import {
   ModalFooter,
   ModalHeader,
   ModalOverlay,
-  Portal,
   Spinner,
   Text,
   Textarea,
@@ -328,30 +327,32 @@ function ProjectSidebarSection() {
       )}
 
       {/* ── Create modal ────────────────────────────────────────────
-          Chakra Modal сам портится в document.body через Portal, поэтому
-          корректно появляется поверх контента страницы. Раньше использо-
-          вался самодельный Modal (Salute Sheet) — он сидел в DOM-дереве
-          сайдбара и на desktop оказывался под основным контентом из-за
-          собственного stacking-context. Теперь — без layering-багов. */}
-      <Portal>
-        <Modal
-          isOpen={open}
-          onClose={() => setOpen(false)}
-          isCentered
-          size={{ base: 'full', md: 'lg' } as any}
-          motionPreset="slideInBottom"
-          autoFocus
-        >
-          <ModalOverlay
-            bg="rgba(0,0,0,0.45)"
-            sx={{
-              backdropFilter: 'blur(8px) saturate(140%)',
-              WebkitBackdropFilter: 'blur(8px) saturate(140%)',
-            }}
-            zIndex={3000}
-          />
-          <ModalContent
-            zIndex={3001}
+          Chakra Modal сам портится в document.body. Раньше его дополни-
+          тельно оборачивали в <Portal>, а sidebar (Drawer на mobile) под-
+          нимал свой stacking-context — модалка визуально оказывалась под
+          оверлеем. Убрали внешний Portal, подняли z-index выше любых
+          drawer/overlay/toast и оставили motionPreset для аккуратного
+          появления снизу на телефоне. */}
+      <Modal
+        isOpen={open}
+        onClose={() => setOpen(false)}
+        isCentered
+        size={{ base: 'full', md: 'lg' } as any}
+        motionPreset="slideInBottom"
+        autoFocus
+        closeOnOverlayClick
+        closeOnEsc
+      >
+        <ModalOverlay
+          bg="rgba(0,0,0,0.48)"
+          sx={{
+            backdropFilter: 'blur(14px) saturate(160%)',
+            WebkitBackdropFilter: 'blur(14px) saturate(160%)',
+          }}
+          zIndex={20000}
+        />
+        <ModalContent
+            zIndex={20001}
             mx={{ base: '16px', md: 'auto' }}
             my={{ base: '16px', md: 'auto' }}
             maxW={{ base: 'calc(100vw - 32px)', md: '640px' }}
@@ -536,7 +537,6 @@ function ProjectSidebarSection() {
             </ModalFooter>
           </ModalContent>
         </Modal>
-      </Portal>
     </Box>
   );
 }

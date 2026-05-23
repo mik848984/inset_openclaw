@@ -453,6 +453,28 @@ const homepageJsonLd = {
       inLanguage: "ru-RU",
       publisher: { "@id": "https://iiset.io/#organization" },
     },
+    {
+      "@type": "WebApplication",
+      "@id": "https://iiset.io/#webapp",
+      name: "ИИСеть",
+      url: "https://iiset.io/",
+      applicationCategory: "ProductivityApplication",
+      operatingSystem: "Web",
+      inLanguage: "ru-RU",
+      description:
+        "ИИ-чат, веб-поиск с источниками и генерация изображений в одном русскоязычном интерфейсе. Доступ к GPT-4o, Claude и Gemini без переключения сервисов.",
+      // Регистрация бесплатна; платные тарифы — отдельная страница.
+      // Указываем только подтверждённую бесплатную точку входа, без
+      // выдуманных цифр.
+      offers: {
+        "@type": "Offer",
+        price: "0",
+        priceCurrency: "RUB",
+        availability: "https://schema.org/InStock",
+        url: "https://iiset.io/others/sign-in",
+      },
+      provider: { "@id": "https://iiset.io/#organization" },
+    },
   ],
 };
 
@@ -568,7 +590,54 @@ export default function HomePage() {
         />
 
         <Box mx="auto" maxW="1040px" textAlign="center" position="relative">
-          <SectionEyebrow color={C.violet}>ИИ-платформа для работы и жизни</SectionEyebrow>
+          {/* ── Brand lockup — Apple product-page style ───────────────
+              Вертикальный logo + wordmark + тонкая caption-line.
+              Заменяет слабый текстовый бейдж. */}
+          <VStack spacing={{ base: "10px", md: "12px" }} mb={{ base: "28px", md: "36px" }}>
+            <Box position="relative" display="inline-flex">
+              <Box
+                position="absolute"
+                inset="-22px"
+                bg="radial-gradient(circle, rgba(0,102,204,0.12) 0%, transparent 70%)"
+                filter="blur(22px)"
+                pointerEvents="none"
+                aria-hidden
+              />
+              <img
+                src="/brand.png"
+                alt="ИИСеть"
+                style={{
+                  width: "52px",
+                  height: "52px",
+                  borderRadius: "14px",
+                  objectFit: "cover",
+                  position: "relative",
+                  boxShadow:
+                    "0 1px 2px rgba(15,23,42,0.06), 0 10px 30px -12px rgba(0,102,204,0.30)",
+                }}
+              />
+            </Box>
+            <Text
+              fontFamily={FD}
+              fontSize={{ base: "22px", md: "26px" }}
+              fontWeight="600"
+              letterSpacing="-0.02em"
+              lineHeight="1.1"
+              color={C.ink}
+            >
+              ИИСеть
+            </Text>
+            <Text
+              fontFamily={FT}
+              fontSize="13px"
+              fontWeight="500"
+              letterSpacing="0.18em"
+              textTransform="uppercase"
+              color={C.actionBlue}
+            >
+              AI · Поиск · Картинки
+            </Text>
+          </VStack>
 
           <Heading
             as="h1"
@@ -917,22 +986,138 @@ export default function HomePage() {
                   lineHeight="1.5"
                   fontFamily={FT}
                   color={C.inkSecondary}
-                  mb="20px"
+                  mb="16px"
                 >
                   Опишите идею — получите иллюстрацию за секунды.
                 </Text>
 
-                <SimpleGrid columns={4} spacing="6px" mb="18px">
-                  {[C.actionBlue, C.violet, "#a5b4fc", "#0b3b8c"].map((bg, i) => (
+                {/* Prompt pill — имитация ввода пользователя */}
+                <Flex
+                  align="center"
+                  gap="10px"
+                  px="12px"
+                  py="10px"
+                  borderRadius="12px"
+                  bg={C.canvasFog}
+                  mb="12px"
+                >
+                  <Box
+                    boxSize="6px"
+                    borderRadius="50%"
+                    bg={C.actionBlue}
+                    flexShrink={0}
+                  />
+                  <Text
+                    fontSize="12px"
+                    fontFamily={FT}
+                    color={C.inkSecondary}
+                    lineHeight="1.4"
+                    noOfLines={1}
+                  >
+                    «Футуристичный офис в стиле Apple, мягкий свет»
+                  </Text>
+                </Flex>
+
+                {/* 2×2 CSS-art preview gallery */}
+                <SimpleGrid columns={2} spacing="8px" mb="12px">
+                  {[
+                    {
+                      label: "Фото",
+                      // Photoreal: pearl bg + glass sphere highlight + deep tone
+                      background:
+                        "radial-gradient(circle at 35% 32%, rgba(255,255,255,0.95) 0%, rgba(255,255,255,0.35) 16%, transparent 32%), radial-gradient(circle at 65% 70%, rgba(0,102,204,0.45) 0%, rgba(0,102,204,0) 55%), linear-gradient(135deg, #eaf0fb 0%, #cfd9ef 100%)",
+                    },
+                    {
+                      label: "Иллюстрация",
+                      // Flat geometric — warm pastel + circle + soft rect overlay
+                      background:
+                        "radial-gradient(circle at 72% 32%, #ffb8a0 0%, #ffb8a0 22%, transparent 23%), linear-gradient(160deg, #fff6ec 0%, #ffe2cf 100%)",
+                    },
+                    {
+                      label: "Концепт",
+                      // Concept-art: deep blue night + pink/indigo orbs
+                      background:
+                        "radial-gradient(circle at 22% 78%, rgba(255,137,194,0.85) 0%, transparent 48%), radial-gradient(circle at 78% 28%, rgba(94,92,230,0.85) 0%, transparent 55%), linear-gradient(135deg, #1a1b3a 0%, #2c1a4a 100%)",
+                      labelDark: true,
+                    },
+                    {
+                      label: "Абстракция",
+                      // Mesh gradient — three soft radial stops
+                      background:
+                        "radial-gradient(at 28% 28%, #ffe57f 0px, transparent 50%), radial-gradient(at 72% 28%, #82d4ff 0px, transparent 50%), radial-gradient(at 50% 80%, #b8a4ff 0px, transparent 50%), linear-gradient(135deg, #fdf6ee 0%, #f3edf8 100%)",
+                    },
+                  ].map((card, i) => (
                     <Box
                       key={i}
-                      bg={bg}
-                      borderRadius="8px"
-                      h="46px"
-                      opacity={0.85}
-                    />
+                      position="relative"
+                      borderRadius="12px"
+                      overflow="hidden"
+                      border="1px solid"
+                      borderColor="rgba(15,23,42,0.06)"
+                      boxShadow="inset 0 1px 0 rgba(255,255,255,0.55), 0 1px 2px rgba(15,23,42,0.04)"
+                      sx={{
+                        aspectRatio: "1 / 1",
+                        background: card.background,
+                      }}
+                    >
+                      {/* Inner gloss highlight for premium feel */}
+                      <Box
+                        position="absolute"
+                        top="0"
+                        left="0"
+                        right="0"
+                        h="40%"
+                        pointerEvents="none"
+                        sx={{
+                          background:
+                            "linear-gradient(180deg, rgba(255,255,255,0.18) 0%, rgba(255,255,255,0) 100%)",
+                        }}
+                      />
+                      {/* Small floating category label */}
+                      <Box
+                        position="absolute"
+                        bottom="6px"
+                        left="6px"
+                        px="7px"
+                        py="2px"
+                        borderRadius="9999px"
+                        bg={card.labelDark ? "rgba(255,255,255,0.18)" : "rgba(255,255,255,0.78)"}
+                        sx={{
+                          backdropFilter: "blur(8px)",
+                          WebkitBackdropFilter: "blur(8px)",
+                        }}
+                      >
+                        <Text
+                          fontSize="10px"
+                          fontWeight="600"
+                          fontFamily={FT}
+                          color={card.labelDark ? "white" : C.ink}
+                          letterSpacing="-0.02em"
+                        >
+                          {card.label}
+                        </Text>
+                      </Box>
+                    </Box>
                   ))}
                 </SimpleGrid>
+
+                {/* Meta line — AI-generated marker */}
+                <Flex align="center" gap="6px" mb="16px">
+                  <Box
+                    boxSize="5px"
+                    borderRadius="50%"
+                    bg={C.actionBlue}
+                    flexShrink={0}
+                  />
+                  <Text
+                    fontSize="11px"
+                    fontFamily={FT}
+                    color={C.inkTertiary}
+                    letterSpacing="-0.02em"
+                  >
+                    AI · готово за 3 секунды
+                  </Text>
+                </Flex>
 
                 <CtaSecondary href="/chat">Сгенерировать изображение</CtaSecondary>
               </Tile>

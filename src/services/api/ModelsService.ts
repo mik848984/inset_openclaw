@@ -1197,6 +1197,17 @@ async transformMessagesToQuery({ userMessages, user }: IImagesRequest) {
         }`,
       );
 
+      // Дедуп серперовских organic-результатов по link/url. Используется
+      // ниже для sourcesPayload / newsTimelinePayload / topResultsForScrape.
+      // (Прод-хотфикс — без него ReferenceError на запросе с web search.)
+      const dedupedOrganic = Array.from(
+        new Map(
+          (organic as any[])
+            .filter((item: any) => item && (item.link || item.url))
+            .map((item: any) => [item.link || item.url, item]),
+        ).values(),
+      );
+
       const buildFallbackMessages = () => [
         {
           role: 'system',

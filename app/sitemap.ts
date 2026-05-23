@@ -54,6 +54,31 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     },
   ];
 
+  // ── AI-инструменты (публичные страницы с собственным head.tsx) ───
+  const toolSlugs = [
+    'translator',
+    'essay',
+    'simplifier',
+    'seo-keywords',
+    'product-description',
+    'faq',
+    'email-enhancer',
+    'business-generator',
+    'name-generator',
+    'caption',
+    'hashtags-generator',
+    'domain-name-generator',
+    'pet-name-generator',
+    'plagiarism-checker',
+    'review-responder',
+  ];
+  const toolEntries: MetadataRoute.Sitemap = toolSlugs.map((slug) => ({
+    url: `${baseUrl}/${slug}`,
+    lastModified: now,
+    changeFrequency: 'monthly' as const,
+    priority: 0.55,
+  }));
+
   // ── Доступные life-agents (статически на диске) ───────────────────
   // Список синхронизирован с app/life-agents/*/page.tsx
   const lifeAgentSlugs = [
@@ -96,5 +121,10 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     console.warn('[sitemap] blog read failed:', err);
   }
 
-  return [...staticEntries, ...lifeAgentEntries, ...blogEntries];
+  return [
+    ...staticEntries,
+    ...toolEntries,
+    ...lifeAgentEntries,
+    ...blogEntries,
+  ];
 }
