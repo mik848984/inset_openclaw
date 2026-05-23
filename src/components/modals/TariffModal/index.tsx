@@ -8,13 +8,14 @@ import {
   useColorModeValue,
 } from '@chakra-ui/react';
 import { CloseIcon } from '@chakra-ui/icons';
-import React, { useContext } from 'react';
+import React, { useContext, useEffect, useRef } from 'react';
 import CardTariff from '@/components/modals/TariffModal/CardTariff';
 import Modal from '../Modal/Modal';
 import { getExpiredDate, getTariffName } from '../../../../app/profile/page';
 import { useUser } from '@/utils/hooks/useUser';
 import SubscriptionButton from '@/components/modals/TariffModal/SubscriptionButton';
 import { ModalContext } from '@/contexts/ModalContext';
+import { trackGoal } from '@/utils/metrics';
 
 interface IProps {
   open: boolean;
@@ -81,6 +82,21 @@ function TariffModal({ open, onClose }: IProps) {
     : isActive
     ? 'rgba(34,197,94,0.32)'
     : 'rgba(0,0,0,0.08)';
+
+  // Track paywall view
+  const hasTrackedOpen = useRef(false);
+  useEffect(() => {
+    if (open && !hasTrackedOpen.current) {
+      hasTrackedOpen.current = true;
+      trackGoal('paywall_viewed', {
+        grade: user?.subscription?.grade || 'none',
+        is_anonymous: !user,
+      });
+    }
+    if (!open) {
+      hasTrackedOpen.current = false;
+    }
+  }, [open, user]);
 
   return (
     <Modal
@@ -162,7 +178,7 @@ function TariffModal({ open, onClose }: IProps) {
             border="1px solid"
             borderColor={infoStripBorder}
             borderRadius="14px"
-            mb={{ base: '12px', md: '16px' }}
+            mb={{ base: '6px', md: '8px' }}
           >
             <Box
               w="6px"
@@ -185,6 +201,44 @@ function TariffModal({ open, onClose }: IProps) {
                 250 слов
               </Text>{' '}
               сгенерированного текста
+            </Text>
+          </Flex>
+
+          {/* Social proof strip */}
+          <Flex
+            align="center"
+            gap="10px"
+            px={{ base: '14px', md: '16px' }}
+            py={{ base: '12px', md: '12px' }}
+            bg={useColorModeValue(
+              'rgba(34,197,94,0.06)',
+              'rgba(34,197,94,0.10)',
+            )}
+            border="1px solid"
+            borderColor={useColorModeValue(
+              'rgba(34,197,94,0.18)',
+              'rgba(34,197,94,0.22)',
+            )}
+            borderRadius="14px"
+            mb={{ base: '12px', md: '16px' }}
+          >
+            <Box
+              w="6px"
+              h="6px"
+              borderRadius="50%"
+              bg="green.400"
+              flexShrink={0}
+            />
+            <Text
+              fontSize={{ base: '13px', md: '14px' }}
+              color={textPrimary}
+              letterSpacing="-0.1px"
+              lineHeight="1.5"
+            >
+              <Text as="span" fontWeight="600">
+                Более 5 000
+              </Text>{' '}
+              пользователей уже работают с ИИСетью ежедневно
             </Text>
           </Flex>
 
@@ -289,17 +343,34 @@ function TariffModal({ open, onClose }: IProps) {
           </Box>
 
           {/* Tariff cards */}
-          <Text
-            fontSize="11px"
-            fontWeight="600"
-            letterSpacing="0.6px"
-            textTransform="uppercase"
-            color={textSecondary}
+          <Flex
+            align="center"
+            justify="space-between"
             mb={{ base: '8px', md: '10px' }}
             ml="2px"
+            flexWrap="wrap"
+            gap="4px"
           >
-            Доступные тарифы
-          </Text>
+            <Text
+              fontSize="11px"
+              fontWeight="600"
+              letterSpacing="0.6px"
+              textTransform="uppercase"
+              color={textSecondary}
+            >
+              Доступные тарифы
+            </Text>
+            <Text
+              fontSize={{ base: '12px', md: '13px' }}
+              color={textSecondary}
+              letterSpacing="-0.1px"
+            >
+              Оформление занимает{' '}
+              <Text as="span" fontWeight="600" color={accentBlue}>
+                20 секунд
+              </Text>
+            </Text>
+          </Flex>
           <Grid
             gap={{ base: '10px', md: '12px' }}
             width="100%"

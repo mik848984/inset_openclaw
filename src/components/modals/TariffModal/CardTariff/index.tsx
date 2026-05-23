@@ -11,6 +11,7 @@ import { LiaBrainSolid } from 'react-icons/lia';
 import React, { useContext } from 'react';
 import { ModalContext } from '@/contexts/ModalContext';
 import { useUser } from '@/utils/hooks/useUser';
+import { trackGoal } from '@/utils/metrics';
 
 interface IProps {
   price: number;
@@ -65,12 +66,13 @@ function CardTariff({ price, grade, heading, description }: IProps) {
 
   const onCreatePayment = () => {
     if (isAnonymous) {
+      trackGoal('paywall_auth_required', { grade, price });
       setAuthorizationModalOpen!(true);
       return;
     }
 
     setGrade!(grade);
-
+    trackGoal('paywall_subscribe_click', { grade, price });
     setPaymentModalOpen!(true);
   };
 
@@ -190,30 +192,40 @@ function CardTariff({ price, grade, heading, description }: IProps) {
           </Flex>
         </Flex>
 
-        {/* CTA */}
-        <Button
-          w={{ base: '100%', md: 'auto' }}
-          onClick={(e: React.MouseEvent) => {
-            e.stopPropagation();
-            onCreatePayment();
-          }}
-          bg={accentBlue}
-          color="white"
-          borderRadius="9999px"
-          h={{ base: '44px', md: '46px' }}
-          px="22px"
-          fontFamily={FONT_APPLE_TEXT}
-          fontWeight="500"
-          fontSize="15px"
-          letterSpacing="-0.2px"
-          _hover={{ bg: accentBlueHover }}
-          _active={{ transform: 'scale(0.96)' }}
-          transition="background 0.16s ease, transform 0.12s ease"
-          boxShadow="0 1px 2px rgba(0,0,0,0.06)"
-          flexShrink={0}
-        >
-          Подписаться
-        </Button>
+        {/* CTA + trust micro-copy */}
+        <Flex direction="column" align={{ base: 'center', md: 'flex-end' }} gap="6px" flexShrink={0}>
+          <Button
+            w={{ base: '100%', md: 'auto' }}
+            onClick={(e: React.MouseEvent) => {
+              e.stopPropagation();
+              onCreatePayment();
+            }}
+            bg={accentBlue}
+            color="white"
+            borderRadius="9999px"
+            h={{ base: '44px', md: '46px' }}
+            px="22px"
+            fontFamily={FONT_APPLE_TEXT}
+            fontWeight="500"
+            fontSize="15px"
+            letterSpacing="-0.2px"
+            _hover={{ bg: accentBlueHover }}
+            _active={{ transform: 'scale(0.96)' }}
+            transition="background 0.16s ease, transform 0.12s ease"
+            boxShadow="0 1px 2px rgba(0,0,0,0.06)"
+          >
+            {grade === 'Free' ? 'Продолжить бесплатно' : `Начать за ${price} ₽`}
+          </Button>
+          <Text
+            fontSize="12px"
+            color={textSecondary}
+            letterSpacing="-0.1px"
+            lineHeight="1.4"
+            textAlign={{ base: 'center', md: 'right' }}
+          >
+            Отмена в любой момент · Без скрытых платежей
+          </Text>
+        </Flex>
       </Flex>
     </Box>
   );
