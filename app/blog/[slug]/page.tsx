@@ -50,6 +50,7 @@ export function generateMetadata({ params }: Props): Metadata {
   if (!post) {
     return {
       title: 'Статья не найдена — Блог ИИСеть',
+      robots: { index: false, follow: false },
     };
   }
 
@@ -63,14 +64,25 @@ export function generateMetadata({ params }: Props): Metadata {
   const authors = post.author ? [post.author] : ['Команда ИИСеть'];
 
   return {
+    metadataBase: new URL(siteBaseUrl),
     title,
     description,
+    alternates: {
+      canonical: url,
+    },
+    robots: {
+      index: true,
+      follow: true,
+    },
     openGraph: {
       title,
       description,
       url,
       type: 'article',
+      siteName: 'ИИСеть',
+      locale: 'ru_RU',
       publishedTime,
+      modifiedTime: publishedTime,
       authors,
       images: image
         ? [
@@ -109,9 +121,19 @@ export default function BlogPostPage({ params }: Props) {
       'Статья блога ИИСеть про искусственный интеллект, технологии и практические кейсы использования ИИСети.',
     datePublished: post.date ? new Date(post.date).toISOString() : undefined,
     dateModified: post.date ? new Date(post.date).toISOString() : undefined,
+    inLanguage: 'ru-RU',
     author: {
       '@type': 'Person',
       name: post.author || 'Команда ИИСеть',
+    },
+    publisher: {
+      '@type': 'Organization',
+      name: 'ИИСеть',
+      url: siteBaseUrl,
+      logo: {
+        '@type': 'ImageObject',
+        url: `${siteBaseUrl}/brand.png`,
+      },
     },
     mainEntityOfPage: {
       '@type': 'WebPage',

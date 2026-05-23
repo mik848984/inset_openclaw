@@ -1,5 +1,10 @@
 import { Icon } from './lib/chakra';
-import { MdAutoAwesome, MdHome, MdOutlineManageAccounts } from 'react-icons/md';
+import {
+  MdAutoAwesome,
+  MdHome,
+  MdOutlineManageAccounts,
+  MdEditDocument,
+} from 'react-icons/md';
 import { IoMdPerson } from 'react-icons/io';
 import { LuHistory } from 'react-icons/lu';
 import { RoundedChart } from '@/components/icons/Icons';
@@ -49,6 +54,15 @@ const routes: IRoute[] = [
     name: 'Новости и Статьи',
     path: '/blog',
     icon: <Icon as={LuHistory} width="20px" height="20px" color="inherit" />,
+    collapse: false,
+  },
+  {
+    admin: true,
+    name: 'Редактор блога',
+    path: '/blog/admin',
+    icon: (
+      <Icon as={MdEditDocument} width="20px" height="20px" color="inherit" />
+    ),
     collapse: false,
   },
   {

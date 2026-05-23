@@ -188,12 +188,40 @@ export default function RootLayout({ children }: { children: ReactNode }) {
           name="keywords"
           content="ИИСеть, Нейросети, GPT, DeepSeek, Chat GPT, Чат ГПТ, AI, Миджорни, генерация картинок, flux, stable diffusion"
         />
+
+        {/* Robots */}
+        <meta name="robots" content="index, follow" />
+        <meta
+          name="googlebot"
+          content="index, follow, max-image-preview:large, max-snippet:-1"
+        />
+        <meta name="yandex" content="index, follow" />
+
+        {/* Canonical */}
+        <link rel="canonical" href="https://iiset.io/" />
+
+        {/* Open Graph */}
+        <meta property="og:type" content="website" />
+        <meta property="og:site_name" content="ИИСеть" />
+        <meta property="og:locale" content="ru_RU" />
+        <meta property="og:url" content="https://iiset.io/" />
         <meta property="og:title" content="ИИСеть" />
         <meta
           property="og:description"
           content="ИИСеть – инновационная платформа генерации ИИ-контента. Создавайте уникальные тексты и изображения быстро и удобно. Бесплатный тестовый период!"
         />
         <meta property="og:image" content="https://iiset.io/brand.png" />
+        <meta property="og:image:alt" content="ИИСеть" />
+
+        {/* Twitter / X */}
+        <meta name="twitter:card" content="summary_large_image" />
+        <meta name="twitter:title" content="ИИСеть" />
+        <meta
+          name="twitter:description"
+          content="ИИСеть – инновационная платформа генерации ИИ-контента. Создавайте уникальные тексты и изображения быстро и удобно. Бесплатный тестовый период!"
+        />
+        <meta name="twitter:image" content="https://iiset.io/brand.png" />
+
         <meta
           name="viewport"
           content="width=device-width, initial-scale=1, maximum-scale=1"

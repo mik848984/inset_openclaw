@@ -67,6 +67,7 @@ export default function NewTemplate() {
   const {
     setTariffModalOpen,
     setPayBalanceModalOpen,
+    setBillingModalOpen,
     setTariffModalData,
     setPaymentModalData,
   } = useContext(ModalContext);
@@ -309,60 +310,172 @@ export default function NewTemplate() {
                   Авторизоваться
                 </Button>
               </Link>
-            ) : (
-              <>
-                <Button
-                  w={{ base: '100%', md: 'auto' }}
-                  bg={accentBlue}
-                  color="white"
-                  borderRadius="9999px"
-                  h="44px"
-                  px="22px"
-                  fontFamily={FONT_APPLE_TEXT}
-                  fontWeight="500"
-                  fontSize="15px"
-                  letterSpacing="-0.2px"
-                  _hover={{ bg: accentBlueHover }}
-                  _active={{ transform: 'scale(0.96)' }}
-                  transition="all 0.16s ease"
-                  leftIcon={<Icon as={TbSettingsDollar} w="18px" h="18px" />}
-                  onClick={() => {
-                    trackGoal('subscription_opened', { from: 'profile' });
-                    setTariffModalOpen!(true);
-                  }}
-                >
-                  Управлять подпиской
-                </Button>
-                <Button
-                  w={{ base: '100%', md: 'auto' }}
-                  variant="outline"
-                  bg={surfaceGlass}
-                  color={textPrimary}
-                  borderRadius="9999px"
-                  h="44px"
-                  px="22px"
-                  border="1px solid"
-                  borderColor={borderSubtle}
-                  fontFamily={FONT_APPLE_TEXT}
-                  fontWeight="500"
-                  fontSize="15px"
-                  letterSpacing="-0.2px"
-                  _hover={{ bg: surfaceGlassHover, borderColor: accentBlue }}
-                  _active={{ transform: 'scale(0.96)' }}
-                  transition="all 0.16s ease"
-                  leftIcon={<Icon as={TbCreditCardPay} w="18px" h="18px" />}
-                  onClick={() => {
-                    trackGoal('topup_click', { from: 'profile' });
-                    setPayBalanceModalOpen!(true);
-                  }}
-                >
-                  Пополнить баланс
-                </Button>
-              </>
-            )}
+            ) : null}
           </Flex>
         </Flex>
       </Box>
+
+      {/* ── Unified billing entry point ─────────────────────────────
+          Один Apple-glass payment-блок вместо двух отдельных кнопок
+          («Управлять подпиской» / «Пополнить баланс»). Открывает
+          BillingModal, где пользователь выбирает один из двух flow.
+          ─────────────────────────────────────────────────────────── */}
+      {!isAnonymous && (
+        <Box
+          bg={surfaceGlass}
+          backdropFilter="blur(22px) saturate(180%)"
+          border="1px solid"
+          borderColor={borderGlass}
+          borderRadius={{ base: '20px', md: '24px' }}
+          boxShadow={cardShadow}
+          p={{ base: '18px', md: '24px' }}
+          mb={{ base: '14px', md: '18px' }}
+          sx={glassCardSx}
+          width="100%"
+          maxWidth="100%"
+          minWidth={0}
+        >
+          <Flex
+            direction={{ base: 'column', md: 'row' }}
+            justify="space-between"
+            align={{ base: 'flex-start', md: 'center' }}
+            gap={{ base: '14px', md: '20px' }}
+            width="100%"
+          >
+            <Box minW={0} flex="1 1 0">
+              <Text
+                fontSize="11px"
+                fontWeight="600"
+                letterSpacing="0.6px"
+                textTransform="uppercase"
+                color={textSecondary}
+                mb="6px"
+              >
+                Оплата
+              </Text>
+              <Heading
+                fontFamily={FONT_APPLE_DISPLAY}
+                fontSize={{ base: '22px', md: '26px' }}
+                fontWeight="600"
+                lineHeight="1.2"
+                letterSpacing="-0.4px"
+                color={textPrimary}
+                mb="6px"
+              >
+                Тариф и баланс
+              </Heading>
+              <Text
+                fontSize={{ base: '13px', md: '14px' }}
+                color={textSecondary}
+                letterSpacing="-0.1px"
+                lineHeight="1.5"
+                mb="10px"
+                maxW="560px"
+              >
+                Управляйте подпиской PRO и разовыми пакетами запросов в одном
+                месте.
+              </Text>
+
+              <Flex
+                gap="6px"
+                flexWrap="wrap"
+                align="center"
+                fontSize="12px"
+                color={textPrimary}
+              >
+                <Flex
+                  align="center"
+                  gap="6px"
+                  px="10px"
+                  py="4px"
+                  bg={statusBadgeBg}
+                  borderRadius="9999px"
+                  border="1px solid"
+                  borderColor={statusBadgeBorder}
+                >
+                  <Box
+                    w="6px"
+                    h="6px"
+                    borderRadius="50%"
+                    bg={statusBadgeColor}
+                  />
+                  <Text
+                    fontSize="11px"
+                    fontWeight="600"
+                    color={statusBadgeColor}
+                  >
+                    Подписка: {getTariffName(status, grade)}
+                  </Text>
+                </Flex>
+                <Box
+                  px="10px"
+                  py="4px"
+                  bg={surfaceActive}
+                  borderRadius="9999px"
+                  border="1px solid"
+                  borderColor={borderSubtle}
+                >
+                  <Text fontSize="11px" fontWeight="600" color={textPrimary}>
+                    Тексты: {textPagesValue} стр.
+                  </Text>
+                </Box>
+                <Box
+                  px="10px"
+                  py="4px"
+                  bg={surfaceActive}
+                  borderRadius="9999px"
+                  border="1px solid"
+                  borderColor={borderSubtle}
+                >
+                  <Text fontSize="11px" fontWeight="600" color={textPrimary}>
+                    Изображения: {imagesValue}
+                  </Text>
+                </Box>
+              </Flex>
+            </Box>
+
+            <Button
+              w={{ base: '100%', md: 'auto' }}
+              bg={accentBlue}
+              color="white"
+              borderRadius="9999px"
+              h="44px"
+              px="22px"
+              fontFamily={FONT_APPLE_TEXT}
+              fontWeight="500"
+              fontSize="15px"
+              letterSpacing="-0.2px"
+              _hover={{ bg: accentBlueHover }}
+              _active={{ transform: 'scale(0.96)' }}
+              transition="all 0.16s ease"
+              leftIcon={<Icon as={TbSettingsDollar} w="18px" h="18px" />}
+              aria-label="Открыть тарифы и баланс"
+              title="Тариф и баланс"
+              flexShrink={0}
+              onClick={() => {
+                // Unified entry point. Сохраняем исторический goal
+                // 'subscription_opened' для совместимости с воронкой и
+                // добавляем новый 'billing_opened_from_profile'.
+                trackGoal('billing_opened_from_profile', {
+                  from: 'profile',
+                });
+                trackGoal('subscription_opened', {
+                  from: 'profile_billing',
+                });
+                if (setBillingModalOpen) {
+                  setBillingModalOpen(true);
+                } else if (setTariffModalOpen) {
+                  // Fallback на старое поведение, если BillingModal
+                  // по какой-то причине не доступен в контексте.
+                  setTariffModalOpen(true);
+                }
+              }}
+            >
+              Открыть тарифы и баланс
+            </Button>
+          </Flex>
+        </Box>
+      )}
 
       {/* ── Subscription card ────────────────────────────────────── */}
       {!isAnonymous && (

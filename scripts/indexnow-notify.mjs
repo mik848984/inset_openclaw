@@ -49,13 +49,22 @@ if (!key) {
   process.exit(0);
 }
 
+// Защита: IndexNow принимает только публичные хосты. Локальный билд
+// не должен отправлять localhost/127.0.0.1/0.0.0.0 — это ничего не даст,
+// зато может попасть в логи метатели.
+if (/^(localhost|127\.|0\.0\.0\.0)/i.test(host)) {
+  console.warn(
+    `IndexNow: host "${host}" looks local. Skipping postbuild ping.`,
+  );
+  process.exit(0);
+}
+
 const urls = [
   `https://${host}/`,
   `https://${host}/chat`,
-  `https://${host}/agents`,
-  `https://${host}/life-agents`,
-  `https://${host}/templates`,
   `https://${host}/blog`,
+  `https://${host}/life-agents`,
+  `https://${host}/all-templates`,
 ];
 
 const payload = {

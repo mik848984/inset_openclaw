@@ -168,7 +168,7 @@ function ModelsModal({ open, onClose }: IProps) {
               speed={70}
             />
             <ModelsCard
-              title="Deepseek V3.2"
+              title="DeepSeek V3.2"
               isChecked={model === 'deepseek-ai/DeepSeek-V3.2-Exp'}
               onClick={() => setModel!('deepseek-ai/DeepSeek-V3.2-Exp')}
               power={90}
@@ -182,14 +182,14 @@ function ModelsModal({ open, onClose }: IProps) {
               speed={55}
             />
             <ModelsCard
-              title="Qwen 3.6 35B A3B"
+              title="Qwen 3.6 35B"
               isChecked={model === 'Qwen/Qwen3.6-35B-A3B'}
               onClick={() => setModel!('Qwen/Qwen3.6-35B-A3B')}
               power={88}
               speed={70}
             />
             <ModelsCard
-              title="Gemini-2.5-pro-thinking"
+              title="Gemini 2.5 Pro"
               isChecked={model === 'gemini-2.5-pro'}
               onClick={() => setModel!('gemini-2.5-pro')}
               power={96}
@@ -197,7 +197,7 @@ function ModelsModal({ open, onClose }: IProps) {
               attachments
             />
             <ModelsCard
-              title="Gemini-2.5-flash-thinking"
+              title="Gemini 2.5 Flash"
               isChecked={model === 'gemini-2.5-flash'}
               onClick={() => setModel!('gemini-2.5-flash')}
               power={89}
@@ -205,7 +205,7 @@ function ModelsModal({ open, onClose }: IProps) {
               attachments
             />
             <ModelsCard
-              title="Gemini-2.5-flash-lite"
+              title="Gemini 2.5 Flash Lite"
               isChecked={model === 'gemini-2.5-flash-lite'}
               onClick={() => setModel!('gemini-2.5-flash-lite')}
               power={75}
@@ -213,28 +213,28 @@ function ModelsModal({ open, onClose }: IProps) {
               attachments
             />
             <ModelsCard
-              title="DeepSeek-R1"
+              title="DeepSeek R1"
               isChecked={model === 'deepseek-ai/DeepSeek-R1'}
               onClick={() => setModel!('deepseek-ai/DeepSeek-R1')}
               power={70}
               speed={30}
             />
             <ModelsCard
-              title="DeepSeek-V3"
+              title="DeepSeek V3"
               isChecked={model === 'deepseek-ai/DeepSeek-V3'}
               onClick={() => setModel!('deepseek-ai/DeepSeek-V3')}
               power={65}
               speed={50}
             />
             <ModelsCard
-              title="Llama-3.3-70B"
+              title="Llama 3.3 70B"
               isChecked={model === 'meta-llama/Llama-3.3-70B-Instruct-Turbo'}
               onClick={() => setModel!('meta-llama/Llama-3.3-70B-Instruct-Turbo')}
               power={55}
               speed={60}
             />
             <ModelsCard
-              title="Ministral Small"
+              title="Mistral Small"
               isChecked={model === 'mistral-small'}
               onClick={() => setModel!('mistral-small')}
               power={45}

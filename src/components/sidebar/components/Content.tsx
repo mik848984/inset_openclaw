@@ -24,6 +24,7 @@ import { signOut } from 'next-auth/react';
 import { ModalContext } from '@/contexts/ModalContext';
 import { useRouter } from 'next/navigation';
 import SidebarCard from '@/components/sidebar/components/SidebarCard';
+import ProjectSidebarSection from '@/components/sidebar/components/ProjectSidebarSection';
 
 // FUNCTIONS
 
@@ -56,10 +57,23 @@ function SidebarContent(props: SidebarContent) {
       px="20px"
     >
       <Brand />
-      <Stack direction="column" mb="auto" mt="8px">
+      <Stack
+        direction="column"
+        mb="auto"
+        mt="8px"
+        overflowY="auto"
+        sx={{
+          '::-webkit-scrollbar': { width: '4px' },
+          '::-webkit-scrollbar-thumb': {
+            background: 'rgba(127,127,127,0.25)',
+            borderRadius: '999px',
+          },
+        }}
+      >
         <Box ps="0px" pe={{ md: '0px', '2xl': '0px' }}>
           <Links routes={routes} />
         </Box>
+        <ProjectSidebarSection />
       </Stack>
       <SidebarCard />
       <Box h="24px" />

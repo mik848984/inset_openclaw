@@ -1,5 +1,9 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { ChatAiContext, IMessage } from '@/contexts/ChatAiContext/index';
+import {
+  ChatAiContext,
+  IMessage,
+  IProjectChip,
+} from '@/contexts/ChatAiContext/index';
 import { ChatBody } from '@/types/types';
 import DDG from 'duck-duck-scrape';
 import useLocalStorageState from 'use-local-storage-state';
@@ -12,6 +16,18 @@ import {
   stripSourcesMarker,
   ISource,
   SearchImage,
+  SearchIntent,
+  SearchSummary,
+  ComparisonWidget,
+  CodeFixWidget,
+  NewsTimelineItem,
+  SearchKnowledgeGraph,
+  PeopleAlsoAskItem,
+  SearchNewsItem,
+  SearchPlaceItem,
+  SearchProductItem,
+  SearchScholarItem,
+  SearchVideoItem,
 } from '@/utils/normalizeModelOutput';
 
 interface IProps {
@@ -52,6 +68,51 @@ function ChatAiContextProvider({ children }: IProps) {
   useEffect(() => {
     reasoningEnabledRef.current = reasoningEnabled;
   }, [reasoningEnabled]);
+
+  // ── Project workspace state ─────────────────────────────────────
+  // Чат может работать «в контексте проекта»: тогда в /api/chatAPI летит
+  // projectId, и backend подмешивает project system prompt в LLM-запрос.
+  const [activeProjectId, setActiveProjectIdState] = useState<string | null>(
+    null,
+  );
+  const [activeProjectChip, setActiveProjectChip] =
+    useState<IProjectChip | null>(null);
+  const activeProjectIdRef = useRef<string | null>(null);
+  useEffect(() => {
+    activeProjectIdRef.current = activeProjectId;
+  }, [activeProjectId]);
+
+  const setActiveProjectId = (id: string | null) => {
+    setActiveProjectIdState(id);
+    if (!id) setActiveProjectChip(null);
+  };
+
+  // Sync с ?projectId= URL — клиентский SPA-роутинг сам не дёргает
+  // провайдер при изменении query, поэтому слушаем popstate/pushstate.
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+
+    const readFromUrl = () => {
+      try {
+        const u = new URL(window.location.href);
+        const next = u.searchParams.get('projectId') || null;
+        if (next !== activeProjectIdRef.current) {
+          setActiveProjectIdState(next);
+          if (!next) setActiveProjectChip(null);
+        }
+      } catch {
+        /* noop */
+      }
+    };
+
+    readFromUrl();
+    window.addEventListener('popstate', readFromUrl);
+    // Next.js `router.push` issues a custom event in some setups; в любом
+    // случае polling-fallback тут не нужен — компонент сам set'ит chip.
+    return () => {
+      window.removeEventListener('popstate', readFromUrl);
+    };
+  }, []);
 
   const setModel = (modelValue: string) => {
     setModelAction(modelValue);
@@ -137,11 +198,25 @@ function ChatAiContextProvider({ children }: IProps) {
     let visibleAnswer = '';
     let pendingText = '';
     // Search metadata extracted from the leading __IISET_SOURCES__ marker
-    // (if any). All three fields travel together so source cards, image
-    // strip and follow-up chips can render LIVE during streaming.
+    // (if any). All fields travel together so source cards, image strip,
+    // follow-up chips и v3-виджеты (summary / comparison / codeFix /
+    // newsTimeline) рендерятся live в процессе стрима.
     let messageSources: ISource[] | undefined = undefined;
     let messageImages: SearchImage[] | undefined = undefined;
     let messageFollowUps: string[] | undefined = undefined;
+    let messageIntent: SearchIntent | null | undefined = undefined;
+    let messageSummary: SearchSummary | null | undefined = undefined;
+    let messageComparison: ComparisonWidget | null | undefined = undefined;
+    let messageCodeFix: CodeFixWidget | null | undefined = undefined;
+    let messageNewsTimeline: NewsTimelineItem[] | undefined = undefined;
+    let messageKnowledgeGraph: SearchKnowledgeGraph | null | undefined =
+      undefined;
+    let messagePeopleAlsoAsk: PeopleAlsoAskItem[] | undefined = undefined;
+    let messageNews: SearchNewsItem[] | undefined = undefined;
+    let messagePlaces: SearchPlaceItem[] | undefined = undefined;
+    let messageShopping: SearchProductItem[] | undefined = undefined;
+    let messageScholar: SearchScholarItem[] | undefined = undefined;
+    let messageVideos: SearchVideoItem[] | undefined = undefined;
     let flushTimer: ReturnType<typeof setInterval> | null = null;
 
     // Adaptive chunk size — more text in buffer ⇒ faster output.
@@ -154,15 +229,27 @@ function ChatAiContextProvider({ children }: IProps) {
       return 18;
     };
 
-    // Immutable assistant message update — React/Message memo sees a new object.
-    // Search metadata (sources/images/followUps) travels via optional fields
-    // so the Perplexity-like UI can render LIVE during streaming, before the
-    // reload path re-parses the marker from content.
+    // Immutable assistant message update — React/Message memo sees a new
+    // object. Search metadata (sources/images/followUps + v3 widgets)
+    // travels via optional fields so Perplexity-like UI рендерится LIVE
+    // в процессе стрима, ещё до того, как reload пересчитает marker.
     const updateAssistantMessage = (content: string) => {
       const hasMeta =
         (messageSources && messageSources.length > 0) ||
         (messageImages && messageImages.length > 0) ||
-        (messageFollowUps && messageFollowUps.length > 0);
+        (messageFollowUps && messageFollowUps.length > 0) ||
+        !!messageIntent ||
+        !!messageSummary ||
+        !!messageComparison ||
+        !!messageCodeFix ||
+        (messageNewsTimeline && messageNewsTimeline.length > 0) ||
+        !!messageKnowledgeGraph ||
+        (messagePeopleAlsoAsk && messagePeopleAlsoAsk.length > 0) ||
+        (messageNews && messageNews.length > 0) ||
+        (messagePlaces && messagePlaces.length > 0) ||
+        (messageShopping && messageShopping.length > 0) ||
+        (messageScholar && messageScholar.length > 0) ||
+        (messageVideos && messageVideos.length > 0);
 
       const next: IMessage = hasMeta
         ? {
@@ -176,6 +263,36 @@ function ChatAiContextProvider({ children }: IProps) {
               : {}),
             ...(messageFollowUps && messageFollowUps.length > 0
               ? { followUps: messageFollowUps }
+              : {}),
+            ...(messageIntent ? { intent: messageIntent } : {}),
+            ...(messageSummary ? { summary: messageSummary } : {}),
+            ...(messageComparison
+              ? { comparison: messageComparison }
+              : {}),
+            ...(messageCodeFix ? { codeFix: messageCodeFix } : {}),
+            ...(messageNewsTimeline && messageNewsTimeline.length > 0
+              ? { newsTimeline: messageNewsTimeline }
+              : {}),
+            ...(messageKnowledgeGraph
+              ? { knowledgeGraph: messageKnowledgeGraph }
+              : {}),
+            ...(messagePeopleAlsoAsk && messagePeopleAlsoAsk.length > 0
+              ? { peopleAlsoAsk: messagePeopleAlsoAsk }
+              : {}),
+            ...(messageNews && messageNews.length > 0
+              ? { news: messageNews }
+              : {}),
+            ...(messagePlaces && messagePlaces.length > 0
+              ? { places: messagePlaces }
+              : {}),
+            ...(messageShopping && messageShopping.length > 0
+              ? { shopping: messageShopping }
+              : {}),
+            ...(messageScholar && messageScholar.length > 0
+              ? { scholar: messageScholar }
+              : {}),
+            ...(messageVideos && messageVideos.length > 0
+              ? { videos: messageVideos }
               : {}),
           }
         : { role: 'assistant', content };
@@ -215,23 +332,63 @@ function ChatAiContextProvider({ children }: IProps) {
       if (!rawChunk) return;
       rawAccumulator += rawChunk;
 
-      // Detect a freshly-complete sources marker once. The marker may also
-      // carry images and follow-up suggestions (v2 payload).
+      // Detect a freshly-complete sources marker once. Marker может
+      // нести расширенные v3-виджеты — intent, summary, comparison,
+      // codeFix, newsTimeline. Старые v1/v2 markers всё ещё валидны.
       if (
         !messageSources &&
         !messageImages &&
-        !messageFollowUps
+        !messageFollowUps &&
+        !messageIntent &&
+        !messageSummary &&
+        !messageComparison &&
+        !messageCodeFix &&
+        !messageNewsTimeline &&
+        !messageKnowledgeGraph &&
+        !messagePeopleAlsoAsk &&
+        !messageNews &&
+        !messagePlaces &&
+        !messageShopping &&
+        !messageScholar &&
+        !messageVideos
       ) {
         const parsed = parseSourcesFromContent(rawAccumulator);
         const gotAnything =
           parsed.sources.length > 0 ||
           parsed.images.length > 0 ||
-          parsed.followUps.length > 0;
+          parsed.followUps.length > 0 ||
+          !!parsed.intent ||
+          !!parsed.summary ||
+          !!parsed.comparison ||
+          !!parsed.codeFix ||
+          parsed.newsTimeline.length > 0 ||
+          !!parsed.knowledgeGraph ||
+          parsed.peopleAlsoAsk.length > 0 ||
+          parsed.news.length > 0 ||
+          parsed.places.length > 0 ||
+          parsed.shopping.length > 0 ||
+          parsed.scholar.length > 0 ||
+          parsed.videos.length > 0;
         if (gotAnything) {
           if (parsed.sources.length > 0) messageSources = parsed.sources;
           if (parsed.images.length > 0) messageImages = parsed.images;
           if (parsed.followUps.length > 0)
             messageFollowUps = parsed.followUps;
+          if (parsed.intent) messageIntent = parsed.intent;
+          if (parsed.summary) messageSummary = parsed.summary;
+          if (parsed.comparison) messageComparison = parsed.comparison;
+          if (parsed.codeFix) messageCodeFix = parsed.codeFix;
+          if (parsed.newsTimeline.length > 0)
+            messageNewsTimeline = parsed.newsTimeline;
+          if (parsed.knowledgeGraph)
+            messageKnowledgeGraph = parsed.knowledgeGraph;
+          if (parsed.peopleAlsoAsk.length > 0)
+            messagePeopleAlsoAsk = parsed.peopleAlsoAsk;
+          if (parsed.news.length > 0) messageNews = parsed.news;
+          if (parsed.places.length > 0) messagePlaces = parsed.places;
+          if (parsed.shopping.length > 0) messageShopping = parsed.shopping;
+          if (parsed.scholar.length > 0) messageScholar = parsed.scholar;
+          if (parsed.videos.length > 0) messageVideos = parsed.videos;
           // Refresh UI now that we know meta — even before first LLM token
           updateAssistantMessage(visibleAnswer);
         }
@@ -292,6 +449,7 @@ function ChatAiContextProvider({ children }: IProps) {
           webSearch,
           files: successAttachments,
           youtube: youtubeUrl,
+          projectId: activeProjectIdRef.current || undefined,
         }),
       });
 
@@ -416,6 +574,10 @@ function ChatAiContextProvider({ children }: IProps) {
         regenerateLastMessage,
         reasoningEnabled,
         setReasoningEnabled,
+        activeProjectId,
+        setActiveProjectId,
+        activeProjectChip,
+        setActiveProjectChip,
       }}
     >
       {children}

@@ -304,9 +304,38 @@ const footerLinks: Record<string, { label: string; href: string }[]> = {
 };
 
 // ── Page ─────────────────────────────────────────────────────────────
+// ── JSON-LD: Organization + WebSite ────────────────────────────────
+// Намеренно без SearchAction — настоящего поиска по сайту пока нет,
+// а ложный SearchAction вредит SEO.
+const homepageJsonLd = {
+  '@context': 'https://schema.org',
+  '@graph': [
+    {
+      '@type': 'Organization',
+      '@id': 'https://iiset.io/#organization',
+      name: 'ИИСеть',
+      url: 'https://iiset.io',
+      logo: 'https://iiset.io/brand.png',
+    },
+    {
+      '@type': 'WebSite',
+      '@id': 'https://iiset.io/#website',
+      url: 'https://iiset.io',
+      name: 'ИИСеть',
+      inLanguage: 'ru-RU',
+      publisher: { '@id': 'https://iiset.io/#organization' },
+    },
+  ],
+};
+
 export default function HomePage() {
   return (
     <Box as="main" bg={C.heroBase}>
+      {/* JSON-LD structured data */}
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(homepageJsonLd) }}
+      />
 
       {/* ── Sticky nav ─────────────────────────────────────────────── */}
       <Box

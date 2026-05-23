@@ -23,11 +23,22 @@ import {
   useColorModeValue,
   useToast,
 } from '@chakra-ui/react';
-import { MdAutoAwesome, MdDelete, MdSend, MdSearch } from 'react-icons/md';
+import {
+  MdAutoAwesome,
+  MdDelete,
+  MdSend,
+  MdSearch,
+  MdSmartToy,
+  MdKeyboardArrowDown,
+} from 'react-icons/md';
 import { trackGoal } from '@/utils/metrics';
 import { FaStopCircle } from 'react-icons/fa';
 import React, { useContext, useEffect, useLayoutEffect, useRef, useState } from 'react';
-import { ChatAiContext } from '@/contexts/ChatAiContext';
+import { ChatAiContext, IProjectChip } from '@/contexts/ChatAiContext';
+import {
+  projectsService,
+  IProjectUI,
+} from '@/services/ui/ProjectsService';
 import { useMessengerScroll } from '../hooks/useMessengerScroll';
 import { ModalContext } from '@/contexts/ModalContext';
 import ResizeTextareaApp from '@/components/fields/ResizeTextarea';
@@ -41,21 +52,43 @@ import AttachmentItem from '@/components/attachmentItem';
 import { useUser } from '@/utils/hooks/useUser';
 import useLocalStorageState from 'use-local-storage-state';
 
-const llmMap = {
-  'mistral-large-latest': 'Mistral Large',
-  'mistral-small': 'Mistral Small',
-  'deepseek-ai/DeepSeek-V3': 'Deepseek V3',
+// Friendly display names for the chat model chip. Must stay in sync with
+// the ModelsModal cards — see src/components/modals/ModelsModal/index.tsx.
+const llmMap: Record<string, string> = {
+  'openai/gpt-oss-120b': 'ChatGPT (GPT-OSS)',
+  'microsoft/phi-4': 'Microsoft Phi 4',
+  'deepseek-ai/DeepSeek-V3.2-Exp': 'DeepSeek V3.2',
   'deepseek-ai/DeepSeek-V4-Pro': 'DeepSeek V4 Pro',
   'Qwen/Qwen3.6-35B-A3B': 'Qwen 3.6 35B',
-  'google/gemini-2.0-flash-thinking-exp-1219:free': 'Gemini-2 Flash Thinking',
-  'google/gemini-2.0-flash-thinking-exp:free': 'Gemini-2 Flash Thinking',
-  'gemini-2.5-flash': 'Gemini-2.5 Flash Thinking',
-  'gemini-2.5-pro': 'Gemini-2.5 Pro Thinking',
-  'gemini-2.5-flash-lite': 'Gemini-2.5 Flash Lite',
-  'gemini-2.5-flash-preview': 'Gemini-2.5 Flash Thinking',
-  'deepseek-ai/DeepSeek-R1': 'Deepseek R1',
-  'meta-llama/Llama-3.3-70B-Instruct-Turbo': 'LLama-3',
+  'gemini-2.5-pro': 'Gemini 2.5 Pro',
+  'gemini-2.5-flash': 'Gemini 2.5 Flash',
+  'gemini-2.5-flash-lite': 'Gemini 2.5 Flash Lite',
+  // Older / fallback Gemini ids — render as their thinking variants.
+  'gemini-2.5-flash-preview': 'Gemini 2.5 Flash',
+  'google/gemini-2.0-flash-thinking-exp-1219:free': 'Gemini 2.0 Flash',
+  'google/gemini-2.0-flash-thinking-exp:free': 'Gemini 2.0 Flash',
+  'deepseek-ai/DeepSeek-R1': 'DeepSeek R1',
+  'deepseek-ai/DeepSeek-V3': 'DeepSeek V3',
+  'meta-llama/Llama-3.3-70B-Instruct-Turbo': 'Llama 3.3 70B',
+  'mistral-small': 'Mistral Small',
+  'mistral-large-latest': 'Mistral Large',
 };
+
+/**
+ * Display name for a model id. Falls back to a cleaned last URL segment
+ * (e.g. "openai/gpt-oss-120b" → "gpt-oss-120b") so unknown models still
+ * render readable text instead of just the robot emoji.
+ *
+ * Empty / undefined id → "Выбрать модель".
+ */
+function getModelTitle(modelId: string | undefined | null): string {
+  if (!modelId) return 'Выбрать модель';
+  if (llmMap[modelId]) return llmMap[modelId];
+  // Take the last path segment, drop tag suffixes after `:`.
+  const last = String(modelId).split('/').pop() || String(modelId);
+  const cleaned = last.split(':')[0].trim();
+  return cleaned || 'Выбрать модель';
+}
 
 
 const QUICK_PROMPTS: {
@@ -471,6 +504,10 @@ const handleSend = async (messageOverride?: string) => {
     setMessages,
     reasoningEnabled,
     setReasoningEnabled,
+    activeProjectId,
+    setActiveProjectId,
+    activeProjectChip,
+    setActiveProjectChip,
   } = useContext(ChatAiContext);
 
   const [visibleQuickPrompts, setVisibleQuickPrompts] = useState(
@@ -600,6 +637,28 @@ const handleSend = async (messageOverride?: string) => {
             minWidth={0}
             width="100%"
           >
+            {/* Project workspace banner — показывается, если активен проект */}
+            {activeProjectId && (
+              <ProjectChatBanner
+                activeProjectId={activeProjectId}
+                chip={activeProjectChip}
+                setChip={setActiveProjectChip}
+                onDisable={() => {
+                  setActiveProjectId?.(null);
+                  // Чистим query, чтобы не возвращаться в проект при reload.
+                  if (typeof window !== 'undefined') {
+                    const url = new URL(window.location.href);
+                    url.searchParams.delete('projectId');
+                    window.history.replaceState(
+                      window.history.state,
+                      '',
+                      url.pathname + (url.search || ''),
+                    );
+                  }
+                }}
+              />
+            )}
+
             {messages?.length === 0 && (
               <>
                 {/* Empty state — фирменный LogoChat hero, Apple-minimal */}
@@ -924,41 +983,63 @@ const handleSend = async (messageOverride?: string) => {
               WebkitOverflowScrolling: 'touch',
             }}
           >
-            {/* Model chip */}
+            {/* Model selector chip — opens ModelsModal.
+                Not a toggle: leading robot icon + model name + chevron. */}
             <Flex
+              as="button"
+              type="button"
+              onClick={() => setModelsModalOpen!(true)}
+              aria-label="Выбрать модель"
+              title="Выбрать модель"
               gap="6px"
               align="center"
               h="32px"
-              bg={mode === 'chat' ? surfaceActive : surface}
+              bg={surface}
               border="1px solid"
-              borderColor={mode === 'chat' ? borderActive : border}
+              borderColor={border}
               borderRadius="9999px"
-              pl="10px"
-              pr="4px"
-              transition="background 0.14s ease, border-color 0.14s ease"
+              pl="12px"
+              pr="8px"
+              transition="background 0.14s ease, border-color 0.14s ease, transform 0.12s ease"
+              cursor="pointer"
               flexShrink={0}
+              minW={0}
+              maxW={{ base: '220px', sm: '260px', md: '320px' }}
+              _hover={{
+                bg: surfaceActive,
+                borderColor: borderActive,
+              }}
+              _active={{ transform: 'scale(0.98)' }}
+              sx={{ WebkitTapHighlightColor: 'transparent' }}
             >
-              <Switch
-                size="sm"
-                isChecked={mode === 'chat'}
-                onChange={() => setMode!('chat')}
+              <Icon
+                as={MdSmartToy}
+                width="15px"
+                height="15px"
+                color={accentBlue}
+                flexShrink={0}
               />
-              <Button
-                paddingLeft="8px"
-                paddingRight="12px"
-                variant="ghost"
-                size="sm"
-                h="26px"
+              <Text
                 fontSize="13px"
                 fontWeight="500"
                 letterSpacing="-0.2px"
-                color={mode === 'chat' ? accentBlue : textPrimary}
-                borderRadius="9999px"
-                _hover={{ bg: 'transparent' }}
-                onClick={() => setModelsModalOpen!(true)}
+                color={textPrimary}
+                noOfLines={1}
+                overflow="hidden"
+                textOverflow="ellipsis"
+                whiteSpace="nowrap"
+                minW={0}
               >
-                🤖 {(llmMap as any)[model!]}
-              </Button>
+                {getModelTitle(model)}
+              </Text>
+              <Icon
+                as={MdKeyboardArrowDown}
+                width="16px"
+                height="16px"
+                color={textSecondary}
+                flexShrink={0}
+                ml="-2px"
+              />
             </Flex>
 
             {/* Web Search chip */}
@@ -1158,7 +1239,7 @@ const handleSend = async (messageOverride?: string) => {
                 _placeholder={placeholderColor}
                 placeholder={
                   webSearch
-                    ? 'Задайте вопрос — найду источники в интернете…'
+                    ? 'Задайте вопрос — найду источники, изображения и контекст…'
                     : 'Спросите ИИСеть…'
                 }
                 ref={ref}
@@ -1225,6 +1306,172 @@ const handleSend = async (messageOverride?: string) => {
         </Box>
       </Box>
     </Grid>
+  );
+}
+
+// ──────────────────────────────────────────────────────────────────
+//  ProjectChatBanner — компактная плашка, показываемая в /chat когда
+//  активен проект. Подгружает chip данные (title + nextStep) и даёт
+//  «Отключить», чтобы выйти из контекста проекта.
+// ──────────────────────────────────────────────────────────────────
+
+function ProjectChatBanner({
+  activeProjectId,
+  chip,
+  setChip,
+  onDisable,
+}: {
+  activeProjectId: string;
+  chip: IProjectChip | null | undefined;
+  setChip?: (chip: IProjectChip | null) => void;
+  onDisable: () => void;
+}) {
+  const [project, setProject] = useState<IProjectUI | null>(null);
+  const [isLoading, setIsLoading] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    setIsLoading(true);
+    projectsService
+      .get(activeProjectId)
+      .then((p) => {
+        if (cancelled) return;
+        setProject(p);
+        if (p) {
+          setChip?.({
+            _id: p._id,
+            title: p.title,
+            nextStep: p.nextStep,
+          });
+        } else {
+          setChip?.(null);
+        }
+      })
+      .finally(() => {
+        if (!cancelled) setIsLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [activeProjectId]);
+
+  const accentBlue = useColorModeValue('#0066cc', '#2997ff');
+  const accentBlueHover = useColorModeValue('#0071e3', '#5fb1ff');
+  const surface = useColorModeValue(
+    'rgba(255,255,255,0.72)',
+    'rgba(13,18,34,0.62)',
+  );
+  const border = useColorModeValue(
+    'rgba(0,0,0,0.07)',
+    'rgba(255,255,255,0.10)',
+  );
+  const borderActive = useColorModeValue(
+    'rgba(0,102,204,0.32)',
+    'rgba(41,151,255,0.36)',
+  );
+  const textPrimary = useColorModeValue('#1d1d1f', '#f5f5f7');
+  const textSecondary = useColorModeValue(
+    '#6e6e73',
+    'rgba(245,245,247,0.65)',
+  );
+
+  // Если project ещё не загружен, но есть chip (например, из стрима) —
+  // используем chip; иначе показываем skeleton-friendly placeholder.
+  const title = project?.title || chip?.title || '';
+  const nextStep = project?.nextStep || chip?.nextStep || '';
+
+  if (!title && !isLoading && !project) {
+    // Проект может быть удалён или недоступен — тихо ничего не рендерим.
+    return null;
+  }
+
+  return (
+    <Flex
+      align="center"
+      justify="space-between"
+      gap="10px"
+      px={{ base: '14px', md: '16px' }}
+      py={{ base: '10px', md: '12px' }}
+      borderRadius={{ base: '14px', md: '16px' }}
+      bg={surface}
+      border="1px solid"
+      borderColor={borderActive}
+      backdropFilter="blur(18px) saturate(180%)"
+      sx={{ WebkitBackdropFilter: 'blur(18px) saturate(180%)' }}
+      width="100%"
+      maxW="100%"
+      minW={0}
+      flexWrap="wrap"
+    >
+      <Box minW={0} flex="1 1 0">
+        <Flex align="center" gap="8px" minW={0} flexWrap="wrap">
+          <Box
+            px="8px"
+            py="2px"
+            borderRadius="9999px"
+            bg="rgba(0,102,204,0.10)"
+            color={accentBlue}
+          >
+            <Text
+              fontFamily="'SF Pro Text', -apple-system, system-ui, sans-serif"
+              fontSize="10px"
+              fontWeight="700"
+              letterSpacing="0.4px"
+              textTransform="uppercase"
+            >
+              Проект
+            </Text>
+          </Box>
+          <Text
+            fontFamily="'SF Pro Display', -apple-system, system-ui, sans-serif"
+            fontSize={{ base: '13px', md: '14px' }}
+            fontWeight="600"
+            color={textPrimary}
+            letterSpacing="-0.15px"
+            noOfLines={1}
+            wordBreak="break-word"
+            minW={0}
+          >
+            {title || (isLoading ? 'Загрузка…' : '')}
+          </Text>
+        </Flex>
+        {nextStep && (
+          <Text
+            mt="2px"
+            fontFamily="'SF Pro Text', -apple-system, system-ui, sans-serif"
+            fontSize="12px"
+            color={textSecondary}
+            lineHeight="1.4"
+            noOfLines={1}
+            wordBreak="break-word"
+          >
+            Следующий шаг: {nextStep}
+          </Text>
+        )}
+      </Box>
+      <Button
+        onClick={onDisable}
+        size="xs"
+        h="28px"
+        px="12px"
+        borderRadius="9999px"
+        bg="transparent"
+        color={textPrimary}
+        border="1px solid"
+        borderColor={border}
+        fontFamily="'SF Pro Text', -apple-system, system-ui, sans-serif"
+        fontWeight="500"
+        fontSize="11px"
+        _hover={{
+          borderColor: accentBlue,
+          bg: 'rgba(0,102,204,0.06)',
+          color: accentBlue,
+        }}
+        flexShrink={0}
+      >
+        Отключить
+      </Button>
+    </Flex>
   );
 }
 

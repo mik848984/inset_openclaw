@@ -1,4 +1,38 @@
 User-Agent: *
-Disallow:
+Allow: /
+
+# API и служебные эндпоинты
+Disallow: /api/
+
+# Админские/технические страницы
+Disallow: /admin
+Disallow: /admin/
+Disallow: /admin-user
+Disallow: /admin-user/
+Disallow: /blog/admin
+Disallow: /blog/admin/
+
+# Личный кабинет / приватные разделы
+Disallow: /users
+Disallow: /users/
+Disallow: /settings
+Disallow: /settings/
+Disallow: /usage
+Disallow: /usage/
+Disallow: /my-plan
+Disallow: /my-plan/
+Disallow: /my-projects
+Disallow: /my-projects/
+Disallow: /history
+Disallow: /history/
+Disallow: /dialogs
+Disallow: /dialogs/
+Disallow: /hr-agent
+Disallow: /hr-agent/
+Disallow: /hr-agent-scores
+Disallow: /hr-agent-scores/
+
+# IndexNow endpoint
+Disallow: /indexnow
 
 Sitemap: https://iiset.io/sitemap.xml

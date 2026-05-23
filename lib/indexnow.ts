@@ -8,6 +8,50 @@ type NotifyPayload = {
   urlList: string[];
 };
 
+// Пути, которые мы НЕ хотим отдавать поисковикам — даже если кто-то
+// случайно отправит их в /indexnow API.
+const PRIVATE_PATH_PATTERNS = [
+  /^\/api(\/|$)/,
+  /^\/admin(\/|$)/,
+  /^\/admin-user(\/|$)/,
+  /^\/blog\/admin(\/|$)/,
+  /^\/users(\/|$)/,
+  /^\/settings(\/|$)/,
+  /^\/usage(\/|$)/,
+  /^\/my-plan(\/|$)/,
+  /^\/my-projects(\/|$)/,
+  /^\/history(\/|$)/,
+  /^\/dialogs(\/|$)/,
+  /^\/hr-agent(\/|$)/,
+  /^\/hr-agent-scores(\/|$)/,
+  /^\/indexnow(\/|$)/,
+];
+
+function isSafeIndexNowUrl(raw: string, expectedHost: string): boolean {
+  let url: URL;
+  try {
+    url = new URL(raw);
+  } catch {
+    return false;
+  }
+  if (url.protocol !== "https:") return false;
+  // Не отправляем localhost / приватные адреса
+  const h = url.hostname.toLowerCase();
+  if (
+    h === "localhost" ||
+    h.startsWith("127.") ||
+    h === "0.0.0.0" ||
+    h.endsWith(".local")
+  ) {
+    return false;
+  }
+  // Хост должен совпадать с публичным
+  if (h !== expectedHost.toLowerCase()) return false;
+  // Не отправляем приватные пути
+  if (PRIVATE_PATH_PATTERNS.some((re) => re.test(url.pathname))) return false;
+  return true;
+}
+
 export async function notifyIndexNow(urls: string[]) {
   if (!urls || urls.length === 0) return;
 
@@ -19,11 +63,18 @@ export async function notifyIndexNow(urls: string[]) {
     return;
   }
 
+  // Не пускаем мусор в Yandex IndexNow.
+  const safeUrls = urls.filter((u) => isSafeIndexNowUrl(u, host));
+  if (safeUrls.length === 0) {
+    console.warn("IndexNow: no safe URLs after filtering. Skipping.");
+    return;
+  }
+
   const payload: NotifyPayload = {
     host,
     key,
     keyLocation: `https://${host}/${key}.txt`,
-    urlList: urls,
+    urlList: safeUrls,
   };
 
   const res = await fetch(INDEXNOW_ENDPOINT, {
@@ -36,6 +87,6 @@ export async function notifyIndexNow(urls: string[]) {
     const text = await res.text().catch(() => "");
     console.error("IndexNow error:", res.status, text);
   } else {
-    console.log("IndexNow sent:", res.status);
+    console.log(`IndexNow sent: ${res.status} (${safeUrls.length} urls)`);
   }
 }

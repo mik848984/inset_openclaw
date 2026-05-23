@@ -29,6 +29,10 @@ export interface IModalState {
   setTariffModalOpen: (open: boolean) => void;
   payBalanceModalOpen: boolean;
   setPayBalanceModalOpen: (open: boolean) => void;
+  // Unified billing entry point — открывает BillingModal с двумя вариантами:
+  // подписка PRO (→ TariffModal) и пакеты запросов (→ PayBalanceModal).
+  billingModalOpen: boolean;
+  setBillingModalOpen: (open: boolean) => void;
   authorizationModalOpen: boolean;
   setAuthorizationModalOpen: (open: boolean) => void;
   sideBarOpen: boolean;

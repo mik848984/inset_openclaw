@@ -12,6 +12,7 @@ import YouTubeModal from '@/components/modals/YouTubeModal';
 import AvitoAgentCreateModal from '../../components/modals/HrAgentCreateModal';
 import BestSearchHrModal from '@/components/modals/BestSearchModal';
 import HrAgentUpdateModal from '@/components/modals/HrAgentUpdateModal';
+import BillingModal from '@/components/modals/BillingModal';
 
 interface IProps {
   children: React.ReactNode;
@@ -26,6 +27,7 @@ function ModalContextProvider({ children }: IProps) {
   const [modelsModalOpen, setModelsModalOpen] = useState(false);
   const [tariffModalOpen, setTariffModalOpen] = useState(false);
   const [payBalanceModalOpen, setPayBalanceModalOpen] = useState(false);
+  const [billingModalOpen, setBillingModalOpen] = useState(false);
   const [authorizationModalOpen, setAuthorizationModalOpen] = useState(false);
   const [youTubeModalOpen, setYouTubeModalOpen] = useState(false);
   const [sideBarOpen, setSideBarOpen] = useState(false);
@@ -67,6 +69,8 @@ function ModalContextProvider({ children }: IProps) {
         setTariffModalOpen,
         payBalanceModalOpen,
         setPayBalanceModalOpen,
+        billingModalOpen,
+        setBillingModalOpen,
         authorizationModalOpen,
         setAuthorizationModalOpen,
         sideBarOpen,
@@ -109,6 +113,10 @@ function ModalContextProvider({ children }: IProps) {
       <PayBalanceModal
         onClose={() => setPayBalanceModalOpen(false)}
         open={payBalanceModalOpen}
+      />
+      <BillingModal
+        onClose={() => setBillingModalOpen(false)}
+        open={billingModalOpen}
       />
       <PaymentModal
         itemId={itemId}

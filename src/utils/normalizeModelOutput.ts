@@ -73,17 +73,155 @@ export function extractThinkBlocks(text: string): {
 
 // ─── Sources marker (Perplexity-like source cards) ───────────────
 // Backend (ModelsService.webSearchRequest) prepends one line at the
-// beginning of the response stream. The marker has TWO compatible shapes:
+// beginning of the response stream. The marker has THREE compatible shapes:
 //
 //   v1 (legacy):
 //     __IISET_SOURCES__=[{...}, {...}]\n
 //
-//   v2 (current):
+//   v2:
 //     __IISET_SOURCES__={"sources":[...],"images":[...],"followUps":[...]}\n
 //
+//   v3 (current — adds advanced search widgets):
+//     __IISET_SOURCES__={
+//       "sources":[...], "images":[...], "followUps":[...],
+//       "intent":"comparison|code|news|general|...",
+//       "summary":{...},
+//       "comparison":{...},   // только если intent=comparison
+//       "codeFix":{...},      // только если intent=code
+//       "newsTimeline":[...]  // только если intent=news
+//     }\n
+//
 // The marker is stripped from the visible answer and parsed into structured
-// fields. v1 messages from before the upgrade still parse cleanly into
-// sources only (images/followUps empty).
+// fields. Старые v1 / v2 сообщения по-прежнему разбираются корректно.
+
+export type SearchIntent =
+  | 'general'
+  | 'news'
+  | 'comparison'
+  | 'code'
+  | 'weather'
+  | 'places'
+  | 'shopping'
+  | 'image'
+  | 'video'
+  | 'scholar';
+
+export interface SearchSummary {
+  totalSources: number;
+  readSources: number;
+  domains: string[];
+  intent: SearchIntent;
+  generatedAt: string;
+}
+
+export interface ComparisonWidget {
+  query: string;
+  criteria: string[];
+  note: string;
+}
+
+export interface CodeFixWidget {
+  query: string;
+  detectedStack: string[];
+  safetyNote: string;
+}
+
+export interface NewsTimelineItem {
+  title: string;
+  url: string;
+  domain: string;
+  date?: string;
+  snippet?: string;
+}
+
+export type SearchNewsItem = NewsTimelineItem;
+
+/** Compact "Knowledge Graph"-style entity card (Serper /search response). */
+export interface SearchKnowledgeGraph {
+  title: string;
+  type?: string;
+  description?: string;
+  imageUrl?: string;
+  website?: string;
+  attributes?: Array<{ label: string; value: string }>;
+}
+
+/** «Что ещё спрашивают» — Serper peopleAlsoAsk. */
+export interface PeopleAlsoAskItem {
+  question: string;
+  snippet?: string;
+  url?: string;
+  domain?: string;
+}
+
+/** Места (Serper /places). */
+export interface SearchPlaceItem {
+  title: string;
+  address?: string;
+  rating?: number;
+  ratingCount?: number;
+  category?: string;
+  url?: string;
+  domain?: string;
+  latitude?: number;
+  longitude?: number;
+  mapsUrl?: string;
+}
+
+/** Карточки покупок (Serper /shopping). */
+export interface SearchProductItem {
+  title: string;
+  source?: string;
+  url: string;
+  price?: string;
+  rating?: number;
+  ratingCount?: number;
+  imageUrl?: string;
+  domain?: string;
+}
+
+/** Научные публикации (Serper /scholar). */
+export interface SearchScholarItem {
+  title: string;
+  url: string;
+  domain?: string;
+  snippet?: string;
+  authors?: string;
+  year?: string;
+  citedBy?: number;
+}
+
+/** Видео (Serper /videos). */
+export interface SearchVideoItem {
+  title: string;
+  url: string;
+  source?: string;
+  domain?: string;
+  date?: string;
+  imageUrl?: string;
+  channel?: string;
+  duration?: string;
+}
+
+export type FollowUp = string;
+
+export interface SearchWidgetMeta {
+  sources: ISource[];
+  images: SearchImage[];
+  followUps: FollowUp[];
+  intent: SearchIntent | null;
+  summary: SearchSummary | null;
+  comparison: ComparisonWidget | null;
+  codeFix: CodeFixWidget | null;
+  newsTimeline: NewsTimelineItem[];
+  knowledgeGraph: SearchKnowledgeGraph | null;
+  peopleAlsoAsk: PeopleAlsoAskItem[];
+  news: SearchNewsItem[];
+  places: SearchPlaceItem[];
+  shopping: SearchProductItem[];
+  scholar: SearchScholarItem[];
+  videos: SearchVideoItem[];
+}
 
 export interface ISource {
   title: string;
@@ -214,25 +352,295 @@ function coerceImage(img: any): SearchImage | null {
   };
 }
 
+// ─── v3 widget coercion helpers ───────────────────────────────────
+
+const VALID_INTENTS: ReadonlyArray<SearchIntent> = [
+  'general',
+  'news',
+  'comparison',
+  'code',
+  'weather',
+  'places',
+  'shopping',
+  'image',
+  'video',
+  'scholar',
+];
+
+function coerceIntent(value: any): SearchIntent | null {
+  if (typeof value !== 'string') return null;
+  const v = value.toLowerCase() as SearchIntent;
+  return (VALID_INTENTS as readonly string[]).includes(v) ? v : null;
+}
+
+function coerceSummary(raw: any): SearchSummary | null {
+  if (!raw || typeof raw !== 'object') return null;
+  const intent = coerceIntent(raw.intent) || 'general';
+  const totalSources =
+    typeof raw.totalSources === 'number' && raw.totalSources >= 0
+      ? raw.totalSources
+      : 0;
+  const readSources =
+    typeof raw.readSources === 'number' && raw.readSources >= 0
+      ? raw.readSources
+      : 0;
+  const domains = Array.isArray(raw.domains)
+    ? (raw.domains as any[])
+        .filter((d) => typeof d === 'string' && d.trim().length > 0)
+        .map((d: string) => d.trim())
+        .slice(0, 12)
+    : [];
+  const generatedAt =
+    typeof raw.generatedAt === 'string' ? raw.generatedAt : '';
+  return { totalSources, readSources, domains, intent, generatedAt };
+}
+
+function coerceComparison(raw: any): ComparisonWidget | null {
+  if (!raw || typeof raw !== 'object') return null;
+  const query = typeof raw.query === 'string' ? raw.query.slice(0, 240) : '';
+  const criteria = Array.isArray(raw.criteria)
+    ? (raw.criteria as any[])
+        .filter((c) => typeof c === 'string' && c.trim().length > 0)
+        .map((c: string) => c.trim().slice(0, 80))
+        .slice(0, 8)
+    : [];
+  const note = typeof raw.note === 'string' ? raw.note.slice(0, 240) : '';
+  if (!query && criteria.length === 0 && !note) return null;
+  return { query, criteria, note };
+}
+
+function coerceCodeFix(raw: any): CodeFixWidget | null {
+  if (!raw || typeof raw !== 'object') return null;
+  const query = typeof raw.query === 'string' ? raw.query.slice(0, 240) : '';
+  const detectedStack = Array.isArray(raw.detectedStack)
+    ? (raw.detectedStack as any[])
+        .filter((s) => typeof s === 'string' && s.trim().length > 0)
+        .map((s: string) => s.trim().slice(0, 40))
+        .slice(0, 6)
+    : [];
+  const safetyNote =
+    typeof raw.safetyNote === 'string' ? raw.safetyNote.slice(0, 240) : '';
+  if (!query && detectedStack.length === 0 && !safetyNote) return null;
+  return { query, detectedStack, safetyNote };
+}
+
+function coerceNewsItem(raw: any): NewsTimelineItem | null {
+  if (!raw || typeof raw !== 'object') return null;
+  if (typeof raw.url !== 'string' || raw.url.length === 0) return null;
+  return {
+    title:
+      typeof raw.title === 'string' ? raw.title.slice(0, 200) : raw.url,
+    url: raw.url,
+    domain: typeof raw.domain === 'string' ? raw.domain : '',
+    date: typeof raw.date === 'string' ? raw.date.slice(0, 60) : undefined,
+    snippet:
+      typeof raw.snippet === 'string' ? raw.snippet.slice(0, 240) : undefined,
+  };
+}
+
+function coerceKnowledgeGraph(raw: any): SearchKnowledgeGraph | null {
+  if (!raw || typeof raw !== 'object') return null;
+  const title =
+    typeof raw.title === 'string' ? raw.title.slice(0, 200) : '';
+  if (!title) return null;
+  const attributes = Array.isArray(raw.attributes)
+    ? (raw.attributes as any[])
+        .map((a: any) =>
+          a && typeof a.label === 'string' && typeof a.value === 'string'
+            ? { label: a.label.slice(0, 60), value: a.value.slice(0, 160) }
+            : null,
+        )
+        .filter(
+          (a): a is { label: string; value: string } => a !== null,
+        )
+        .slice(0, 8)
+    : undefined;
+  return {
+    title,
+    type: typeof raw.type === 'string' ? raw.type.slice(0, 80) : undefined,
+    description:
+      typeof raw.description === 'string'
+        ? raw.description.slice(0, 600)
+        : undefined,
+    imageUrl:
+      typeof raw.imageUrl === 'string' && raw.imageUrl.length > 0
+        ? raw.imageUrl
+        : undefined,
+    website:
+      typeof raw.website === 'string' && raw.website.length > 0
+        ? raw.website
+        : undefined,
+    attributes,
+  };
+}
+
+function coercePAA(raw: any): PeopleAlsoAskItem | null {
+  if (!raw || typeof raw !== 'object') return null;
+  const question =
+    typeof raw.question === 'string' ? raw.question.slice(0, 240) : '';
+  if (!question) return null;
+  return {
+    question,
+    snippet:
+      typeof raw.snippet === 'string' ? raw.snippet.slice(0, 320) : undefined,
+    url:
+      typeof raw.url === 'string' && raw.url.length > 0 ? raw.url : undefined,
+    domain:
+      typeof raw.domain === 'string' && raw.domain.length > 0
+        ? raw.domain
+        : undefined,
+  };
+}
+
+function coercePlace(raw: any): SearchPlaceItem | null {
+  if (!raw || typeof raw !== 'object') return null;
+  const title =
+    typeof raw.title === 'string' ? raw.title.slice(0, 200) : '';
+  if (!title) return null;
+  return {
+    title,
+    address:
+      typeof raw.address === 'string' ? raw.address.slice(0, 240) : undefined,
+    rating: typeof raw.rating === 'number' ? raw.rating : undefined,
+    ratingCount:
+      typeof raw.ratingCount === 'number' ? raw.ratingCount : undefined,
+    category:
+      typeof raw.category === 'string'
+        ? raw.category.slice(0, 80)
+        : undefined,
+    url: typeof raw.url === 'string' ? raw.url : undefined,
+    domain: typeof raw.domain === 'string' ? raw.domain : undefined,
+    latitude: typeof raw.latitude === 'number' ? raw.latitude : undefined,
+    longitude:
+      typeof raw.longitude === 'number' ? raw.longitude : undefined,
+    mapsUrl:
+      typeof raw.mapsUrl === 'string' ? raw.mapsUrl : undefined,
+  };
+}
+
+function coerceProduct(raw: any): SearchProductItem | null {
+  if (!raw || typeof raw !== 'object') return null;
+  if (typeof raw.url !== 'string' || raw.url.length === 0) return null;
+  return {
+    title:
+      typeof raw.title === 'string' ? raw.title.slice(0, 200) : raw.url,
+    source:
+      typeof raw.source === 'string' ? raw.source.slice(0, 80) : undefined,
+    url: raw.url,
+    price: typeof raw.price === 'string' ? raw.price.slice(0, 60) : undefined,
+    rating: typeof raw.rating === 'number' ? raw.rating : undefined,
+    ratingCount:
+      typeof raw.ratingCount === 'number' ? raw.ratingCount : undefined,
+    imageUrl:
+      typeof raw.imageUrl === 'string' && raw.imageUrl.length > 0
+        ? raw.imageUrl
+        : undefined,
+    domain:
+      typeof raw.domain === 'string' && raw.domain.length > 0
+        ? raw.domain
+        : undefined,
+  };
+}
+
+function coerceScholar(raw: any): SearchScholarItem | null {
+  if (!raw || typeof raw !== 'object') return null;
+  if (typeof raw.url !== 'string' || raw.url.length === 0) return null;
+  return {
+    title:
+      typeof raw.title === 'string' ? raw.title.slice(0, 240) : raw.url,
+    url: raw.url,
+    domain: typeof raw.domain === 'string' ? raw.domain : undefined,
+    snippet:
+      typeof raw.snippet === 'string'
+        ? raw.snippet.slice(0, 280)
+        : undefined,
+    authors:
+      typeof raw.authors === 'string'
+        ? raw.authors.slice(0, 200)
+        : undefined,
+    year: typeof raw.year === 'string' ? raw.year.slice(0, 16) : undefined,
+    citedBy:
+      typeof raw.citedBy === 'number' && raw.citedBy >= 0
+        ? raw.citedBy
+        : undefined,
+  };
+}
+
+function coerceVideo(raw: any): SearchVideoItem | null {
+  if (!raw || typeof raw !== 'object') return null;
+  if (typeof raw.url !== 'string' || raw.url.length === 0) return null;
+  return {
+    title:
+      typeof raw.title === 'string' ? raw.title.slice(0, 200) : raw.url,
+    url: raw.url,
+    source:
+      typeof raw.source === 'string' ? raw.source.slice(0, 80) : undefined,
+    domain:
+      typeof raw.domain === 'string' && raw.domain.length > 0
+        ? raw.domain
+        : undefined,
+    date: typeof raw.date === 'string' ? raw.date.slice(0, 60) : undefined,
+    imageUrl:
+      typeof raw.imageUrl === 'string' && raw.imageUrl.length > 0
+        ? raw.imageUrl
+        : undefined,
+    channel:
+      typeof raw.channel === 'string'
+        ? raw.channel.slice(0, 80)
+        : undefined,
+    duration:
+      typeof raw.duration === 'string'
+        ? raw.duration.slice(0, 32)
+        : undefined,
+  };
+}
+
 /**
  * Parse the sources marker from text. Returns clean content + structured
- * search metadata (sources / images / followUps). If the marker is missing
- * or malformed JSON, returns content unchanged and empty arrays.
+ * search metadata: sources, images, followUps плюс v3-расширения
+ * (intent, summary, comparison, codeFix, newsTimeline). Marker отсутствует
+ * или JSON битый → возвращаем content без изменений и пустые поля.
  *
- * Backward-compatible: a legacy `[...]` payload becomes `{sources: [...]}`
- * with empty `images` and `followUps`.
+ * Backward-compatible:
+ *   - v1 (массив) → только sources
+ *   - v2 (объект без intent) → sources/images/followUps, остальное пустое
+ *   - v3 → все поля
  */
 export function parseSourcesFromContent(text: string): {
   cleanContent: string;
   sources: ISource[];
   images: SearchImage[];
   followUps: string[];
+  intent: SearchIntent | null;
+  summary: SearchSummary | null;
+  comparison: ComparisonWidget | null;
+  codeFix: CodeFixWidget | null;
+  newsTimeline: NewsTimelineItem[];
+  knowledgeGraph: SearchKnowledgeGraph | null;
+  peopleAlsoAsk: PeopleAlsoAskItem[];
+  news: SearchNewsItem[];
+  places: SearchPlaceItem[];
+  shopping: SearchProductItem[];
+  scholar: SearchScholarItem[];
+  videos: SearchVideoItem[];
 } {
   const empty = {
     cleanContent: text,
     sources: [] as ISource[],
     images: [] as SearchImage[],
     followUps: [] as string[],
+    intent: null as SearchIntent | null,
+    summary: null as SearchSummary | null,
+    comparison: null as ComparisonWidget | null,
+    codeFix: null as CodeFixWidget | null,
+    newsTimeline: [] as NewsTimelineItem[],
+    knowledgeGraph: null as SearchKnowledgeGraph | null,
+    peopleAlsoAsk: [] as PeopleAlsoAskItem[],
+    news: [] as SearchNewsItem[],
+    places: [] as SearchPlaceItem[],
+    shopping: [] as SearchProductItem[],
+    scholar: [] as SearchScholarItem[],
+    videos: [] as SearchVideoItem[],
   };
   if (!text) return empty;
 
@@ -255,14 +663,13 @@ export function parseSourcesFromContent(text: string): {
       .filter((s): s is ISource => s !== null)
       .slice(0, 8);
     return {
+      ...empty,
       cleanContent,
       sources,
-      images: [],
-      followUps: [],
     };
   }
 
-  // v2 — object { sources, images, followUps }
+  // v2 / v3 — object
   if (parsed && typeof parsed === 'object') {
     const rawSources = Array.isArray(parsed.sources) ? parsed.sources : [];
     const rawImages = Array.isArray(parsed.images) ? parsed.images : [];
@@ -291,7 +698,75 @@ export function parseSourcesFromContent(text: string): {
       .map((q: string) => q.trim().slice(0, 120))
       .slice(0, 4);
 
-    return { cleanContent, sources, images, followUps };
+    // v3 widgets
+    const intent = coerceIntent(parsed.intent);
+    const summary = coerceSummary(parsed.summary);
+    const comparison = coerceComparison(parsed.comparison);
+    const codeFix = coerceCodeFix(parsed.codeFix);
+    const newsTimeline = Array.isArray(parsed.newsTimeline)
+      ? (parsed.newsTimeline as any[])
+          .map((it: any) => coerceNewsItem(it))
+          .filter((it): it is NewsTimelineItem => it !== null)
+          .slice(0, 8)
+      : [];
+
+    // v4 widgets — knowledgeGraph / PAA / specialized endpoint payloads
+    const knowledgeGraph = coerceKnowledgeGraph(parsed.knowledgeGraph);
+    const peopleAlsoAsk = Array.isArray(parsed.peopleAlsoAsk)
+      ? (parsed.peopleAlsoAsk as any[])
+          .map((it: any) => coercePAA(it))
+          .filter((it): it is PeopleAlsoAskItem => it !== null)
+          .slice(0, 4)
+      : [];
+    const news = Array.isArray(parsed.news)
+      ? (parsed.news as any[])
+          .map((it: any) => coerceNewsItem(it))
+          .filter((it): it is NewsTimelineItem => it !== null)
+          .slice(0, 5)
+      : [];
+    const places = Array.isArray(parsed.places)
+      ? (parsed.places as any[])
+          .map((it: any) => coercePlace(it))
+          .filter((it): it is SearchPlaceItem => it !== null)
+          .slice(0, 5)
+      : [];
+    const shopping = Array.isArray(parsed.shopping)
+      ? (parsed.shopping as any[])
+          .map((it: any) => coerceProduct(it))
+          .filter((it): it is SearchProductItem => it !== null)
+          .slice(0, 5)
+      : [];
+    const scholar = Array.isArray(parsed.scholar)
+      ? (parsed.scholar as any[])
+          .map((it: any) => coerceScholar(it))
+          .filter((it): it is SearchScholarItem => it !== null)
+          .slice(0, 5)
+      : [];
+    const videos = Array.isArray(parsed.videos)
+      ? (parsed.videos as any[])
+          .map((it: any) => coerceVideo(it))
+          .filter((it): it is SearchVideoItem => it !== null)
+          .slice(0, 5)
+      : [];
+
+    return {
+      cleanContent,
+      sources,
+      images,
+      followUps,
+      intent,
+      summary,
+      comparison,
+      codeFix,
+      newsTimeline,
+      knowledgeGraph,
+      peopleAlsoAsk,
+      news,
+      places,
+      shopping,
+      scholar,
+      videos,
+    };
   }
 
   return { ...empty, cleanContent };

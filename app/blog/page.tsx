@@ -21,9 +21,34 @@ export const dynamic = 'force-dynamic';
 export const revalidate = 0;
 
 export const metadata: Metadata = {
+  metadataBase: new URL('https://iiset.io'),
   title: 'Новости ИИСеть — новости технологий и искусственного интеллекта',
   description:
     'Новости ИИСеть: новости технологий и искусственного интеллекта, обзоры ИИ-инструментов и практические кейсы применения ИИСети в работе и личной жизни.',
+  alternates: {
+    canonical: 'https://iiset.io/blog',
+  },
+  openGraph: {
+    type: 'website',
+    locale: 'ru_RU',
+    siteName: 'ИИСеть',
+    url: 'https://iiset.io/blog',
+    title: 'Новости ИИСеть — новости технологий и искусственного интеллекта',
+    description:
+      'Новости ИИСеть: новости технологий и искусственного интеллекта, обзоры ИИ-инструментов и практические кейсы применения ИИСети.',
+    images: ['https://iiset.io/brand.png'],
+  },
+  twitter: {
+    card: 'summary_large_image',
+    title: 'Новости ИИСеть',
+    description:
+      'Новости технологий и искусственного интеллекта, обзоры и практические кейсы.',
+    images: ['https://iiset.io/brand.png'],
+  },
+  robots: {
+    index: true,
+    follow: true,
+  },
 };
 
 // ── Apple typography ──────────────────────────────────────────────

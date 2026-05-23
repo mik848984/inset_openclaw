@@ -928,6 +928,11 @@ async transformMessagesToQuery({ userMessages, user }: IImagesRequest) {
         return 'Сервис веб-поиска временно недоступен. Пожалуйста, попробуйте позже.';
       }
 
+      const serperHeaders = {
+        'X-API-KEY': serperApiKey,
+        'Content-Type': 'application/json',
+      } as any;
+
       // fetch with hard timeout — Serper sometimes hangs on slow targets,
       // and we never want web-search to block the whole answer indefinitely.
       const fetchWithTimeout = async (
@@ -944,71 +949,252 @@ async transformMessagesToQuery({ userMessages, user }: IImagesRequest) {
         }
       };
 
-      // 1. Параллельно: текстовый поиск и поиск картинок через Serper.
-      //    Промежуточные сбои не должны валить весь web-search ответ.
+      // JSON-обёртка над fetchWithTimeout — для Serper endpoint'ов.
+      // Возвращает {} при сбое/невалидном JSON, чтобы не валить пайплайн.
+      const fetchJsonWithTimeout = async (
+        url: string,
+        body: any,
+        timeoutMs: number,
+      ): Promise<any> => {
+        try {
+          const r = await fetchWithTimeout(
+            url,
+            {
+              method: 'POST',
+              headers: serperHeaders,
+              body: JSON.stringify(body),
+            },
+            timeoutMs,
+          );
+          return await r.json();
+        } catch (e) {
+          console.error('[CHAT-WS] serper endpoint failed', url, e);
+          return {};
+        }
+      };
+
+      // 1. Early intent — нужен ДО fan-out, чтобы решить, какие специальные
+      //    endpoint'ы Serper дёргать параллельно с базовым /search.
+      const earlyLastUserText =
+        (userMessages[userMessages.length - 1]?.content as string) || '';
+      const earlyIntentText = `${query} ${earlyLastUserText}`.toLowerCase();
+      const hasAny = (t: string, ...needles: string[]) =>
+        needles.some((n) => t.includes(n));
+
+      const wantImages =
+        hasAny(
+          earlyIntentText,
+          'фото',
+          'картинки',
+          'изображения',
+          'как выглядит',
+          'дизайн',
+          'пример интерфейса',
+          'логотип',
+          'интерьер',
+        ) || true; // images always — дешевле, чем гадать
+      const wantNews = hasAny(
+        earlyIntentText,
+        'новости',
+        'что нового',
+        'последние',
+        'сегодня',
+        'за неделю',
+        'свежие данные',
+        'что произошло',
+        'случилось',
+        'анонсировали',
+        'breaking',
+      );
+      const wantPlaces = hasAny(
+        earlyIntentText,
+        'куда сходить',
+        'рядом',
+        'ресторан',
+        'кафе',
+        'кофейня',
+        'торговый центр',
+        'магазин',
+        'на карте',
+        'адрес ',
+      );
+      const wantShopping = hasAny(
+        earlyIntentText,
+        'купить',
+        'цена',
+        'стоимость',
+        'лучшие',
+        'выбрать',
+        'обзор',
+        'скидка',
+        'наушники',
+        'ноутбук',
+        'кроссовки',
+        'парфюм',
+      );
+      const wantScholar = hasAny(
+        earlyIntentText,
+        'исследование',
+        ' paper ',
+        'статья научная',
+        'arxiv',
+        ' doi ',
+        'метаанализ',
+        'benchmark paper',
+        'scholar',
+      );
+      const wantVideos = hasAny(
+        earlyIntentText,
+        'видео',
+        'youtube',
+        'обзор видео',
+        'туториал',
+        'как настроить',
+      );
+
+      // 2. Параллельный fan-out: текстовый поиск + (по интенту) специальные
+      //    endpoint'ы Serper. Сбой одного endpoint'а не валит web-search.
       const tSerper =
         typeof performance !== 'undefined' ? performance.now() : Date.now();
-      const serperHeaders = {
-        'X-API-KEY': serperApiKey,
-        'Content-Type': 'application/json',
-      } as any;
 
-      const searchPromise = fetchWithTimeout(
-        'https://google.serper.dev/search',
-        {
-          method: 'POST',
-          headers: serperHeaders,
-          body: JSON.stringify({
-            q: query,
-            gl: 'ru',
-            hl: 'ru',
-            num: 15,
-            autocorrect: true,
-            type: 'search',
-          }),
-        },
-        9000,
-      ).then((r) => r.json());
+      const commonBody = {
+        q: query,
+        gl: 'ru',
+        hl: 'ru',
+        autocorrect: true,
+      };
 
-      const imagesPromise = fetchWithTimeout(
-        'https://google.serper.dev/images',
-        {
-          method: 'POST',
-          headers: serperHeaders,
-          body: JSON.stringify({
-            q: query,
-            gl: 'ru',
-            hl: 'ru',
-            num: 12,
-            autocorrect: true,
-          }),
-        },
-        7000,
-      ).then((r) => r.json());
+      const tasks: Array<{
+        key:
+          | 'search'
+          | 'images'
+          | 'news'
+          | 'places'
+          | 'shopping'
+          | 'scholar'
+          | 'videos';
+        promise: Promise<any>;
+      }> = [];
 
-      const [searchSettled, imagesSettled] = await Promise.allSettled([
-        searchPromise,
-        imagesPromise,
-      ]);
+      tasks.push({
+        key: 'search',
+        promise: fetchJsonWithTimeout(
+          'https://google.serper.dev/search',
+          { ...commonBody, num: 15, type: 'search' },
+          9000,
+        ),
+      });
 
-      const searchJson: any =
-        searchSettled.status === 'fulfilled' ? searchSettled.value : {};
-      const imagesJson: any =
-        imagesSettled.status === 'fulfilled' ? imagesSettled.value : {};
+      if (wantImages) {
+        tasks.push({
+          key: 'images',
+          promise: fetchJsonWithTimeout(
+            'https://google.serper.dev/images',
+            { ...commonBody, num: 12 },
+            7000,
+          ),
+        });
+      }
+      if (wantNews) {
+        tasks.push({
+          key: 'news',
+          promise: fetchJsonWithTimeout(
+            'https://google.serper.dev/news',
+            { ...commonBody, num: 12 },
+            7000,
+          ),
+        });
+      }
+      if (wantPlaces) {
+        tasks.push({
+          key: 'places',
+          promise: fetchJsonWithTimeout(
+            'https://google.serper.dev/places',
+            { ...commonBody, num: 10 },
+            7000,
+          ),
+        });
+      }
+      if (wantShopping) {
+        tasks.push({
+          key: 'shopping',
+          promise: fetchJsonWithTimeout(
+            'https://google.serper.dev/shopping',
+            { ...commonBody, num: 12 },
+            7000,
+          ),
+        });
+      }
+      if (wantScholar) {
+        tasks.push({
+          key: 'scholar',
+          promise: fetchJsonWithTimeout(
+            'https://google.serper.dev/scholar',
+            { ...commonBody, num: 10 },
+            8000,
+          ),
+        });
+      }
+      if (wantVideos) {
+        tasks.push({
+          key: 'videos',
+          promise: fetchJsonWithTimeout(
+            'https://google.serper.dev/videos',
+            { ...commonBody, num: 10 },
+            7000,
+          ),
+        });
+      }
+
+      const settled = await Promise.allSettled(tasks.map((t) => t.promise));
+      const byKey: Record<string, any> = {};
+      tasks.forEach((t, i) => {
+        const s = settled[i];
+        byKey[t.key] = s.status === 'fulfilled' ? s.value : {};
+      });
+
+      const searchJson: any = byKey.search || {};
+      const imagesJson: any = byKey.images || {};
+      const newsJson: any = byKey.news || {};
+      const placesJson: any = byKey.places || {};
+      const shoppingJson: any = byKey.shopping || {};
+      const scholarJson: any = byKey.scholar || {};
+      const videosJson: any = byKey.videos || {};
 
       const organic = ((searchJson && searchJson.organic) || []) as any[];
       const serperImages = ((imagesJson && imagesJson.images) || []) as any[];
       const relatedSearches = ((searchJson && searchJson.relatedSearches) ||
         []) as any[];
+      const knowledgeGraphRaw =
+        (searchJson && searchJson.knowledgeGraph) || null;
+      const peopleAlsoAskRaw = ((searchJson &&
+        (searchJson.peopleAlsoAsk || searchJson.peopleAlsoAskBlock)) ||
+        []) as any[];
+      const newsRaw = ((newsJson && newsJson.news) || []) as any[];
+      const placesRaw = ((placesJson && placesJson.places) || []) as any[];
+      const shoppingRaw = ((shoppingJson && shoppingJson.shopping) ||
+        []) as any[];
+      // Serper /scholar отдаёт результаты обычно под organic; на всякий
+      // случай поддерживаем и shape { scholar: [...] }.
+      const scholarRaw = (((scholarJson && scholarJson.organic) ||
+        (scholarJson && scholarJson.scholar) ||
+        []) as any[]);
+      const videosRaw = ((videosJson && videosJson.videos) || []) as any[];
 
       console.log(
-        `[CHAT-WS] serper_search+images_done dt=${Math.round(
+        `[CHAT-WS] serper_fanout_done dt=${Math.round(
           (typeof performance !== 'undefined'
             ? performance.now()
             : Date.now()) - tSerper,
-        )}ms organic_count=${organic.length} images_count=${
+        )}ms organic=${organic.length} images=${
           serperImages.length
-        } related_count=${relatedSearches.length}`,
+        } related=${relatedSearches.length} news=${newsRaw.length} places=${
+          placesRaw.length
+        } shopping=${shoppingRaw.length} scholar=${
+          scholarRaw.length
+        } videos=${videosRaw.length} kg=${!!knowledgeGraphRaw} paa=${
+          peopleAlsoAskRaw.length
+        }`,
       );
 
       const buildFallbackMessages = () => [
@@ -1177,20 +1363,22 @@ async transformMessagesToQuery({ userMessages, user }: IImagesRequest) {
       const now = new Date();
       const currentDate = now.toISOString().split('T')[0];
 
-      const systemPrompt =
-        'Ты — ИИСеть, умный ассистент с доступом к интернету. ' +
-        'Текущая дата сервера: ' +
-        currentDate +
-        '. ' +
-        'Отвечай на вопросы пользователя только на русском языке. ' +
-        'Используй только факты из переданных ниже источников и не придумывай данные. ' +
-        'Никогда не придумывай дату, температуру, скорость ветра или другие численные значения, если они явно не указаны в источниках. ' +
-        'Если источники относятся к прошлым датам, обязательно укажи, что это данные по состоянию на эту дату и что они могут быть неактуальны. ' +
-        'Если информации недостаточно, прямо скажи об этом и предложи пользователю свериться с профильным сервисом (например, погодным сайтом или новостями). ' +
-        'В тексте ответа обязательно ссылайся на источники в формате [1], [2] и т.п. ' +
-        'Не используй таблицы в ответе, кроме случаев, когда пользователь прямо просит оформить информацию в виде таблицы. ' +
-        'Для списков мест, преимуществ, шагов и подобных вещей используй обычный текст с подзаголовками и маркированными/нумерованными списками. ' +
-        'Не выводи в конце ответа отдельный раздел «Источники» и не дублируй голые URL — интерфейс покажет источники отдельным блоком карточек.';
+      const systemPrompt = [
+        'Ты — ИИСеть, умный ассистент с доступом к интернету.',
+        `Текущая дата сервера: ${currentDate}.`,
+        'Отвечай на вопросы пользователя только на русском языке.',
+        'Опирайся только на факты из переданных ниже источников и не придумывай данные.',
+        'Никогда не придумывай дату, температуру, скорость ветра, цены и другие численные значения, если они явно не указаны в источниках.',
+        'Если источники относятся к прошлым датам, отметь это в ответе.',
+        'Если информации не хватает — честно скажи об этом и предложи свериться с профильным сервисом.',
+        'В тексте ставь короткие маркеры цитирования [1], [2], [3] сразу после утверждения, опирающегося на источник.',
+        'Никогда не выводи голые URL и не вставляй markdown-ссылки с полными URL — UI сам покажет карточки источников.',
+        'Никогда не добавляй в конец ответа раздел «Источники», список ссылок или JSON.',
+        'Никогда не выводи теги <think> и не описывай свои размышления.',
+        'Интерфейс может уже показывать виджеты: Knowledge Graph, картинки, новости, места, товары, видео, follow-up вопросы. Не дублируй их полное содержимое — давай краткий вывод и ссылайся на источники.',
+        'Используй таблицу только если пользователь прямо просит таблицу. Для перечислений — обычные маркированные/нумерованные списки.',
+        'Структура: короткий вывод (1–2 предложения), затем детали, при необходимости — «Что важно учесть».',
+      ].join(' ');
 
       const answerMessages = [
         {
@@ -1258,28 +1446,591 @@ async transformMessagesToQuery({ userMessages, user }: IImagesRequest) {
         .filter(Boolean)
         .slice(0, 6);
 
-      // followUps: предпочитаем relatedSearches от Serper, иначе — три
-      // нейтральных fallback-вопроса, которые работают для любого запроса.
-      const fallbackFollowUps = [
-        'Дай краткое резюме',
-        'Сравни ключевые варианты',
-        'Покажи свежие данные',
-      ];
+      // ── v3 widgets: intent detection ─────────────────────────────
+      // Rule-based intent — нужен для прайорити-логики follow-ups и
+      // для подсветки виджетов в UI (label "Новости/Покупки/..." и т.д.).
+      const intentSources = [
+        typeof query === 'string' ? query : '',
+        typeof lastUserMessage === 'string' ? lastUserMessage : '',
+      ]
+        .join(' ')
+        .toLowerCase();
+
+      type DetectedIntent =
+        | 'general'
+        | 'news'
+        | 'comparison'
+        | 'code'
+        | 'weather'
+        | 'places'
+        | 'shopping'
+        | 'image'
+        | 'video'
+        | 'scholar';
+
+      const detectIntent = (text: string): DetectedIntent => {
+        const t = text || '';
+        const has = (...needles: string[]) =>
+          needles.some((n) => t.includes(n));
+
+        if (
+          has(
+            'сравни',
+            ' vs ',
+            ' versus ',
+            'против',
+            'что лучше',
+            'отличия',
+            'разница между',
+            'compare ',
+          )
+        ) {
+          return 'comparison';
+        }
+        if (
+          has(
+            'новости',
+            'что нового',
+            'последние',
+            'сегодня',
+            'за неделю',
+            'свежие данные',
+            'что произошло',
+            'случилось',
+            'анонсировали',
+            'breaking',
+          )
+        ) {
+          return 'news';
+        }
+        if (
+          has(
+            'погода',
+            'температура',
+            'дождь',
+            'ветер',
+            'что надеть',
+            'weather ',
+          )
+        ) {
+          return 'weather';
+        }
+        if (
+          has(
+            'исследование',
+            ' paper ',
+            'статья научная',
+            'arxiv',
+            ' doi ',
+            'метаанализ',
+            'benchmark paper',
+            'scholar',
+          )
+        ) {
+          return 'scholar';
+        }
+        if (
+          has(
+            'видео',
+            'youtube',
+            'обзор видео',
+            'туториал',
+            'как настроить',
+          )
+        ) {
+          return 'video';
+        }
+        if (
+          has(
+            'куда сходить',
+            'рядом',
+            'ресторан',
+            'кафе',
+            'кофейня',
+            'торговый центр',
+            'магазин',
+            'на карте',
+            'адрес ',
+          )
+        ) {
+          return 'places';
+        }
+        if (
+          has(
+            'купить',
+            'цена',
+            'стоимость',
+            'лучшие',
+            'выбрать',
+            'обзор',
+            'скидка',
+            'наушники',
+            'ноутбук',
+            'кроссовки',
+            'парфюм',
+          )
+        ) {
+          return 'shopping';
+        }
+        if (
+          has(
+            'ошибка',
+            'error',
+            'exception',
+            'docker',
+            'next.js',
+            'typescript',
+            'python',
+            'npm',
+            ' git ',
+            'linux',
+            'команда',
+            'как исправить',
+            'failed',
+            'traceback',
+          )
+        ) {
+          return 'code';
+        }
+        if (
+          has(
+            'фото',
+            'картинки',
+            'изображения',
+            'как выглядит',
+            'дизайн',
+            'пример интерфейса',
+            'логотип',
+            'интерьер',
+          )
+        ) {
+          return 'image';
+        }
+        return 'general';
+      };
+
+      const intent = detectIntent(intentSources);
+
+      // followUps: приоритет
+      //   1) relatedSearches от Serper
+      //   2) peopleAlsoAsk вопросы
+      //   3) fallback — три нейтральных follow-up по intent
+      const fallbackByIntent: Record<string, string[]> = {
+        general: [
+          'Дай краткое резюме',
+          'Сравни ключевые варианты',
+          'Покажи свежие данные',
+        ],
+        news: [
+          'Что важно знать одним абзацем?',
+          'Какие источники самые свежие?',
+          'Каковы возможные последствия?',
+        ],
+        comparison: [
+          'Кому что подойдёт?',
+          'Сравни по цене',
+          'Какие есть альтернативы?',
+        ],
+        code: [
+          'Как воспроизвести проблему?',
+          'Покажи безопасное решение',
+          'Какие команды нужно выполнить?',
+        ],
+        shopping: [
+          'Какие варианты до бюджета?',
+          'Где сейчас лучше цена?',
+          'На что обратить внимание перед покупкой?',
+        ],
+        places: [
+          'Покажи рядом',
+          'Какие отзывы у этих мест?',
+          'Лучшее время для посещения?',
+        ],
+        scholar: [
+          'Какие ключевые выводы?',
+          'Кто авторы и год публикации?',
+          'Есть ли последующие работы?',
+        ],
+        video: [
+          'Покажи самые свежие видео',
+          'С чего начать изучение?',
+          'Есть ли русскоязычные туториалы?',
+        ],
+        image: [
+          'Покажи больше визуальных материалов',
+          'Какие стили встречаются чаще?',
+          'Откуда эти изображения?',
+        ],
+        weather: [
+          'Что надеть сегодня?',
+          'Как будет завтра?',
+          'Прогноз на неделю?',
+        ],
+      };
+      const fallbackFollowUps =
+        fallbackByIntent[intent] || fallbackByIntent.general;
       const followUpsFromSerper = (relatedSearches as any[])
         .map((r: any) => (typeof r === 'string' ? r : r?.query))
         .filter((q: any) => typeof q === 'string' && q.trim().length > 0)
         .map((q: string) => q.trim().slice(0, 120));
-      const followUpsPayload = (
+      const followUpsFromPAA = (peopleAlsoAskRaw as any[])
+        .map((p: any) => (typeof p?.question === 'string' ? p.question : ''))
+        .filter((q: any) => typeof q === 'string' && q.trim().length > 0)
+        .map((q: string) => q.trim().slice(0, 120));
+      const followUpsCandidates =
         followUpsFromSerper.length > 0
           ? followUpsFromSerper
-          : fallbackFollowUps
-      ).slice(0, 4);
+          : followUpsFromPAA.length > 0
+            ? followUpsFromPAA
+            : fallbackFollowUps;
+      const followUpsSeen = new Set<string>();
+      const followUpsPayload = followUpsCandidates
+        .filter((q: string) => {
+          const k = q.toLowerCase();
+          if (followUpsSeen.has(k)) return false;
+          followUpsSeen.add(k);
+          return true;
+        })
+        .slice(0, 5);
 
-      const searchMetaPayload = {
+      const summaryDomains = Array.from(
+        new Set(
+          sourcesPayload
+            .map((s) => s.domain)
+            .filter((d) => typeof d === 'string' && d.length > 0),
+        ),
+      ).slice(0, 12);
+
+      const summaryPayload = {
+        totalSources: sourcesPayload.length,
+        readSources: pagesFromScrape.length,
+        domains: summaryDomains,
+        intent,
+        generatedAt: now.toISOString(),
+      };
+
+      // intent === 'comparison'
+      let comparisonPayload: {
+        query: string;
+        criteria: string[];
+        note: string;
+      } | null = null;
+      if (intent === 'comparison') {
+        comparisonPayload = {
+          query: (lastUserMessage || query || '').slice(0, 240),
+          criteria: [
+            'Качество',
+            'Скорость',
+            'Цена/стоимость',
+            'Риски',
+            'Когда выбрать',
+          ],
+          note:
+            'Сравнение основано на найденных источниках и ответе модели.',
+        };
+      }
+
+      // intent === 'code': грубая детекция стека
+      let codeFixPayload: {
+        query: string;
+        detectedStack: string[];
+        safetyNote: string;
+      } | null = null;
+      if (intent === 'code') {
+        const stackHits: string[] = [];
+        const checkStack = (label: string, ...needles: string[]) => {
+          if (needles.some((n) => intentSources.includes(n))) {
+            stackHits.push(label);
+          }
+        };
+        checkStack('Docker', 'docker', 'compose');
+        checkStack('Next.js', 'next.js', 'next ');
+        checkStack('TypeScript', 'typescript', ' ts ', '.ts');
+        checkStack('Python', 'python', 'py');
+        checkStack('npm', 'npm', 'pnpm', 'yarn');
+        checkStack('Git', ' git ', 'git ');
+        checkStack('Linux', 'linux', 'ubuntu', 'debian', 'bash');
+        codeFixPayload = {
+          query: (lastUserMessage || query || '').slice(0, 240),
+          detectedStack: Array.from(new Set(stackHits)).slice(0, 6),
+          safetyNote:
+            'Перед выполнением команд проверьте окружение и бэкапы.',
+        };
+      }
+
+      // intent === 'news': мини-timeline из топ-3..5 результатов
+      let newsTimelinePayload: Array<{
+        title: string;
+        url: string;
+        domain: string;
+        date?: string;
+        snippet?: string;
+      }> = [];
+      if (intent === 'news') {
+        const seenUrl = new Set<string>();
+        newsTimelinePayload = (dedupedOrganic as any[])
+          .map((item: any) => {
+            const url = item.link || item.url || '';
+            if (!url || seenUrl.has(url)) return null;
+            seenUrl.add(url);
+            return {
+              title:
+                typeof item.title === 'string'
+                  ? item.title.slice(0, 200)
+                  : safeDomain(url) || url,
+              url,
+              domain: safeDomain(url),
+              date: typeof item.date === 'string' ? item.date : undefined,
+              snippet:
+                typeof item.snippet === 'string'
+                  ? item.snippet.slice(0, 240)
+                  : undefined,
+            };
+          })
+          .filter(Boolean)
+          .slice(0, 5) as any[];
+      }
+
+      // ── v4 widgets: KG, PAA, news, places, shopping, scholar, videos ──
+      // Каждый блок — defensive coerce от того, что вернул Serper.
+
+      const knowledgeGraphPayload = (() => {
+        const kg = knowledgeGraphRaw;
+        if (!kg || typeof kg !== 'object') return null;
+        const title =
+          typeof kg.title === 'string' ? kg.title.slice(0, 200) : '';
+        if (!title) return null;
+        const rawAttrs = kg.attributes;
+        let attributes: Array<{ label: string; value: string }> | undefined;
+        if (rawAttrs && typeof rawAttrs === 'object') {
+          attributes = Object.entries(rawAttrs)
+            .filter(
+              ([k, v]) => typeof k === 'string' && typeof v === 'string',
+            )
+            .map(([k, v]) => ({
+              label: String(k).slice(0, 60),
+              value: String(v).slice(0, 160),
+            }))
+            .slice(0, 8);
+        }
+        return {
+          title,
+          type: typeof kg.type === 'string' ? kg.type.slice(0, 80) : undefined,
+          description:
+            typeof kg.description === 'string'
+              ? kg.description.slice(0, 600)
+              : undefined,
+          imageUrl:
+            typeof kg.imageUrl === 'string' && kg.imageUrl.length > 0
+              ? kg.imageUrl
+              : undefined,
+          website:
+            typeof kg.website === 'string' && kg.website.length > 0
+              ? kg.website
+              : undefined,
+          attributes,
+        };
+      })();
+
+      const peopleAlsoAskPayload = (peopleAlsoAskRaw as any[])
+        .map((p: any) => {
+          const question =
+            typeof p?.question === 'string' ? p.question.slice(0, 240) : '';
+          if (!question) return null;
+          const url = p?.link || p?.url || '';
+          return {
+            question,
+            snippet:
+              typeof p?.snippet === 'string'
+                ? p.snippet.slice(0, 320)
+                : undefined,
+            url: typeof url === 'string' && url.length > 0 ? url : undefined,
+            domain:
+              typeof url === 'string' && url.length > 0
+                ? safeDomain(url)
+                : undefined,
+          };
+        })
+        .filter(Boolean)
+        .slice(0, 4);
+
+      const newsPayload = (newsRaw as any[])
+        .map((n: any) => {
+          const url = n?.link || n?.url || '';
+          if (!url) return null;
+          return {
+            title:
+              typeof n?.title === 'string' ? n.title.slice(0, 200) : url,
+            url,
+            domain: safeDomain(url),
+            date: typeof n?.date === 'string' ? n.date.slice(0, 60) : undefined,
+            snippet:
+              typeof n?.snippet === 'string'
+                ? n.snippet.slice(0, 240)
+                : undefined,
+          };
+        })
+        .filter(Boolean)
+        .slice(0, 5);
+
+      const placesPayload = (placesRaw as any[])
+        .map((p: any) => {
+          const title =
+            typeof p?.title === 'string' ? p.title.slice(0, 200) : '';
+          if (!title) return null;
+          const url = p?.website || p?.link || '';
+          return {
+            title,
+            address:
+              typeof p?.address === 'string'
+                ? p.address.slice(0, 240)
+                : undefined,
+            rating: typeof p?.rating === 'number' ? p.rating : undefined,
+            ratingCount:
+              typeof p?.ratingCount === 'number' ? p.ratingCount : undefined,
+            category:
+              typeof p?.category === 'string'
+                ? p.category.slice(0, 80)
+                : undefined,
+            url: typeof url === 'string' && url.length > 0 ? url : undefined,
+            domain:
+              typeof url === 'string' && url.length > 0
+                ? safeDomain(url)
+                : undefined,
+            latitude:
+              typeof p?.latitude === 'number' ? p.latitude : undefined,
+            longitude:
+              typeof p?.longitude === 'number' ? p.longitude : undefined,
+            mapsUrl:
+              typeof p?.cid === 'string'
+                ? `https://www.google.com/maps/place/?q=place_id:${p.cid}`
+                : undefined,
+          };
+        })
+        .filter(Boolean)
+        .slice(0, 5);
+
+      const shoppingPayload = (shoppingRaw as any[])
+        .map((s: any) => {
+          const url = s?.link || s?.url || '';
+          if (!url) return null;
+          return {
+            title:
+              typeof s?.title === 'string' ? s.title.slice(0, 200) : url,
+            source:
+              typeof s?.source === 'string'
+                ? s.source.slice(0, 80)
+                : undefined,
+            url,
+            price:
+              typeof s?.price === 'string'
+                ? s.price.slice(0, 60)
+                : typeof s?.price === 'number'
+                  ? `${s.price}`
+                  : undefined,
+            rating: typeof s?.rating === 'number' ? s.rating : undefined,
+            ratingCount:
+              typeof s?.ratingCount === 'number' ? s.ratingCount : undefined,
+            imageUrl:
+              typeof s?.imageUrl === 'string' && s.imageUrl.length > 0
+                ? s.imageUrl
+                : undefined,
+            domain: safeDomain(url),
+          };
+        })
+        .filter(Boolean)
+        .slice(0, 5);
+
+      const scholarPayload = (scholarRaw as any[])
+        .map((s: any) => {
+          const url = s?.link || s?.url || '';
+          if (!url) return null;
+          return {
+            title:
+              typeof s?.title === 'string' ? s.title.slice(0, 240) : url,
+            url,
+            domain: safeDomain(url),
+            snippet:
+              typeof s?.snippet === 'string'
+                ? s.snippet.slice(0, 280)
+                : undefined,
+            authors:
+              typeof s?.publicationInfo === 'string'
+                ? s.publicationInfo.slice(0, 200)
+                : typeof s?.authors === 'string'
+                  ? s.authors.slice(0, 200)
+                  : undefined,
+            year:
+              typeof s?.year === 'string'
+                ? s.year.slice(0, 16)
+                : typeof s?.year === 'number'
+                  ? String(s.year)
+                  : undefined,
+            citedBy:
+              typeof s?.citedBy === 'number' && s.citedBy >= 0
+                ? s.citedBy
+                : undefined,
+          };
+        })
+        .filter(Boolean)
+        .slice(0, 5);
+
+      const videosPayload = (videosRaw as any[])
+        .map((v: any) => {
+          const url = v?.link || v?.url || '';
+          if (!url) return null;
+          return {
+            title:
+              typeof v?.title === 'string' ? v.title.slice(0, 200) : url,
+            url,
+            source:
+              typeof v?.source === 'string'
+                ? v.source.slice(0, 80)
+                : undefined,
+            domain: safeDomain(url),
+            date: typeof v?.date === 'string' ? v.date.slice(0, 60) : undefined,
+            imageUrl:
+              typeof v?.imageUrl === 'string' && v.imageUrl.length > 0
+                ? v.imageUrl
+                : undefined,
+            channel:
+              typeof v?.channel === 'string'
+                ? v.channel.slice(0, 80)
+                : undefined,
+            duration:
+              typeof v?.duration === 'string'
+                ? v.duration.slice(0, 32)
+                : undefined,
+          };
+        })
+        .filter(Boolean)
+        .slice(0, 5);
+
+      const searchMetaPayload: any = {
         sources: sourcesPayload,
         images: imagesPayload,
         followUps: followUpsPayload,
+        intent,
+        summary: summaryPayload,
       };
+      if (comparisonPayload) searchMetaPayload.comparison = comparisonPayload;
+      if (codeFixPayload) searchMetaPayload.codeFix = codeFixPayload;
+      if (newsTimelinePayload.length > 0) {
+        searchMetaPayload.newsTimeline = newsTimelinePayload;
+      }
+      if (knowledgeGraphPayload) {
+        searchMetaPayload.knowledgeGraph = knowledgeGraphPayload;
+      }
+      if (peopleAlsoAskPayload.length > 0) {
+        searchMetaPayload.peopleAlsoAsk = peopleAlsoAskPayload;
+      }
+      if (newsPayload.length > 0) searchMetaPayload.news = newsPayload;
+      if (placesPayload.length > 0) searchMetaPayload.places = placesPayload;
+      if (shoppingPayload.length > 0)
+        searchMetaPayload.shopping = shoppingPayload;
+      if (scholarPayload.length > 0)
+        searchMetaPayload.scholar = scholarPayload;
+      if (videosPayload.length > 0) searchMetaPayload.videos = videosPayload;
 
       const sourcesMarker = `__IISET_SOURCES__=${JSON.stringify(
         searchMetaPayload,
@@ -1287,7 +2038,7 @@ async transformMessagesToQuery({ userMessages, user }: IImagesRequest) {
 
       // 4. Финальный ответ через GPT-OSS (Deepinfra)
       console.log(
-        `[CHAT-WS] final_llm_request_start dt_total_pre_llm=${wsDt()}ms sources=${sourcesPayload.length} images=${imagesPayload.length} followUps=${followUpsPayload.length}`,
+        `[CHAT-WS] final_llm_request_start dt_total_pre_llm=${wsDt()}ms intent=${intent} sources=${sourcesPayload.length} images=${imagesPayload.length} followUps=${followUpsPayload.length} news=${newsPayload.length} places=${placesPayload.length} shopping=${shoppingPayload.length} scholar=${scholarPayload.length} videos=${videosPayload.length} kg=${!!knowledgeGraphPayload} paa=${peopleAlsoAskPayload.length} comparison=${!!comparisonPayload} codeFix=${!!codeFixPayload}`,
       );
       const llmStreamResult = (await this.llmBaseRequest({
         model: 'openai/gpt-oss-120b',

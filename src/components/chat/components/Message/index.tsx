@@ -9,6 +9,7 @@ import {
   Grid,
   Icon,
   IconButton,
+  Stack,
   Text,
   useColorModeValue,
   useDisclosure,
@@ -19,13 +20,41 @@ import {
   MenuItem,
 } from '@chakra-ui/react';
 import { MdAutoAwesome } from 'react-icons/md';
-import { LuChevronDown, LuLink, LuImages, LuSparkles } from 'react-icons/lu';
+import {
+  LuChevronDown,
+  LuLink,
+  LuImages,
+  LuSparkles,
+  LuLayoutGrid,
+  LuTerminal,
+  LuClock,
+  LuMapPin,
+  LuShoppingBag,
+  LuGraduationCap,
+  LuVideo,
+  LuMessageSquare,
+  LuInfo,
+  LuStar,
+  LuExternalLink,
+} from 'react-icons/lu';
 import { markdown } from '@/services/ui/MarkdownService';
 import {
   extractThinkBlocks,
   parseSourcesFromContent,
   ISource,
   SearchImage,
+  SearchIntent,
+  SearchSummary,
+  ComparisonWidget as ComparisonWidgetMeta,
+  CodeFixWidget as CodeFixWidgetMeta,
+  NewsTimelineItem,
+  SearchKnowledgeGraph,
+  PeopleAlsoAskItem,
+  SearchNewsItem,
+  SearchPlaceItem,
+  SearchProductItem,
+  SearchScholarItem,
+  SearchVideoItem,
 } from '@/utils/normalizeModelOutput';
 import React, { useContext, useEffect, useMemo, useState } from 'react';
 import { NextAvatar } from '@/components/image/Avatar';
@@ -116,6 +145,7 @@ function Message({ message, isLast }: IProps) {
     setMessages,
     reasoningEnabled,
     sendMessage,
+    activeProjectId,
   } = useContext(ChatAiContext);
   const { setTariffModalOpen, setPayBalanceModalOpen } =
     useContext(ModalContext);
@@ -326,57 +356,166 @@ function Message({ message, isLast }: IProps) {
 
   if (message.role === 'assistant') {
     // ── Parse sources marker (Perplexity cards) and reasoning ─────
-    // Priority: live `message.sources/images/followUps` (during streaming)
-    // > marker re-parse from content (after reload). Marker is stripped.
-    const { cleanText, reasoningText, sources, images, followUps } = useMemo(
-      () => {
-        const raw = message.content || '';
-        const sourcesParsed = parseSourcesFromContent(raw);
+    // Priority: live `message.*` (during streaming) > marker re-parse from
+    // content (after reload). Marker is stripped from visible text.
+    const {
+      cleanText,
+      reasoningText,
+      sources,
+      images,
+      followUps,
+      intent,
+      summary,
+      comparison,
+      codeFix,
+      newsTimeline,
+      knowledgeGraph,
+      peopleAlsoAsk,
+      news,
+      places,
+      shopping,
+      scholar,
+      videos,
+    } = useMemo(() => {
+      const raw = message.content || '';
+      const sourcesParsed = parseSourcesFromContent(raw);
 
-        const liveSources: ISource[] | undefined = (message as any).sources;
-        const liveImages: SearchImage[] | undefined = (message as any).images;
-        const liveFollowUps: string[] | undefined = (message as any).followUps;
+      const liveSources: ISource[] | undefined = (message as any).sources;
+      const liveImages: SearchImage[] | undefined = (message as any).images;
+      const liveFollowUps: string[] | undefined = (message as any).followUps;
+      const liveIntent: SearchIntent | null | undefined = (message as any)
+        .intent;
+      const liveSummary: SearchSummary | null | undefined = (message as any)
+        .summary;
+      const liveComparison: ComparisonWidgetMeta | null | undefined = (
+        message as any
+      ).comparison;
+      const liveCodeFix: CodeFixWidgetMeta | null | undefined = (
+        message as any
+      ).codeFix;
+      const liveNewsTimeline: NewsTimelineItem[] | undefined = (
+        message as any
+      ).newsTimeline;
+      const liveKnowledgeGraph: SearchKnowledgeGraph | null | undefined = (
+        message as any
+      ).knowledgeGraph;
+      const livePeopleAlsoAsk: PeopleAlsoAskItem[] | undefined = (
+        message as any
+      ).peopleAlsoAsk;
+      const liveNews: SearchNewsItem[] | undefined = (message as any).news;
+      const livePlaces: SearchPlaceItem[] | undefined = (message as any)
+        .places;
+      const liveShopping: SearchProductItem[] | undefined = (message as any)
+        .shopping;
+      const liveScholar: SearchScholarItem[] | undefined = (message as any)
+        .scholar;
+      const liveVideos: SearchVideoItem[] | undefined = (message as any)
+        .videos;
 
-        const finalSources: ISource[] =
-          liveSources && liveSources.length > 0
-            ? liveSources
-            : sourcesParsed.sources;
-        const finalImages: SearchImage[] =
-          liveImages && liveImages.length > 0
-            ? liveImages
-            : sourcesParsed.images;
-        const finalFollowUps: string[] =
-          liveFollowUps && liveFollowUps.length > 0
-            ? liveFollowUps
-            : sourcesParsed.followUps;
+      const finalSources: ISource[] =
+        liveSources && liveSources.length > 0
+          ? liveSources
+          : sourcesParsed.sources;
+      const finalImages: SearchImage[] =
+        liveImages && liveImages.length > 0
+          ? liveImages
+          : sourcesParsed.images;
+      const finalFollowUps: string[] =
+        liveFollowUps && liveFollowUps.length > 0
+          ? liveFollowUps
+          : sourcesParsed.followUps;
+      const finalIntent: SearchIntent | null =
+        liveIntent !== undefined ? liveIntent : sourcesParsed.intent;
+      const finalSummary: SearchSummary | null =
+        liveSummary !== undefined ? liveSummary : sourcesParsed.summary;
+      const finalComparison: ComparisonWidgetMeta | null =
+        liveComparison !== undefined
+          ? liveComparison
+          : sourcesParsed.comparison;
+      const finalCodeFix: CodeFixWidgetMeta | null =
+        liveCodeFix !== undefined ? liveCodeFix : sourcesParsed.codeFix;
+      const finalNewsTimeline: NewsTimelineItem[] =
+        liveNewsTimeline && liveNewsTimeline.length > 0
+          ? liveNewsTimeline
+          : sourcesParsed.newsTimeline;
+      const finalKnowledgeGraph: SearchKnowledgeGraph | null =
+        liveKnowledgeGraph !== undefined
+          ? liveKnowledgeGraph
+          : sourcesParsed.knowledgeGraph;
+      const finalPeopleAlsoAsk: PeopleAlsoAskItem[] =
+        livePeopleAlsoAsk && livePeopleAlsoAsk.length > 0
+          ? livePeopleAlsoAsk
+          : sourcesParsed.peopleAlsoAsk;
+      const finalNews: SearchNewsItem[] =
+        liveNews && liveNews.length > 0 ? liveNews : sourcesParsed.news;
+      const finalPlaces: SearchPlaceItem[] =
+        livePlaces && livePlaces.length > 0
+          ? livePlaces
+          : sourcesParsed.places;
+      const finalShopping: SearchProductItem[] =
+        liveShopping && liveShopping.length > 0
+          ? liveShopping
+          : sourcesParsed.shopping;
+      const finalScholar: SearchScholarItem[] =
+        liveScholar && liveScholar.length > 0
+          ? liveScholar
+          : sourcesParsed.scholar;
+      const finalVideos: SearchVideoItem[] =
+        liveVideos && liveVideos.length > 0
+          ? liveVideos
+          : sourcesParsed.videos;
 
-        const withoutSources = sourcesParsed.cleanContent;
-        if (reasoningEnabled) {
-          const ext = extractThinkBlocks(withoutSources);
-          return {
-            cleanText: ext.cleanText,
-            reasoningText: ext.reasoningText,
-            sources: finalSources,
-            images: finalImages,
-            followUps: finalFollowUps,
-          };
-        }
+      const withoutSources = sourcesParsed.cleanContent;
+      const base = {
+        sources: finalSources,
+        images: finalImages,
+        followUps: finalFollowUps,
+        intent: finalIntent,
+        summary: finalSummary,
+        comparison: finalComparison,
+        codeFix: finalCodeFix,
+        newsTimeline: finalNewsTimeline,
+        knowledgeGraph: finalKnowledgeGraph,
+        peopleAlsoAsk: finalPeopleAlsoAsk,
+        news: finalNews,
+        places: finalPlaces,
+        shopping: finalShopping,
+        scholar: finalScholar,
+        videos: finalVideos,
+      };
+
+      if (reasoningEnabled) {
+        const ext = extractThinkBlocks(withoutSources);
         return {
-          cleanText: withoutSources,
-          reasoningText: '',
-          sources: finalSources,
-          images: finalImages,
-          followUps: finalFollowUps,
+          cleanText: ext.cleanText,
+          reasoningText: ext.reasoningText,
+          ...base,
         };
-      },
-      [
-        message.content,
-        (message as any).sources,
-        (message as any).images,
-        (message as any).followUps,
-        reasoningEnabled,
-      ],
-    );
+      }
+      return {
+        cleanText: withoutSources,
+        reasoningText: '',
+        ...base,
+      };
+    }, [
+      message.content,
+      (message as any).sources,
+      (message as any).images,
+      (message as any).followUps,
+      (message as any).intent,
+      (message as any).summary,
+      (message as any).comparison,
+      (message as any).codeFix,
+      (message as any).newsTimeline,
+      (message as any).knowledgeGraph,
+      (message as any).peopleAlsoAsk,
+      (message as any).news,
+      (message as any).places,
+      (message as any).shopping,
+      (message as any).scholar,
+      (message as any).videos,
+      reasoningEnabled,
+    ]);
 
     return (
       <Flex
@@ -506,6 +645,62 @@ function Message({ message, isLast }: IProps) {
                 >
                   Поделиться
                 </MenuItem>
+                {message.role === 'assistant' && activeProjectId && (
+                  <MenuItem
+                    onClick={async () => {
+                      try {
+                        const text = (cleanText || message.content || '')
+                          .trim()
+                          .slice(0, 2000);
+                        if (!text) {
+                          toast({
+                            title: 'Нечего сохранять',
+                            status: 'warning',
+                            duration: 2500,
+                            isClosable: true,
+                          });
+                          return;
+                        }
+                        const res = await fetch(
+                          `/api/projects/${encodeURIComponent(
+                            activeProjectId,
+                          )}/memory`,
+                          {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({
+                              type: 'note',
+                              text,
+                            }),
+                          },
+                        );
+                        if (!res.ok) {
+                          throw new Error('save failed');
+                        }
+                        toast({
+                          title: 'Сохранено в проект',
+                          description:
+                            'ИИСеть учтёт это в следующих ответах.',
+                          status: 'success',
+                          duration: 3000,
+                          isClosable: true,
+                        });
+                      } catch (e) {
+                        console.error(e);
+                        toast({
+                          title: 'Не удалось сохранить',
+                          description:
+                            'Попробуйте ещё раз чуть позже.',
+                          status: 'error',
+                          duration: 4000,
+                          isClosable: true,
+                        });
+                      }
+                    }}
+                  >
+                    Сохранить в проект
+                  </MenuItem>
+                )}
               </MenuList>
             </Menu>
           </Box>
@@ -618,6 +813,21 @@ function Message({ message, isLast }: IProps) {
               </Box>
             )}
 
+            {/* SearchSummaryWidget — рендерится как только marker пришёл,
+                ДО полного ответа LLM, чтобы пользователь сразу видел
+                полезные данные поиска. */}
+            {summary && (
+              <SearchSummaryWidget
+                summary={summary}
+                isStreaming={!cleanText && !!loading}
+              />
+            )}
+
+            {/* Knowledge Graph — entity card сразу после summary */}
+            {knowledgeGraph && (
+              <KnowledgeGraphCard data={knowledgeGraph} />
+            )}
+
             {cleanText && (
               <Box
                 color={textColor}
@@ -642,6 +852,47 @@ function Message({ message, isLast }: IProps) {
                   }}
                 />
               </Box>
+            )}
+
+            {/* Intent-specific widgets — между ответом и SourcesBlock */}
+            {cleanText && intent === 'comparison' && comparison && (
+              <ComparisonWidgetView data={comparison} />
+            )}
+            {cleanText && intent === 'code' && codeFix && (
+              <CodeFixWidgetView data={codeFix} />
+            )}
+            {cleanText &&
+              intent === 'news' &&
+              newsTimeline &&
+              newsTimeline.length > 0 && (
+                <NewsTimelineWidgetView items={newsTimeline} />
+              )}
+
+            {/* v4 specialized blocks — рисуются как только marker дошёл,
+                без ожидания полного ответа LLM. */}
+            {places && places.length > 0 && (
+              <PlacesBlock items={places} />
+            )}
+            {shopping && shopping.length > 0 && (
+              <ShoppingBlock items={shopping} />
+            )}
+            {videos && videos.length > 0 && (
+              <VideoBlock items={videos} />
+            )}
+            {scholar && scholar.length > 0 && (
+              <ScholarBlock items={scholar} />
+            )}
+            {news && news.length > 0 && (
+              <NewsBlock items={news} />
+            )}
+            {peopleAlsoAsk && peopleAlsoAsk.length > 0 && (
+              <PeopleAlsoAskBlock
+                items={peopleAlsoAsk}
+                onAsk={(q) => {
+                  if (!q || loading || !sendMessage) return;
+                  sendMessage(q);
+                }}
+              />
             )}
 
             {message.content &&
@@ -1563,6 +1814,1544 @@ function SourcesBlock({
           </Flex>
         </Box>
       )}
+    </Box>
+  );
+}
+
+// ──────────────────────────────────────────────────────────────────
+//  v3 search widgets — used for advanced web-search responses.
+//  Each widget is graceful: if data is empty, it renders null. Designs
+//  share the same Apple/glass tokens as SourcesBlock and WebSearchProgress.
+// ──────────────────────────────────────────────────────────────────
+
+const INTENT_LABELS: Record<SearchIntent, string> = {
+  general: 'Поиск',
+  news: 'Новости',
+  comparison: 'Сравнение',
+  code: 'Код',
+  weather: 'Погода',
+  places: 'Места',
+  shopping: 'Покупки',
+  image: 'Изображения',
+  video: 'Видео',
+  scholar: 'Наука',
+};
+
+interface SearchSummaryWidgetProps {
+  summary: SearchSummary;
+  isStreaming?: boolean;
+}
+
+function SearchSummaryWidget({
+  summary,
+  isStreaming = false,
+}: SearchSummaryWidgetProps) {
+  const cardBg = useColorModeValue(
+    'rgba(255,255,255,0.72)',
+    'rgba(15,18,32,0.60)',
+  );
+  const cardBorder = useColorModeValue(
+    'rgba(0,0,0,0.07)',
+    'rgba(255,255,255,0.10)',
+  );
+  const titleColor = useColorModeValue('#1d1d1f', '#f5f5f7');
+  const metaColor = useColorModeValue('#6e6e73', 'rgba(245,245,247,0.62)');
+  const accentBlue = useColorModeValue('#0066cc', '#2997ff');
+  const chipBg = useColorModeValue(
+    'rgba(0,102,204,0.08)',
+    'rgba(41,151,255,0.14)',
+  );
+  const chipBorder = useColorModeValue(
+    'rgba(0,102,204,0.18)',
+    'rgba(41,151,255,0.22)',
+  );
+
+  const intentLabel =
+    INTENT_LABELS[summary.intent] || INTENT_LABELS.general;
+
+  return (
+    <Box
+      mt="6px"
+      mb="14px"
+      p={{ base: '12px 14px', md: '14px 18px' }}
+      borderRadius={{ base: '16px', md: '18px' }}
+      bg={cardBg}
+      border="1px solid"
+      borderColor={cardBorder}
+      backdropFilter="blur(18px) saturate(180%)"
+      sx={{ WebkitBackdropFilter: 'blur(18px) saturate(180%)' }}
+      width="100%"
+      maxWidth="100%"
+      minWidth={0}
+    >
+      <Flex
+        align="center"
+        gap="8px"
+        flexWrap="wrap"
+        minW={0}
+        mb={
+          summary.domains.length > 0 || summary.readSources > 0
+            ? '8px'
+            : '0'
+        }
+      >
+        <Box
+          px="10px"
+          py="3px"
+          borderRadius="9999px"
+          bg={chipBg}
+          color={accentBlue}
+          border="1px solid"
+          borderColor={chipBorder}
+        >
+          <Text
+            fontFamily={FONT_APPLE_TEXT}
+            fontSize="11px"
+            fontWeight="700"
+            letterSpacing="0.1px"
+            textTransform="uppercase"
+          >
+            Поиск с источниками
+          </Text>
+        </Box>
+        <Text
+          fontFamily={FONT_APPLE_TEXT}
+          fontSize="12px"
+          fontWeight="600"
+          color={titleColor}
+        >
+          {intentLabel}
+        </Text>
+        {summary.totalSources > 0 && (
+          <Text
+            fontFamily={FONT_APPLE_TEXT}
+            fontSize="12px"
+            color={metaColor}
+          >
+            · Найдено {summary.totalSources}
+          </Text>
+        )}
+        {summary.readSources > 0 && (
+          <Text
+            fontFamily={FONT_APPLE_TEXT}
+            fontSize="12px"
+            color={metaColor}
+          >
+            · Прочитано {summary.readSources}
+          </Text>
+        )}
+      </Flex>
+
+      {summary.domains.length > 0 && (
+        <Flex gap="6px" flexWrap="wrap" minW={0}>
+          {summary.domains.slice(0, 8).map((d) => (
+            <Box
+              key={d}
+              px="8px"
+              py="3px"
+              borderRadius="9999px"
+              border="1px solid"
+              borderColor={cardBorder}
+              maxW="100%"
+            >
+              <Text
+                fontFamily={FONT_APPLE_TEXT}
+                fontSize="11px"
+                fontWeight="500"
+                color={metaColor}
+                noOfLines={1}
+                wordBreak="break-all"
+              >
+                {d}
+              </Text>
+            </Box>
+          ))}
+        </Flex>
+      )}
+
+      {/* Subtle indicator: marker уже пришёл, но LLM ещё стримит ответ. */}
+      {isStreaming && (
+        <Flex
+          mt="10px"
+          align="center"
+          gap="8px"
+          width="fit-content"
+          maxWidth="100%"
+          px="10px"
+          py="4px"
+          borderRadius="9999px"
+          bg={chipBg}
+          border="1px solid"
+          borderColor={chipBorder}
+          sx={{
+            '@keyframes iisetSummaryDot': {
+              '0%, 80%, 100%': {
+                opacity: 0.25,
+                transform: 'scale(0.85)',
+              },
+              '40%': { opacity: 1, transform: 'scale(1)' },
+            },
+          }}
+        >
+          <Flex gap="3px" align="center">
+            {[0, 1, 2].map((i) => (
+              <Box
+                key={i}
+                w="5px"
+                h="5px"
+                borderRadius="9999px"
+                bg={accentBlue}
+                sx={{
+                  animation: `iisetSummaryDot 1.2s ease-in-out ${
+                    i * 0.16
+                  }s infinite`,
+                }}
+              />
+            ))}
+          </Flex>
+          <Text
+            fontFamily={FONT_APPLE_TEXT}
+            fontSize="11px"
+            fontWeight="600"
+            color={accentBlue}
+          >
+            Собираю ответ с источниками…
+          </Text>
+        </Flex>
+      )}
+    </Box>
+  );
+}
+
+interface ComparisonWidgetViewProps {
+  data: ComparisonWidgetMeta;
+}
+
+function ComparisonWidgetView({ data }: ComparisonWidgetViewProps) {
+  const cardBg = useColorModeValue(
+    'rgba(255,255,255,0.66)',
+    'rgba(15,18,32,0.58)',
+  );
+  const cardBorder = useColorModeValue(
+    'rgba(0,0,0,0.07)',
+    'rgba(255,255,255,0.10)',
+  );
+  const titleColor = useColorModeValue('#1d1d1f', '#f5f5f7');
+  const metaColor = useColorModeValue('#6e6e73', 'rgba(245,245,247,0.62)');
+  const accentBlue = useColorModeValue('#0066cc', '#2997ff');
+  const pillBg = useColorModeValue(
+    'rgba(0,102,204,0.06)',
+    'rgba(41,151,255,0.10)',
+  );
+  const pillBorder = useColorModeValue(
+    'rgba(0,102,204,0.18)',
+    'rgba(41,151,255,0.22)',
+  );
+
+  if (!data.criteria.length && !data.note) return null;
+
+  return (
+    <Box
+      mt="18px"
+      p={{ base: '14px', md: '18px' }}
+      borderRadius={{ base: '16px', md: '20px' }}
+      bg={cardBg}
+      border="1px solid"
+      borderColor={cardBorder}
+      backdropFilter="blur(18px) saturate(180%)"
+      sx={{ WebkitBackdropFilter: 'blur(18px) saturate(180%)' }}
+      width="100%"
+      maxWidth="100%"
+      minWidth={0}
+    >
+      <Flex align="center" gap="8px" mb="10px" minW={0}>
+        <Icon as={LuLayoutGrid} w="14px" h="14px" color={accentBlue} />
+        <Text
+          fontFamily={FONT_APPLE_TEXT}
+          fontSize="11px"
+          fontWeight="700"
+          letterSpacing="0.5px"
+          textTransform="uppercase"
+          color={metaColor}
+        >
+          Сравнение
+        </Text>
+      </Flex>
+      {data.query && (
+        <Text
+          fontFamily={FONT_APPLE_DISPLAY}
+          fontSize={{ base: '15px', md: '16px' }}
+          fontWeight="600"
+          color={titleColor}
+          mb="10px"
+          letterSpacing="-0.2px"
+          wordBreak="break-word"
+          noOfLines={2}
+        >
+          {data.query}
+        </Text>
+      )}
+      {data.criteria.length > 0 && (
+        <Flex gap="6px" flexWrap="wrap" minW={0} mb={data.note ? '10px' : 0}>
+          {data.criteria.map((c) => (
+            <Box
+              key={c}
+              px="10px"
+              py="4px"
+              borderRadius="9999px"
+              bg={pillBg}
+              border="1px solid"
+              borderColor={pillBorder}
+              color={accentBlue}
+            >
+              <Text
+                fontFamily={FONT_APPLE_TEXT}
+                fontSize="12px"
+                fontWeight="600"
+                noOfLines={1}
+              >
+                {c}
+              </Text>
+            </Box>
+          ))}
+        </Flex>
+      )}
+      {data.note && (
+        <Text
+          fontFamily={FONT_APPLE_TEXT}
+          fontSize="12px"
+          color={metaColor}
+          lineHeight="1.55"
+        >
+          {data.note}
+        </Text>
+      )}
+    </Box>
+  );
+}
+
+interface CodeFixWidgetViewProps {
+  data: CodeFixWidgetMeta;
+}
+
+function CodeFixWidgetView({ data }: CodeFixWidgetViewProps) {
+  const cardBg = useColorModeValue(
+    'rgba(255,255,255,0.66)',
+    'rgba(15,18,32,0.58)',
+  );
+  const cardBorder = useColorModeValue(
+    'rgba(0,0,0,0.07)',
+    'rgba(255,255,255,0.10)',
+  );
+  const titleColor = useColorModeValue('#1d1d1f', '#f5f5f7');
+  const metaColor = useColorModeValue('#6e6e73', 'rgba(245,245,247,0.62)');
+  const accentBlue = useColorModeValue('#0066cc', '#2997ff');
+  const warnBg = useColorModeValue(
+    'rgba(255,159,10,0.08)',
+    'rgba(255,159,10,0.14)',
+  );
+  const warnBorder = useColorModeValue(
+    'rgba(255,159,10,0.24)',
+    'rgba(255,159,10,0.32)',
+  );
+  const warnColor = useColorModeValue('#b25f00', '#ffb454');
+  const stackPillBg = useColorModeValue(
+    'rgba(0,102,204,0.06)',
+    'rgba(41,151,255,0.10)',
+  );
+  const stackPillBorder = useColorModeValue(
+    'rgba(0,102,204,0.18)',
+    'rgba(41,151,255,0.22)',
+  );
+
+  if (!data.detectedStack.length && !data.safetyNote && !data.query)
+    return null;
+
+  return (
+    <Box
+      mt="18px"
+      p={{ base: '14px', md: '18px' }}
+      borderRadius={{ base: '16px', md: '20px' }}
+      bg={cardBg}
+      border="1px solid"
+      borderColor={cardBorder}
+      backdropFilter="blur(18px) saturate(180%)"
+      sx={{ WebkitBackdropFilter: 'blur(18px) saturate(180%)' }}
+      width="100%"
+      maxWidth="100%"
+      minWidth={0}
+    >
+      <Flex align="center" gap="8px" mb="10px" minW={0}>
+        <Icon as={LuTerminal} w="14px" h="14px" color={accentBlue} />
+        <Text
+          fontFamily={FONT_APPLE_TEXT}
+          fontSize="11px"
+          fontWeight="700"
+          letterSpacing="0.5px"
+          textTransform="uppercase"
+          color={metaColor}
+        >
+          Технический разбор
+        </Text>
+      </Flex>
+      {data.query && (
+        <Text
+          fontFamily={FONT_APPLE_DISPLAY}
+          fontSize={{ base: '15px', md: '16px' }}
+          fontWeight="600"
+          color={titleColor}
+          mb="10px"
+          letterSpacing="-0.2px"
+          wordBreak="break-word"
+          noOfLines={2}
+        >
+          {data.query}
+        </Text>
+      )}
+      {data.detectedStack.length > 0 && (
+        <Flex gap="6px" flexWrap="wrap" minW={0} mb="10px">
+          {data.detectedStack.map((s) => (
+            <Box
+              key={s}
+              px="10px"
+              py="4px"
+              borderRadius="9999px"
+              bg={stackPillBg}
+              border="1px solid"
+              borderColor={stackPillBorder}
+              color={accentBlue}
+            >
+              <Text
+                fontFamily={FONT_APPLE_TEXT}
+                fontSize="12px"
+                fontWeight="600"
+                noOfLines={1}
+              >
+                {s}
+              </Text>
+            </Box>
+          ))}
+        </Flex>
+      )}
+      {data.safetyNote && (
+        <Flex
+          gap="8px"
+          align="flex-start"
+          px="12px"
+          py="10px"
+          borderRadius="12px"
+          bg={warnBg}
+          border="1px solid"
+          borderColor={warnBorder}
+          minW={0}
+        >
+          <Icon
+            as={LuSparkles}
+            w="14px"
+            h="14px"
+            color={warnColor}
+            mt="2px"
+            flexShrink={0}
+          />
+          <Text
+            fontFamily={FONT_APPLE_TEXT}
+            fontSize="12px"
+            color={warnColor}
+            lineHeight="1.55"
+            wordBreak="break-word"
+          >
+            {data.safetyNote} Сначала проверьте окружение, затем выполняйте
+            команды.
+          </Text>
+        </Flex>
+      )}
+    </Box>
+  );
+}
+
+interface NewsTimelineWidgetViewProps {
+  items: NewsTimelineItem[];
+}
+
+function NewsTimelineWidgetView({ items }: NewsTimelineWidgetViewProps) {
+  const cardBg = useColorModeValue(
+    'rgba(255,255,255,0.66)',
+    'rgba(15,18,32,0.58)',
+  );
+  const cardBgHover = useColorModeValue(
+    'rgba(255,255,255,0.84)',
+    'rgba(15,18,32,0.78)',
+  );
+  const cardBorder = useColorModeValue(
+    'rgba(0,0,0,0.07)',
+    'rgba(255,255,255,0.10)',
+  );
+  const cardBorderHover = useColorModeValue(
+    'rgba(0,102,204,0.28)',
+    'rgba(41,151,255,0.34)',
+  );
+  const titleColor = useColorModeValue('#1d1d1f', '#f5f5f7');
+  const metaColor = useColorModeValue('#6e6e73', 'rgba(245,245,247,0.62)');
+  const accentBlue = useColorModeValue('#0066cc', '#2997ff');
+  const railColor = useColorModeValue(
+    'rgba(0,102,204,0.18)',
+    'rgba(41,151,255,0.24)',
+  );
+  const dotColor = accentBlue;
+
+  if (!items.length) return null;
+
+  return (
+    <Box mt="18px" width="100%" maxWidth="100%" minWidth={0}>
+      <Flex align="center" gap="8px" mb="10px" minW={0}>
+        <Icon as={LuClock} w="14px" h="14px" color={accentBlue} />
+        <Text
+          fontFamily={FONT_APPLE_TEXT}
+          fontSize="11px"
+          fontWeight="700"
+          letterSpacing="0.5px"
+          textTransform="uppercase"
+          color={metaColor}
+        >
+          Хронология новостей
+        </Text>
+      </Flex>
+
+      <Box position="relative" pl={{ base: '16px', md: '20px' }} minW={0}>
+        {/* Vertical rail */}
+        <Box
+          position="absolute"
+          left={{ base: '5px', md: '7px' }}
+          top="6px"
+          bottom="6px"
+          w="2px"
+          bg={railColor}
+          borderRadius="9999px"
+        />
+
+        <Stack spacing="10px" minW={0}>
+          {items.map((it, i) => (
+            <Box
+              key={`${i}-${it.url}`}
+              as="a"
+              href={it.url}
+              target="_blank"
+              rel="noopener noreferrer"
+              position="relative"
+              display="block"
+              p={{ base: '10px 12px', md: '12px 14px' }}
+              borderRadius={{ base: '14px', md: '16px' }}
+              bg={cardBg}
+              border="1px solid"
+              borderColor={cardBorder}
+              backdropFilter="blur(16px) saturate(180%)"
+              sx={{
+                WebkitBackdropFilter: 'blur(16px) saturate(180%)',
+                textDecoration: 'none',
+              }}
+              transition="background 0.16s ease, border-color 0.16s ease, transform 0.14s ease"
+              _hover={{
+                bg: cardBgHover,
+                borderColor: cardBorderHover,
+                transform: 'translateY(-1px)',
+              }}
+              minW={0}
+              wordBreak="break-word"
+            >
+              {/* Dot on the rail */}
+              <Box
+                position="absolute"
+                left={{ base: '-13px', md: '-17px' }}
+                top="14px"
+                w="10px"
+                h="10px"
+                borderRadius="9999px"
+                bg={dotColor}
+                border="2px solid"
+                borderColor={cardBg}
+                boxShadow="0 0 0 2px rgba(0,102,204,0.18)"
+              />
+
+              <Flex
+                align="center"
+                gap="6px"
+                mb="4px"
+                fontSize="11px"
+                color={metaColor}
+                minW={0}
+                flexWrap="wrap"
+              >
+                {it.domain && (
+                  <Text
+                    fontFamily={FONT_APPLE_TEXT}
+                    fontWeight="600"
+                    noOfLines={1}
+                  >
+                    {it.domain}
+                  </Text>
+                )}
+                {it.date && (
+                  <Text fontFamily={FONT_APPLE_TEXT} fontWeight="500">
+                    · {it.date}
+                  </Text>
+                )}
+              </Flex>
+              <Text
+                fontFamily={FONT_APPLE_DISPLAY}
+                fontSize={{ base: '14px', md: '15px' }}
+                fontWeight="600"
+                color={titleColor}
+                lineHeight="1.35"
+                letterSpacing="-0.2px"
+                noOfLines={2}
+                mb={it.snippet ? '4px' : 0}
+              >
+                {it.title}
+              </Text>
+              {it.snippet && (
+                <Text
+                  fontFamily={FONT_APPLE_TEXT}
+                  fontSize="12px"
+                  color={metaColor}
+                  lineHeight="1.5"
+                  noOfLines={2}
+                >
+                  {it.snippet}
+                </Text>
+              )}
+            </Box>
+          ))}
+        </Stack>
+      </Box>
+    </Box>
+  );
+}
+
+// ──────────────────────────────────────────────────────────────────
+//  v4 search widgets — KG / PAA / Places / Shopping / Scholar / Videos / News
+// ──────────────────────────────────────────────────────────────────
+
+function useWidgetTokens() {
+  const cardBg = useColorModeValue(
+    'rgba(255,255,255,0.66)',
+    'rgba(15,18,32,0.58)',
+  );
+  const cardBgHover = useColorModeValue(
+    'rgba(255,255,255,0.84)',
+    'rgba(15,18,32,0.78)',
+  );
+  const cardBorder = useColorModeValue(
+    'rgba(0,0,0,0.07)',
+    'rgba(255,255,255,0.10)',
+  );
+  const cardBorderHover = useColorModeValue(
+    'rgba(0,102,204,0.28)',
+    'rgba(41,151,255,0.34)',
+  );
+  const titleColor = useColorModeValue('#1d1d1f', '#f5f5f7');
+  const bodyColor = useColorModeValue('#2b2b2f', 'rgba(245,245,247,0.86)');
+  const metaColor = useColorModeValue('#6e6e73', 'rgba(245,245,247,0.62)');
+  const accentBlue = useColorModeValue('#0066cc', '#2997ff');
+  const chipBg = useColorModeValue(
+    'rgba(0,102,204,0.06)',
+    'rgba(41,151,255,0.10)',
+  );
+  const chipBorder = useColorModeValue(
+    'rgba(0,102,204,0.18)',
+    'rgba(41,151,255,0.22)',
+  );
+  return {
+    cardBg,
+    cardBgHover,
+    cardBorder,
+    cardBorderHover,
+    titleColor,
+    bodyColor,
+    metaColor,
+    accentBlue,
+    chipBg,
+    chipBorder,
+  };
+}
+
+function SectionHeader({
+  icon,
+  label,
+  metaColor,
+  accentBlue,
+}: {
+  icon: any;
+  label: string;
+  metaColor: string;
+  accentBlue: string;
+}) {
+  return (
+    <Flex align="center" gap="8px" mb="10px" minW={0}>
+      <Icon as={icon} w="14px" h="14px" color={accentBlue} />
+      <Text
+        fontFamily={FONT_APPLE_TEXT}
+        fontSize="11px"
+        fontWeight="700"
+        letterSpacing="0.5px"
+        textTransform="uppercase"
+        color={metaColor}
+      >
+        {label}
+      </Text>
+    </Flex>
+  );
+}
+
+// ── KnowledgeGraphCard ─────────────────────────────────────────────
+function KnowledgeGraphCard({ data }: { data: SearchKnowledgeGraph }) {
+  const T = useWidgetTokens();
+  return (
+    <Box
+      mt="14px"
+      p={{ base: '14px', md: '18px' }}
+      borderRadius={{ base: '16px', md: '20px' }}
+      bg={T.cardBg}
+      border="1px solid"
+      borderColor={T.cardBorder}
+      backdropFilter="blur(18px) saturate(180%)"
+      sx={{ WebkitBackdropFilter: 'blur(18px) saturate(180%)' }}
+      width="100%"
+      maxWidth="100%"
+      minWidth={0}
+    >
+      <SectionHeader
+        icon={LuInfo}
+        label="Краткая справка"
+        metaColor={T.metaColor}
+        accentBlue={T.accentBlue}
+      />
+
+      <Flex
+        direction={{ base: 'column', sm: 'row' }}
+        gap={{ base: '12px', sm: '14px' }}
+        align="flex-start"
+        minW={0}
+      >
+        {data.imageUrl && (
+          <Box
+            w={{ base: '100%', sm: '128px' }}
+            maxW={{ base: '180px', sm: '128px' }}
+            flexShrink={0}
+            borderRadius="14px"
+            overflow="hidden"
+            border="1px solid"
+            borderColor={T.cardBorder}
+          >
+            <Box
+              as="img"
+              src={data.imageUrl}
+              alt={data.title}
+              loading="lazy"
+              w="100%"
+              h={{ base: '120px', sm: '110px' }}
+              sx={{ objectFit: 'cover', display: 'block' }}
+              onError={(e: any) => {
+                const el = e?.currentTarget?.parentElement as
+                  | HTMLElement
+                  | undefined;
+                if (el) el.style.display = 'none';
+              }}
+            />
+          </Box>
+        )}
+
+        <Box flex="1" minW={0}>
+          <Text
+            fontFamily={FONT_APPLE_DISPLAY}
+            fontSize={{ base: '17px', md: '19px' }}
+            fontWeight="600"
+            color={T.titleColor}
+            letterSpacing="-0.25px"
+            lineHeight="1.2"
+            mb="3px"
+            noOfLines={2}
+            wordBreak="break-word"
+          >
+            {data.title}
+          </Text>
+          {data.type && (
+            <Text
+              fontFamily={FONT_APPLE_TEXT}
+              fontSize="12px"
+              color={T.metaColor}
+              mb="6px"
+              noOfLines={1}
+            >
+              {data.type}
+            </Text>
+          )}
+          {data.description && (
+            <Text
+              fontFamily={FONT_APPLE_TEXT}
+              fontSize="13px"
+              color={T.bodyColor}
+              lineHeight="1.55"
+              mb={data.attributes && data.attributes.length > 0 ? '10px' : '0'}
+              noOfLines={4}
+              wordBreak="break-word"
+            >
+              {data.description}
+            </Text>
+          )}
+          {data.attributes && data.attributes.length > 0 && (
+            <Flex gap="6px" flexWrap="wrap" minW={0}>
+              {data.attributes.slice(0, 6).map((a, i) => (
+                <Box
+                  key={`${i}-${a.label}`}
+                  px="10px"
+                  py="4px"
+                  borderRadius="9999px"
+                  bg={T.chipBg}
+                  border="1px solid"
+                  borderColor={T.chipBorder}
+                  color={T.accentBlue}
+                  maxW="100%"
+                >
+                  <Text
+                    fontFamily={FONT_APPLE_TEXT}
+                    fontSize="11px"
+                    fontWeight="600"
+                    noOfLines={1}
+                    wordBreak="break-word"
+                  >
+                    <Text as="span" opacity={0.75}>
+                      {a.label}:
+                    </Text>{' '}
+                    {a.value}
+                  </Text>
+                </Box>
+              ))}
+            </Flex>
+          )}
+          {data.website && (
+            <Box
+              as="a"
+              href={data.website}
+              target="_blank"
+              rel="noopener noreferrer"
+              display="inline-flex"
+              alignItems="center"
+              mt="10px"
+              px="12px"
+              py="6px"
+              borderRadius="9999px"
+              bg={T.chipBg}
+              color={T.accentBlue}
+              border="1px solid"
+              borderColor={T.chipBorder}
+              fontFamily={FONT_APPLE_TEXT}
+              fontSize="12px"
+              fontWeight="600"
+              sx={{ textDecoration: 'none' }}
+              _hover={{ borderColor: T.cardBorderHover }}
+              gap="6px"
+            >
+              <Text>Сайт</Text>
+              <Icon as={LuExternalLink} w="12px" h="12px" />
+            </Box>
+          )}
+        </Box>
+      </Flex>
+    </Box>
+  );
+}
+
+// ── PeopleAlsoAskBlock ─────────────────────────────────────────────
+function PeopleAlsoAskBlock({
+  items,
+  onAsk,
+}: {
+  items: PeopleAlsoAskItem[];
+  onAsk: (q: string) => void;
+}) {
+  const T = useWidgetTokens();
+  return (
+    <Box mt="18px" width="100%" maxWidth="100%" minWidth={0}>
+      <SectionHeader
+        icon={LuMessageSquare}
+        label="Что ещё спрашивают"
+        metaColor={T.metaColor}
+        accentBlue={T.accentBlue}
+      />
+      <Stack spacing="8px" minW={0}>
+        {items.map((p, i) => (
+          <Box
+            as="button"
+            type="button"
+            key={`${i}-${p.question}`}
+            onClick={() => onAsk(p.question)}
+            display="block"
+            textAlign="left"
+            p={{ base: '12px', md: '14px' }}
+            borderRadius={{ base: '14px', md: '16px' }}
+            bg={T.cardBg}
+            border="1px solid"
+            borderColor={T.cardBorder}
+            backdropFilter="blur(16px) saturate(180%)"
+            sx={{
+              WebkitBackdropFilter: 'blur(16px) saturate(180%)',
+              cursor: 'pointer',
+              WebkitTapHighlightColor: 'transparent',
+            }}
+            transition="background 0.16s ease, border-color 0.16s ease, transform 0.14s ease"
+            _hover={{
+              bg: T.cardBgHover,
+              borderColor: T.cardBorderHover,
+              transform: 'translateY(-1px)',
+            }}
+            width="100%"
+            maxW="100%"
+            minW={0}
+          >
+            <Flex align="center" justify="space-between" gap="10px" minW={0}>
+              <Text
+                fontFamily={FONT_APPLE_DISPLAY}
+                fontSize={{ base: '14px', md: '15px' }}
+                fontWeight="600"
+                color={T.titleColor}
+                letterSpacing="-0.15px"
+                lineHeight="1.35"
+                noOfLines={2}
+                wordBreak="break-word"
+                minW={0}
+              >
+                {p.question}
+              </Text>
+              <Icon
+                as={LuExternalLink}
+                w="14px"
+                h="14px"
+                color={T.metaColor}
+                flexShrink={0}
+              />
+            </Flex>
+            {p.snippet && (
+              <Text
+                mt="4px"
+                fontFamily={FONT_APPLE_TEXT}
+                fontSize="12px"
+                color={T.metaColor}
+                lineHeight="1.5"
+                noOfLines={2}
+                wordBreak="break-word"
+              >
+                {p.snippet}
+              </Text>
+            )}
+            {p.domain && (
+              <Text
+                mt="6px"
+                fontFamily={FONT_APPLE_TEXT}
+                fontSize="11px"
+                color={T.metaColor}
+                fontWeight="500"
+                noOfLines={1}
+              >
+                {p.domain}
+              </Text>
+            )}
+          </Box>
+        ))}
+      </Stack>
+    </Box>
+  );
+}
+
+// ── PlacesBlock ────────────────────────────────────────────────────
+function PlacesBlock({ items }: { items: SearchPlaceItem[] }) {
+  const T = useWidgetTokens();
+  return (
+    <Box mt="18px" width="100%" maxWidth="100%" minWidth={0}>
+      <SectionHeader
+        icon={LuMapPin}
+        label="Места"
+        metaColor={T.metaColor}
+        accentBlue={T.accentBlue}
+      />
+      <Stack spacing="8px" minW={0}>
+        {items.map((p, i) => {
+          const linkUrl = p.mapsUrl || p.url;
+          return (
+            <Box
+              key={`${i}-${p.title}`}
+              as={linkUrl ? 'a' : 'div'}
+              href={linkUrl}
+              target={linkUrl ? '_blank' : undefined}
+              rel={linkUrl ? 'noopener noreferrer' : undefined}
+              display="block"
+              p={{ base: '12px', md: '14px' }}
+              borderRadius={{ base: '14px', md: '16px' }}
+              bg={T.cardBg}
+              border="1px solid"
+              borderColor={T.cardBorder}
+              backdropFilter="blur(16px) saturate(180%)"
+              sx={{
+                WebkitBackdropFilter: 'blur(16px) saturate(180%)',
+                textDecoration: 'none',
+              }}
+              transition="background 0.16s ease, border-color 0.16s ease, transform 0.14s ease"
+              _hover={
+                linkUrl
+                  ? {
+                      bg: T.cardBgHover,
+                      borderColor: T.cardBorderHover,
+                      transform: 'translateY(-1px)',
+                    }
+                  : undefined
+              }
+              minW={0}
+            >
+              <Flex
+                justify="space-between"
+                align="flex-start"
+                gap="10px"
+                minW={0}
+              >
+                <Box minW={0} flex="1">
+                  <Text
+                    fontFamily={FONT_APPLE_DISPLAY}
+                    fontSize={{ base: '14px', md: '15px' }}
+                    fontWeight="600"
+                    color={T.titleColor}
+                    lineHeight="1.35"
+                    letterSpacing="-0.15px"
+                    noOfLines={2}
+                    wordBreak="break-word"
+                  >
+                    {p.title}
+                  </Text>
+                  {p.category && (
+                    <Text
+                      mt="2px"
+                      fontFamily={FONT_APPLE_TEXT}
+                      fontSize="11px"
+                      color={T.metaColor}
+                      noOfLines={1}
+                    >
+                      {p.category}
+                    </Text>
+                  )}
+                  {p.address && (
+                    <Text
+                      mt="4px"
+                      fontFamily={FONT_APPLE_TEXT}
+                      fontSize="12px"
+                      color={T.bodyColor}
+                      lineHeight="1.45"
+                      noOfLines={2}
+                      wordBreak="break-word"
+                    >
+                      {p.address}
+                    </Text>
+                  )}
+                </Box>
+                {typeof p.rating === 'number' && (
+                  <Flex
+                    align="center"
+                    gap="4px"
+                    px="8px"
+                    py="3px"
+                    borderRadius="9999px"
+                    bg={T.chipBg}
+                    border="1px solid"
+                    borderColor={T.chipBorder}
+                    flexShrink={0}
+                  >
+                    <Icon as={LuStar} w="11px" h="11px" color={T.accentBlue} />
+                    <Text
+                      fontFamily={FONT_APPLE_TEXT}
+                      fontSize="11px"
+                      fontWeight="600"
+                      color={T.accentBlue}
+                    >
+                      {p.rating.toFixed(1)}
+                      {typeof p.ratingCount === 'number' && (
+                        <Text
+                          as="span"
+                          ml="3px"
+                          opacity={0.7}
+                          fontWeight="500"
+                        >
+                          · {p.ratingCount}
+                        </Text>
+                      )}
+                    </Text>
+                  </Flex>
+                )}
+              </Flex>
+            </Box>
+          );
+        })}
+      </Stack>
+    </Box>
+  );
+}
+
+// ── ShoppingBlock ──────────────────────────────────────────────────
+function ShoppingBlock({ items }: { items: SearchProductItem[] }) {
+  const T = useWidgetTokens();
+  return (
+    <Box mt="18px" width="100%" maxWidth="100%" minWidth={0}>
+      <SectionHeader
+        icon={LuShoppingBag}
+        label="Товары"
+        metaColor={T.metaColor}
+        accentBlue={T.accentBlue}
+      />
+      <Flex
+        gap="10px"
+        overflowX="auto"
+        pb="6px"
+        mx={{ base: '-4px', md: '0' }}
+        px={{ base: '4px', md: '0' }}
+        sx={{
+          scrollbarWidth: 'thin',
+          '::-webkit-scrollbar': { height: '6px' },
+          '::-webkit-scrollbar-thumb': {
+            background: 'rgba(127,127,127,0.25)',
+            borderRadius: '999px',
+          },
+          scrollSnapType: 'x proximity',
+        }}
+      >
+        {items.map((s, i) => (
+          <Box
+            key={`${i}-${s.url}`}
+            as="a"
+            href={s.url}
+            target="_blank"
+            rel="noopener noreferrer"
+            flexShrink={0}
+            w={{ base: '180px', md: '210px' }}
+            borderRadius={{ base: '14px', md: '16px' }}
+            bg={T.cardBg}
+            border="1px solid"
+            borderColor={T.cardBorder}
+            backdropFilter="blur(16px) saturate(180%)"
+            sx={{
+              WebkitBackdropFilter: 'blur(16px) saturate(180%)',
+              scrollSnapAlign: 'start',
+              textDecoration: 'none',
+            }}
+            transition="background 0.16s ease, border-color 0.16s ease, transform 0.14s ease"
+            _hover={{
+              bg: T.cardBgHover,
+              borderColor: T.cardBorderHover,
+              transform: 'translateY(-1px)',
+            }}
+            display="block"
+            overflow="hidden"
+          >
+            {s.imageUrl && (
+              <Box
+                w="100%"
+                h={{ base: '120px', md: '130px' }}
+                overflow="hidden"
+              >
+                <Box
+                  as="img"
+                  src={s.imageUrl}
+                  alt={s.title}
+                  loading="lazy"
+                  w="100%"
+                  h="100%"
+                  sx={{ objectFit: 'cover', display: 'block' }}
+                  onError={(e: any) => {
+                    const el = e?.currentTarget?.parentElement as
+                      | HTMLElement
+                      | undefined;
+                    if (el) el.style.display = 'none';
+                  }}
+                />
+              </Box>
+            )}
+            <Box p={{ base: '10px', md: '12px' }}>
+              {s.price && (
+                <Text
+                  fontFamily={FONT_APPLE_DISPLAY}
+                  fontSize={{ base: '15px', md: '16px' }}
+                  fontWeight="700"
+                  color={T.accentBlue}
+                  letterSpacing="-0.2px"
+                  mb="2px"
+                >
+                  {s.price}
+                </Text>
+              )}
+              <Text
+                fontFamily={FONT_APPLE_TEXT}
+                fontSize="13px"
+                fontWeight="600"
+                color={T.titleColor}
+                lineHeight="1.35"
+                noOfLines={2}
+                mb="4px"
+                wordBreak="break-word"
+              >
+                {s.title}
+              </Text>
+              <Flex
+                align="center"
+                gap="6px"
+                fontSize="11px"
+                color={T.metaColor}
+                minW={0}
+              >
+                {s.source && (
+                  <Text
+                    fontFamily={FONT_APPLE_TEXT}
+                    fontWeight="600"
+                    noOfLines={1}
+                  >
+                    {s.source}
+                  </Text>
+                )}
+                {typeof s.rating === 'number' && (
+                  <Flex align="center" gap="2px">
+                    <Icon as={LuStar} w="10px" h="10px" />
+                    <Text fontFamily={FONT_APPLE_TEXT}>
+                      {s.rating.toFixed(1)}
+                    </Text>
+                  </Flex>
+                )}
+              </Flex>
+            </Box>
+          </Box>
+        ))}
+      </Flex>
+    </Box>
+  );
+}
+
+// ── ScholarBlock ───────────────────────────────────────────────────
+function ScholarBlock({ items }: { items: SearchScholarItem[] }) {
+  const T = useWidgetTokens();
+  return (
+    <Box mt="18px" width="100%" maxWidth="100%" minWidth={0}>
+      <SectionHeader
+        icon={LuGraduationCap}
+        label="Научные публикации"
+        metaColor={T.metaColor}
+        accentBlue={T.accentBlue}
+      />
+      <Stack spacing="8px" minW={0}>
+        {items.map((s, i) => (
+          <Box
+            key={`${i}-${s.url}`}
+            as="a"
+            href={s.url}
+            target="_blank"
+            rel="noopener noreferrer"
+            display="block"
+            p={{ base: '12px', md: '14px' }}
+            borderRadius={{ base: '14px', md: '16px' }}
+            bg={T.cardBg}
+            border="1px solid"
+            borderColor={T.cardBorder}
+            backdropFilter="blur(16px) saturate(180%)"
+            sx={{
+              WebkitBackdropFilter: 'blur(16px) saturate(180%)',
+              textDecoration: 'none',
+            }}
+            transition="background 0.16s ease, border-color 0.16s ease, transform 0.14s ease"
+            _hover={{
+              bg: T.cardBgHover,
+              borderColor: T.cardBorderHover,
+              transform: 'translateY(-1px)',
+            }}
+            minW={0}
+          >
+            <Text
+              fontFamily={FONT_APPLE_DISPLAY}
+              fontSize={{ base: '14px', md: '15px' }}
+              fontWeight="600"
+              color={T.titleColor}
+              lineHeight="1.35"
+              letterSpacing="-0.15px"
+              noOfLines={2}
+              mb="4px"
+              wordBreak="break-word"
+            >
+              {s.title}
+            </Text>
+            {(s.authors || s.year || typeof s.citedBy === 'number') && (
+              <Flex
+                gap="6px"
+                flexWrap="wrap"
+                align="center"
+                fontSize="11px"
+                color={T.metaColor}
+                mb={s.snippet ? '4px' : 0}
+              >
+                {s.authors && (
+                  <Text
+                    fontFamily={FONT_APPLE_TEXT}
+                    noOfLines={1}
+                    maxW="100%"
+                    wordBreak="break-word"
+                  >
+                    {s.authors}
+                  </Text>
+                )}
+                {s.year && (
+                  <Text fontFamily={FONT_APPLE_TEXT}>· {s.year}</Text>
+                )}
+                {typeof s.citedBy === 'number' && (
+                  <Text fontFamily={FONT_APPLE_TEXT}>
+                    · Цитирований: {s.citedBy}
+                  </Text>
+                )}
+              </Flex>
+            )}
+            {s.snippet && (
+              <Text
+                fontFamily={FONT_APPLE_TEXT}
+                fontSize="12px"
+                color={T.bodyColor}
+                lineHeight="1.5"
+                noOfLines={2}
+                wordBreak="break-word"
+              >
+                {s.snippet}
+              </Text>
+            )}
+            {s.domain && (
+              <Text
+                mt="4px"
+                fontFamily={FONT_APPLE_TEXT}
+                fontSize="11px"
+                color={T.metaColor}
+                fontWeight="500"
+              >
+                {s.domain}
+              </Text>
+            )}
+          </Box>
+        ))}
+      </Stack>
+    </Box>
+  );
+}
+
+// ── VideoBlock ─────────────────────────────────────────────────────
+function VideoBlock({ items }: { items: SearchVideoItem[] }) {
+  const T = useWidgetTokens();
+  return (
+    <Box mt="18px" width="100%" maxWidth="100%" minWidth={0}>
+      <SectionHeader
+        icon={LuVideo}
+        label="Видео"
+        metaColor={T.metaColor}
+        accentBlue={T.accentBlue}
+      />
+      <Flex
+        gap="10px"
+        overflowX="auto"
+        pb="6px"
+        mx={{ base: '-4px', md: '0' }}
+        px={{ base: '4px', md: '0' }}
+        sx={{
+          scrollbarWidth: 'thin',
+          '::-webkit-scrollbar': { height: '6px' },
+          '::-webkit-scrollbar-thumb': {
+            background: 'rgba(127,127,127,0.25)',
+            borderRadius: '999px',
+          },
+          scrollSnapType: 'x proximity',
+        }}
+      >
+        {items.map((v, i) => (
+          <Box
+            key={`${i}-${v.url}`}
+            as="a"
+            href={v.url}
+            target="_blank"
+            rel="noopener noreferrer"
+            flexShrink={0}
+            w={{ base: '210px', md: '240px' }}
+            borderRadius={{ base: '14px', md: '16px' }}
+            bg={T.cardBg}
+            border="1px solid"
+            borderColor={T.cardBorder}
+            sx={{
+              scrollSnapAlign: 'start',
+              textDecoration: 'none',
+            }}
+            transition="background 0.16s ease, border-color 0.16s ease, transform 0.14s ease"
+            _hover={{
+              bg: T.cardBgHover,
+              borderColor: T.cardBorderHover,
+              transform: 'translateY(-1px)',
+            }}
+            display="block"
+            overflow="hidden"
+          >
+            <Box
+              position="relative"
+              w="100%"
+              h={{ base: '120px', md: '135px' }}
+              bg="rgba(0,0,0,0.06)"
+            >
+              {v.imageUrl && (
+                <Box
+                  as="img"
+                  src={v.imageUrl}
+                  alt={v.title}
+                  loading="lazy"
+                  w="100%"
+                  h="100%"
+                  sx={{ objectFit: 'cover', display: 'block' }}
+                  onError={(e: any) => {
+                    const el = e?.currentTarget as HTMLImageElement;
+                    el.style.display = 'none';
+                  }}
+                />
+              )}
+              {v.duration && (
+                <Box
+                  position="absolute"
+                  right="8px"
+                  bottom="8px"
+                  px="6px"
+                  py="2px"
+                  borderRadius="6px"
+                  bg="rgba(0,0,0,0.65)"
+                  color="white"
+                  fontFamily={FONT_APPLE_TEXT}
+                  fontSize="10px"
+                  fontWeight="600"
+                >
+                  {v.duration}
+                </Box>
+              )}
+            </Box>
+            <Box p={{ base: '10px', md: '12px' }}>
+              <Text
+                fontFamily={FONT_APPLE_TEXT}
+                fontSize="13px"
+                fontWeight="600"
+                color={T.titleColor}
+                lineHeight="1.35"
+                noOfLines={2}
+                mb="4px"
+                wordBreak="break-word"
+              >
+                {v.title}
+              </Text>
+              <Flex
+                align="center"
+                gap="6px"
+                fontSize="11px"
+                color={T.metaColor}
+                minW={0}
+              >
+                {v.channel && (
+                  <Text fontFamily={FONT_APPLE_TEXT} noOfLines={1}>
+                    {v.channel}
+                  </Text>
+                )}
+                {v.date && (
+                  <Text fontFamily={FONT_APPLE_TEXT}>· {v.date}</Text>
+                )}
+              </Flex>
+            </Box>
+          </Box>
+        ))}
+      </Flex>
+    </Box>
+  );
+}
+
+// ── NewsBlock — простые карточки (отличается от NewsTimelineWidgetView
+//    тем, что не строит вертикальный rail, а отдаёт компактную сетку). ─
+function NewsBlock({ items }: { items: SearchNewsItem[] }) {
+  const T = useWidgetTokens();
+  return (
+    <Box mt="18px" width="100%" maxWidth="100%" minWidth={0}>
+      <SectionHeader
+        icon={LuClock}
+        label="Свежие материалы"
+        metaColor={T.metaColor}
+        accentBlue={T.accentBlue}
+      />
+      <Stack spacing="8px" minW={0}>
+        {items.map((n, i) => (
+          <Box
+            key={`${i}-${n.url}`}
+            as="a"
+            href={n.url}
+            target="_blank"
+            rel="noopener noreferrer"
+            display="block"
+            p={{ base: '12px', md: '14px' }}
+            borderRadius={{ base: '14px', md: '16px' }}
+            bg={T.cardBg}
+            border="1px solid"
+            borderColor={T.cardBorder}
+            sx={{ textDecoration: 'none' }}
+            transition="background 0.16s ease, border-color 0.16s ease, transform 0.14s ease"
+            _hover={{
+              bg: T.cardBgHover,
+              borderColor: T.cardBorderHover,
+              transform: 'translateY(-1px)',
+            }}
+            minW={0}
+          >
+            <Flex
+              align="center"
+              gap="6px"
+              mb="4px"
+              fontSize="11px"
+              color={T.metaColor}
+              minW={0}
+              flexWrap="wrap"
+            >
+              {n.domain && (
+                <Text
+                  fontFamily={FONT_APPLE_TEXT}
+                  fontWeight="600"
+                  noOfLines={1}
+                >
+                  {n.domain}
+                </Text>
+              )}
+              {n.date && (
+                <Text fontFamily={FONT_APPLE_TEXT}>· {n.date}</Text>
+              )}
+            </Flex>
+            <Text
+              fontFamily={FONT_APPLE_DISPLAY}
+              fontSize={{ base: '14px', md: '15px' }}
+              fontWeight="600"
+              color={T.titleColor}
+              lineHeight="1.35"
+              letterSpacing="-0.15px"
+              noOfLines={2}
+              mb={n.snippet ? '4px' : 0}
+              wordBreak="break-word"
+            >
+              {n.title}
+            </Text>
+            {n.snippet && (
+              <Text
+                fontFamily={FONT_APPLE_TEXT}
+                fontSize="12px"
+                color={T.bodyColor}
+                lineHeight="1.5"
+                noOfLines={2}
+                wordBreak="break-word"
+              >
+                {n.snippet}
+              </Text>
+            )}
+          </Box>
+        ))}
+      </Stack>
     </Box>
   );
 }
