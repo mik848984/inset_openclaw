@@ -23,7 +23,9 @@ import { mode } from '@chakra-ui/theme-tools';
 import { signOut } from 'next-auth/react';
 import { ModalContext } from '@/contexts/ModalContext';
 import { useRouter } from 'next/navigation';
-import SidebarCard from '@/components/sidebar/components/SidebarCard';
+// SidebarCard (фиолетовая «Ежедневная статистика») удалён из sidebar:
+// конкурировал с проектами визуально и тянул весь экран в админский тон.
+// Сам компонент оставлен в репо — может пригодиться в /usage или /profile.
 import ProjectSidebarSection from '@/components/sidebar/components/ProjectSidebarSection';
 
 // FUNCTIONS
@@ -79,8 +81,7 @@ function SidebarContent(props: SidebarContent) {
           <ProjectSidebarSection />
         </Suspense>
       </Stack>
-      <SidebarCard />
-      <Box h="24px" />
+      <Box h="16px" />
       <Card
         m={0}
         p={0}

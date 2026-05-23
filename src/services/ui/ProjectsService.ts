@@ -218,6 +218,43 @@ class ProjectsService {
     if (!res.ok) return null;
     return await res.json();
   }
+
+  async listArtifacts(projectId: string): Promise<IProjectArtifactUI[]> {
+    const res = await fetch(
+      `/api/projects/${encodeURIComponent(projectId)}/artifacts`,
+      { cache: 'no-store' },
+    );
+    if (!res.ok) return [];
+    const data = await res.json();
+    return Array.isArray(data) ? data : [];
+  }
+
+  // ─── Threads (branches) ───────────────────────────────────────
+  async listThreads(projectId: string): Promise<IProjectThreadUI[]> {
+    const res = await fetch(
+      `/api/projects/${encodeURIComponent(projectId)}/threads`,
+      { cache: 'no-store' },
+    );
+    if (!res.ok) return [];
+    const data = await res.json();
+    return Array.isArray(data) ? data : [];
+  }
+
+  async createThread(
+    projectId: string,
+    payload: { title: string; kind?: string; hint?: string },
+  ): Promise<IProjectThreadUI | null> {
+    const res = await fetch(
+      `/api/projects/${encodeURIComponent(projectId)}/threads`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      },
+    );
+    if (!res.ok) return null;
+    return await res.json();
+  }
 }
 
 export type ProjectSourceUIType = 'file' | 'link' | 'note' | 'web';
@@ -269,6 +306,17 @@ export interface IProjectArtifactUI {
   title: string;
   content: string;
   createdAt: string;
+}
+
+export interface IProjectThreadUI {
+  _id: string;
+  project: string;
+  title: string;
+  kind?: string;
+  hint?: string;
+  dialog?: string;
+  createdAt: string;
+  updatedAt: string;
 }
 
 export const projectsService = new ProjectsService();

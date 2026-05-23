@@ -18,7 +18,7 @@ export const runtime = 'nodejs';
 
 type Params = { params: { id: string } };
 
-const MAX_FILE_BYTES = 10 * 1024 * 1024; // 10 MB
+const MAX_FILE_BYTES = 25 * 1024 * 1024; // 25 MB
 const DANGEROUS_EXT = new Set([
   'exe',
   'bat',
@@ -32,6 +32,21 @@ const DANGEROUS_EXT = new Set([
   'dll',
   'jar',
   'php',
+]);
+
+// Что мы принимаем явно. Всё остальное → unsupported_format.
+const SUPPORTED_EXT = new Set([
+  'txt',
+  'md',
+  'markdown',
+  'log',
+  'csv',
+  'tsv',
+  'json',
+  'pdf',
+  'docx',
+  'xlsx',
+  'xls',
 ]);
 
 function sanitizeFileName(name: string): string {
@@ -94,7 +109,20 @@ export async function POST(req: NextRequest, { params }: Params) {
     const buffer = Buffer.from(arrayBuffer);
     if (buffer.byteLength > MAX_FILE_BYTES) {
       return NextResponse.json(
-        { message: 'Файл слишком большой (лимит 10 МБ)' },
+        {
+          message: 'Файл слишком большой (лимит 25 МБ).',
+          errorCode: 'file_too_large',
+        },
+        { status: 400 },
+      );
+    }
+    if (!SUPPORTED_EXT.has(ext)) {
+      return NextResponse.json(
+        {
+          message:
+            'Этот формат не поддерживается. Поддерживаются: PDF, DOCX, XLSX, XLS, TXT, MD, CSV, JSON.',
+          errorCode: 'unsupported_format',
+        },
         { status: 400 },
       );
     }
@@ -130,7 +158,7 @@ export async function POST(req: NextRequest, { params }: Params) {
 
     // ── Parse + chunk + embed + store ────────────────────────────
     try {
-      const parsed = parseFile(
+      const parsed = await parseFile(
         buffer,
         originalName,
         (webFile as any).type || '',
@@ -150,7 +178,10 @@ export async function POST(req: NextRequest, { params }: Params) {
           },
         );
         const updated = await ProjectSource.findById(source._id).lean();
-        return NextResponse.json(updated);
+        return NextResponse.json({
+          ...updated,
+          errorCode: parsed.errorCode || 'unsupported_format',
+        });
       }
 
       const chunksCount = await ingestParsedText({
@@ -158,7 +189,9 @@ export async function POST(req: NextRequest, { params }: Params) {
         sourceId: String(source._id),
         userId: String(user.id),
         userEmail: email,
-        text: parsed.text,
+        // segments несут metadata (page/sheet), text — fallback.
+        segments: parsed.segments,
+        text: parsed.segments ? undefined : parsed.text,
       });
 
       await ProjectSource.updateOne(
@@ -175,7 +208,8 @@ export async function POST(req: NextRequest, { params }: Params) {
         },
       );
     } catch (ingestErr: any) {
-      console.error('[SOURCE_UPLOAD] ingest failed', ingestErr);
+      // Не пишем тело документа в лог — только тип ошибки.
+      console.error('[SOURCE_UPLOAD] ingest failed', ingestErr?.message);
       await ProjectSource.updateOne(
         { _id: source._id },
         {
@@ -186,6 +220,11 @@ export async function POST(req: NextRequest, { params }: Params) {
           },
         },
       );
+      const updated = await ProjectSource.findById(source._id).lean();
+      return NextResponse.json({
+        ...updated,
+        errorCode: 'ingestion_failed',
+      });
     }
 
     const updated = await ProjectSource.findById(source._id).lean();

@@ -91,7 +91,7 @@ export async function POST(_req: NextRequest, { params }: Params) {
     ) {
       try {
         const buf = fs.readFileSync(source.storagePath);
-        const parsed = parseFile(
+        const parsed = await parseFile(
           buf,
           source.originalName || 'file',
           source.mimeType,
@@ -107,11 +107,18 @@ export async function POST(_req: NextRequest, { params }: Params) {
             },
           );
           const updated = await ProjectSource.findById(source._id).lean();
-          return NextResponse.json(updated);
+          return NextResponse.json({
+            ...updated,
+            errorCode: parsed.errorCode || 'unsupported_format',
+          });
+        }
+        // Если есть segments (PDF/XLSX) — берём их сразу для ingest.
+        if (parsed.segments && parsed.segments.length > 0) {
+          (source as any)._parsedSegments = parsed.segments;
         }
         text = parsed.text;
-      } catch (e) {
-        console.error('[SOURCE_REPROCESS] parse failed', e);
+      } catch (e: any) {
+        console.error('[SOURCE_REPROCESS] parse failed', e?.message);
       }
     }
 
@@ -130,12 +137,14 @@ export async function POST(_req: NextRequest, { params }: Params) {
       return NextResponse.json(updated);
     }
 
+    const segments = (source as any)._parsedSegments;
     const chunksCount = await ingestParsedText({
       projectId: String(project._id),
       sourceId: String(source._id),
       userId: String(user.id),
       userEmail: email,
-      text,
+      segments: segments && segments.length > 0 ? segments : undefined,
+      text: segments && segments.length > 0 ? undefined : text,
     });
     await ProjectSource.updateOne(
       { _id: source._id },

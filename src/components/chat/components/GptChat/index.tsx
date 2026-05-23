@@ -42,6 +42,7 @@ import {
   IProjectUI,
 } from '@/services/ui/ProjectsService';
 import ProjectSourcesDrawer from '@/components/chat/components/ProjectSourcesDrawer';
+import ProjectCommandCenter from '@/components/chat/components/ProjectCommandCenter';
 import { useMessengerScroll } from '../hooks/useMessengerScroll';
 import { ModalContext } from '@/contexts/ModalContext';
 import ResizeTextareaApp from '@/components/fields/ResizeTextarea';
@@ -700,7 +701,47 @@ const handleSend = async (messageOverride?: string) => {
               />
             )}
 
-            {messages?.length === 0 && (
+            {/* Project Command Center — заменяет LogoChat-hero, когда
+                открыт проект и в чате пусто. Это «Project Home»: цель,
+                следующий шаг, источники, ветки, артефакты, выводы. */}
+            {messages?.length === 0 && activeProjectId && (
+              <Box width="100%" maxW="100%" minW={0} mt={{ base: '4px', md: '8px' }}>
+                <ProjectCommandCenter
+                  projectId={activeProjectId}
+                  onOpenSources={() => setSourcesDrawerOpen(true)}
+                  onCreateThread={async () => {
+                    // Минимальный inline-creator: создаём ветку с
+                    // дефолтным именем и сразу переходим в неё.
+                    try {
+                      const { projectsService: ps } = await import(
+                        '@/services/ui/ProjectsService'
+                      );
+                      const t = await ps.createThread(activeProjectId, {
+                        title: `Новая ветка`,
+                      });
+                      if (t && typeof window !== 'undefined') {
+                        const url = new URL(window.location.href);
+                        url.searchParams.set('projectId', activeProjectId);
+                        url.searchParams.set('threadId', t._id);
+                        window.history.pushState(
+                          window.history.state,
+                          '',
+                          url.pathname + (url.search || ''),
+                        );
+                      }
+                    } catch (e) {
+                      console.error('[CommandCenter] createThread', e);
+                    }
+                  }}
+                  onSendAction={(text) => {
+                    if (!sendMessage || loading) return;
+                    void sendMessage(text);
+                  }}
+                />
+              </Box>
+            )}
+
+            {messages?.length === 0 && !activeProjectId && (
               <>
                 {/* Empty state — фирменный LogoChat hero, Apple-minimal */}
                 <Flex

@@ -600,7 +600,7 @@ function ProjectSourcesDrawer({ projectId, open, onClose }: Props) {
                       ref={fileInputRef}
                       type="file"
                       hidden
-                      accept=".txt,.md,.markdown,.csv,.tsv,.json,.log,.pdf,.docx,.xlsx"
+                      accept=".pdf,.docx,.xlsx,.xls,.txt,.md,.markdown,.csv,.tsv,.json,.log"
                       onChange={(e) => {
                         const f = e.target.files?.[0];
                         if (f) handleUpload(f);
@@ -614,8 +614,9 @@ function ProjectSourcesDrawer({ projectId, open, onClose }: Props) {
                     </Flex>
                   ) : sources.length === 0 ? (
                     <Text fontSize="13px" color={textSecondary}>
-                      Источников пока нет. Загрузите txt/md/csv/json, добавьте
-                      ссылку или заметку — ИИСеть учтёт их в ответах.
+                      Источников пока нет. Загрузите PDF, DOCX, XLSX, TXT, MD,
+                      CSV или JSON (до 25 МБ), добавьте ссылку или заметку —
+                      ИИСеть учтёт их в ответах.
                     </Text>
                   ) : (
                     <Flex direction="column" gap="8px">

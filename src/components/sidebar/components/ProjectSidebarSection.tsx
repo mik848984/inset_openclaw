@@ -27,10 +27,16 @@ import React, {
   useState,
 } from 'react';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
-import { MdAdd, MdAutoAwesome } from 'react-icons/md';
+import {
+  MdAdd,
+  MdAutoAwesome,
+  MdChevronRight,
+  MdKeyboardArrowDown,
+} from 'react-icons/md';
 import {
   projectsService,
   IProjectUI,
+  IProjectThreadUI,
 } from '@/services/ui/ProjectsService';
 import { ModalContext } from '@/contexts/ModalContext';
 import { useUser } from '@/utils/hooks/useUser';
@@ -68,6 +74,31 @@ function ProjectSidebarSection() {
   const [open, setOpen] = useState(false);
   const [rawText, setRawText] = useState('');
   const [isCreating, setIsCreating] = useState(false);
+
+  // ── Threads (ветки) ────────────────────────────────────────────
+  // Одно раскрытие в момент времени — sidebar узкий, два-три открытых
+  // проекта одновременно ломают визуальный ритм.
+  const activeThreadId = searchParams?.get('threadId') || null;
+  const [expandedProjectId, setExpandedProjectId] = useState<string | null>(
+    null,
+  );
+  const [threadsByProject, setThreadsByProject] = useState<
+    Record<string, IProjectThreadUI[]>
+  >({});
+  const [threadsLoadingFor, setThreadsLoadingFor] = useState<string | null>(
+    null,
+  );
+  const [creatingThreadFor, setCreatingThreadFor] = useState<string | null>(
+    null,
+  );
+
+  // Активный проект автоматически раскрывается, чтобы пользователь видел
+  // его ветки. Не сбрасываем, если пользователь сам раскрыл другой.
+  useEffect(() => {
+    if (activeProjectId && expandedProjectId === null) {
+      setExpandedProjectId(activeProjectId);
+    }
+  }, [activeProjectId, expandedProjectId]);
 
   const headerColor = useColorModeValue('gray.500', 'gray.500');
   const sectionTitleColor = useColorModeValue('navy.700', 'white');
@@ -132,6 +163,79 @@ function ProjectSidebarSection() {
   const handleOpenProject = (id: string) => {
     setSideBarOpen?.(false);
     router.push(`/chat?projectId=${encodeURIComponent(id)}`);
+  };
+
+  const loadThreadsFor = useCallback(async (projectId: string) => {
+    setThreadsLoadingFor(projectId);
+    try {
+      const list = await projectsService.listThreads(projectId);
+      setThreadsByProject((prev) => ({ ...prev, [projectId]: list }));
+    } finally {
+      setThreadsLoadingFor((curr) => (curr === projectId ? null : curr));
+    }
+  }, []);
+
+  const handleToggleExpand = useCallback(
+    (projectId: string) => {
+      setExpandedProjectId((prev) => {
+        const next = prev === projectId ? null : projectId;
+        // Fetch threads lazy при первом раскрытии.
+        if (next && !threadsByProject[projectId]) {
+          void loadThreadsFor(projectId);
+        }
+        return next;
+      });
+    },
+    [threadsByProject, loadThreadsFor],
+  );
+
+  const handleCreateThread = useCallback(
+    async (projectId: string) => {
+      setCreatingThreadFor(projectId);
+      try {
+        const existing = threadsByProject[projectId] || [];
+        // Дефолтный набор тредов под JTBD — пользователь дальше переименует
+        // через детали. На MVP создаём «Новая ветка N».
+        const title = `Новая ветка ${existing.length + 1}`;
+        const thread = await projectsService.createThread(projectId, {
+          title,
+        });
+        if (!thread) throw new Error('create thread failed');
+        setThreadsByProject((prev) => ({
+          ...prev,
+          [projectId]: [...(prev[projectId] || []), thread],
+        }));
+        toast({
+          title: 'Ветка создана',
+          description: thread.title,
+          status: 'success',
+          duration: 2200,
+          isClosable: true,
+        });
+        setSideBarOpen?.(false);
+        router.push(
+          `/chat?projectId=${encodeURIComponent(projectId)}&threadId=${encodeURIComponent(thread._id)}`,
+        );
+      } catch (e) {
+        console.error(e);
+        toast({
+          title: 'Не удалось создать ветку',
+          status: 'error',
+          duration: 3000,
+          isClosable: true,
+        });
+      } finally {
+        setCreatingThreadFor(null);
+      }
+    },
+    [threadsByProject, toast, setSideBarOpen, router],
+  );
+
+  const handleOpenThread = (projectId: string, threadId: string) => {
+    setSideBarOpen?.(false);
+    router.push(
+      `/chat?projectId=${encodeURIComponent(projectId)}&threadId=${encodeURIComponent(threadId)}`,
+    );
   };
 
   const handleCreate = async () => {
@@ -241,82 +345,226 @@ function ProjectSidebarSection() {
         <Flex direction="column" gap="2px" minW={0}>
           {visibleProjects.map((p) => {
             const isActive = p._id === activeProjectId && isOnChat;
+            const isExpanded = expandedProjectId === p._id;
             const memoryCount = Array.isArray(p.memoryItems)
               ? p.memoryItems.length
               : 0;
+            const threads = threadsByProject[p._id] || [];
+            const isLoadingThreads = threadsLoadingFor === p._id;
+            const isCreatingThreadHere = creatingThreadFor === p._id;
             return (
-              <Box
-                key={p._id}
-                as="button"
-                type="button"
-                onClick={() => handleOpenProject(p._id)}
-                textAlign="left"
-                px="10px"
-                py="8px"
-                borderRadius="10px"
-                bg={isActive ? activeBg : itemBg}
-                border="1px solid"
-                borderColor={isActive ? activeBorder : 'transparent'}
-                _hover={{ bg: isActive ? activeBg : itemHoverBg }}
-                transition="background 0.14s ease, border-color 0.14s ease"
-                sx={{ WebkitTapHighlightColor: 'transparent' }}
-                cursor="pointer"
-                minW={0}
-                maxW="100%"
-                overflow="hidden"
-              >
-                <Text
-                  fontFamily={FONT_APPLE_TEXT}
-                  fontSize="13px"
-                  fontWeight={isActive ? 600 : 500}
-                  color={titleColor}
-                  letterSpacing="-0.15px"
-                  noOfLines={1}
-                  wordBreak="break-word"
+              <Box key={p._id} minW={0} maxW="100%">
+                {/* ── Project row ─────────────────────────────────── */}
+                <Flex
+                  align="center"
+                  gap="2px"
+                  borderRadius="10px"
+                  bg={isActive ? activeBg : itemBg}
+                  border="1px solid"
+                  borderColor={isActive ? activeBorder : 'transparent'}
+                  _hover={{ bg: isActive ? activeBg : itemHoverBg }}
+                  transition="background 0.14s ease, border-color 0.14s ease"
+                  minW={0}
+                  overflow="hidden"
                 >
-                  {p.title || 'Без названия'}
-                </Text>
-                {p.nextStep && (
-                  <Text
-                    mt="2px"
-                    fontFamily={FONT_APPLE_TEXT}
-                    fontSize="11px"
-                    color={hintColor}
-                    noOfLines={2}
-                    wordBreak="break-word"
-                    lineHeight="1.35"
-                  >
-                    → {p.nextStep}
-                  </Text>
-                )}
-                {memoryCount > 0 && (
+                  {/* Chevron toggle — отдельный hit-target, не открывает проект */}
                   <Flex
-                    mt="6px"
-                    gap="4px"
+                    as="button"
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleToggleExpand(p._id);
+                    }}
+                    aria-label={isExpanded ? 'Свернуть' : 'Раскрыть ветки'}
                     align="center"
-                    minW={0}
-                    overflow="hidden"
+                    justify="center"
+                    boxSize="24px"
+                    ml="4px"
+                    borderRadius="6px"
+                    bg="transparent"
+                    color={hintColor}
+                    _hover={{ bg: 'rgba(0,0,0,0.05)', color: ACCENT_BLUE }}
+                    cursor="pointer"
+                    flexShrink={0}
+                    sx={{ WebkitTapHighlightColor: 'transparent' }}
                   >
-                    <Box
-                      px="6px"
-                      py="1px"
-                      borderRadius="9999px"
-                      bg="rgba(0,102,204,0.10)"
-                      color={ACCENT_BLUE}
+                    <Icon
+                      as={isExpanded ? MdKeyboardArrowDown : MdChevronRight}
+                      boxSize="14px"
+                    />
+                  </Flex>
+                  {/* Project title — клик открывает Project Home */}
+                  <Box
+                    as="button"
+                    type="button"
+                    onClick={() => handleOpenProject(p._id)}
+                    textAlign="left"
+                    flex="1 1 0"
+                    minW={0}
+                    py="6px"
+                    pr="8px"
+                    bg="transparent"
+                    cursor="pointer"
+                    sx={{ WebkitTapHighlightColor: 'transparent' }}
+                  >
+                    <Text
+                      fontFamily={FONT_APPLE_TEXT}
+                      fontSize="13px"
+                      fontWeight={isActive ? 600 : 500}
+                      color={titleColor}
+                      letterSpacing="-0.15px"
+                      noOfLines={1}
+                      wordBreak="break-word"
                     >
+                      {p.title || 'Без названия'}
+                    </Text>
+                    {p.nextStep && !isExpanded && (
                       <Text
+                        mt="2px"
                         fontFamily={FONT_APPLE_TEXT}
-                        fontSize="10px"
-                        fontWeight="600"
-                        letterSpacing="0.2px"
+                        fontSize="11px"
+                        color={hintColor}
+                        noOfLines={2}
+                        wordBreak="break-word"
+                        lineHeight="1.35"
                       >
-                        {memoryCount}{' '}
-                        {memoryCount === 1
-                          ? 'заметка'
-                          : memoryCount < 5
-                            ? 'заметки'
-                            : 'заметок'}
+                        → {p.nextStep}
                       </Text>
+                    )}
+                    {memoryCount > 0 && !isExpanded && (
+                      <Flex
+                        mt="6px"
+                        gap="4px"
+                        align="center"
+                        minW={0}
+                        overflow="hidden"
+                      >
+                        <Box
+                          px="6px"
+                          py="1px"
+                          borderRadius="9999px"
+                          bg="rgba(0,102,204,0.10)"
+                          color={ACCENT_BLUE}
+                        >
+                          <Text
+                            fontFamily={FONT_APPLE_TEXT}
+                            fontSize="10px"
+                            fontWeight="600"
+                            letterSpacing="0.2px"
+                          >
+                            {memoryCount}{' '}
+                            {memoryCount === 1
+                              ? 'заметка'
+                              : memoryCount < 5
+                                ? 'заметки'
+                                : 'заметок'}
+                          </Text>
+                        </Box>
+                      </Flex>
+                    )}
+                  </Box>
+                </Flex>
+
+                {/* ── Threads sub-list ───────────────────────────── */}
+                {isExpanded && (
+                  <Flex
+                    direction="column"
+                    gap="1px"
+                    mt="2px"
+                    ml="22px"
+                    pl="6px"
+                    borderLeft="1px solid"
+                    borderColor={modalBorder}
+                    minW={0}
+                  >
+                    {isLoadingThreads && threads.length === 0 ? (
+                      <Flex align="center" gap="6px" py="4px" px="4px">
+                        <Spinner size="xs" color={ACCENT_BLUE} />
+                        <Text fontSize="11px" color={hintColor}>
+                          Загружаю ветки…
+                        </Text>
+                      </Flex>
+                    ) : threads.length === 0 ? (
+                      <Text
+                        fontSize="11px"
+                        color={hintColor}
+                        px="4px"
+                        py="4px"
+                        lineHeight="1.35"
+                      >
+                        Веток пока нет. Они помогают разделить
+                        исследование, план и риски.
+                      </Text>
+                    ) : (
+                      threads.map((t) => {
+                        const tActive =
+                          activeThreadId === t._id &&
+                          activeProjectId === p._id;
+                        return (
+                          <Box
+                            key={t._id}
+                            as="button"
+                            type="button"
+                            onClick={() => handleOpenThread(p._id, t._id)}
+                            textAlign="left"
+                            px="8px"
+                            py="5px"
+                            borderRadius="7px"
+                            bg={tActive ? activeBg : 'transparent'}
+                            _hover={{
+                              bg: tActive ? activeBg : itemHoverBg,
+                            }}
+                            color={titleColor}
+                            cursor="pointer"
+                            sx={{ WebkitTapHighlightColor: 'transparent' }}
+                            minW={0}
+                          >
+                            <Text
+                              fontFamily={FONT_APPLE_TEXT}
+                              fontSize="12px"
+                              fontWeight={tActive ? 600 : 500}
+                              color={tActive ? ACCENT_BLUE : titleColor}
+                              noOfLines={1}
+                              letterSpacing="-0.1px"
+                            >
+                              {t.title}
+                            </Text>
+                          </Box>
+                        );
+                      })
+                    )}
+                    {/* + Ветка */}
+                    <Box
+                      as="button"
+                      type="button"
+                      onClick={() => handleCreateThread(p._id)}
+                      disabled={isCreatingThreadHere}
+                      mt="2px"
+                      px="8px"
+                      py="5px"
+                      borderRadius="7px"
+                      bg="transparent"
+                      color={ACCENT_BLUE}
+                      cursor={isCreatingThreadHere ? 'wait' : 'pointer'}
+                      _hover={{ bg: itemHoverBg }}
+                      textAlign="left"
+                      opacity={isCreatingThreadHere ? 0.6 : 1}
+                      sx={{ WebkitTapHighlightColor: 'transparent' }}
+                    >
+                      <Flex align="center" gap="6px">
+                        {isCreatingThreadHere ? (
+                          <Spinner size="xs" />
+                        ) : (
+                          <Icon as={MdAdd} boxSize="12px" />
+                        )}
+                        <Text
+                          fontFamily={FONT_APPLE_TEXT}
+                          fontSize="12px"
+                          fontWeight="500"
+                        >
+                          Новая ветка
+                        </Text>
+                      </Flex>
                     </Box>
                   </Flex>
                 )}
