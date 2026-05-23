@@ -13,7 +13,6 @@ import {
   Icon,
   IconButton,
   Input,
-  Portal,
   Spinner,
   Tab,
   TabList,
@@ -112,10 +111,11 @@ function ProjectSourcesDrawer({ projectId, open, onClose }: Props) {
   } | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
 
-  const surfaceBg = useColorModeValue(
-    'rgba(255,255,255,0.88)',
-    'rgba(12,16,30,0.78)',
-  );
+  // Solid Apple-like sheet surface — без translucent + backdrop-blur на
+  // самом контенте, чтобы Drawer всегда был чётко виден, даже если
+  // overlay по какой-то причине отрисовался поверх (раньше выходил
+  // эффект «blur есть, шторки нет»).
+  const surfaceBg = useColorModeValue('#ffffff', '#15171c');
   const cardBg = useColorModeValue(
     'rgba(255,255,255,0.66)',
     'rgba(15,18,32,0.58)',
@@ -492,32 +492,39 @@ function ProjectSourcesDrawer({ projectId, open, onClose }: Props) {
     sources.filter((s) => s.type === type);
 
   return (
-    <Portal>
-      <Drawer
-        isOpen={open}
-        onClose={onClose}
-        placement="right"
-        size={{ base: 'full', md: 'md' } as any}
-        autoFocus={false}
+    // ── Sources drawer ─────────────────────────────────────────────
+    // Chakra Drawer сам портится в document.body через внутренний
+    // Portal. portalProps.appendToParentPortal=false гарантирует, что
+    // он НЕ вкладывается в родительский Chakra Portal (например в
+    // sidebar Drawer на mobile или в navbar Portal из app/layout.tsx).
+    //
+    // z-index НЕ переопределяем: Chakra-дефолт `modal` (1400) уже выше
+    // всего в проекте. Раньше overlay поднимали до 3000, а dialog-
+    // wrapper оставался на 1400 — поэтому контент исчезал «под» blur.
+    //
+    // Solid surface без backdrop-blur на контенте — чтобы шторка
+    // всегда была чётко видна и не зависела от того, что за ней.
+    <Drawer
+      isOpen={open}
+      onClose={onClose}
+      placement="right"
+      size={{ base: 'full', md: 'md' } as any}
+      autoFocus={false}
+      portalProps={{ appendToParentPortal: false }}
+    >
+      <DrawerOverlay
+        bg="rgba(0,0,0,0.45)"
+        sx={{
+          backdropFilter: 'blur(8px) saturate(140%)',
+          WebkitBackdropFilter: 'blur(8px) saturate(140%)',
+        }}
+      />
+      <DrawerContent
+        bg={surfaceBg}
+        maxW={{ base: '100vw', md: '560px' }}
+        fontFamily={FONT_APPLE_TEXT}
+        boxShadow="-1px 0 2px rgba(15,23,42,0.04), -24px 0 60px -8px rgba(15,23,42,0.18)"
       >
-        <DrawerOverlay
-          bg="rgba(0,0,0,0.45)"
-          sx={{
-            backdropFilter: 'blur(8px) saturate(140%)',
-            WebkitBackdropFilter: 'blur(8px) saturate(140%)',
-          }}
-          zIndex={3000}
-        />
-        <DrawerContent
-          zIndex={3001}
-          bg={surfaceBg}
-          sx={{
-            backdropFilter: 'blur(20px) saturate(180%)',
-            WebkitBackdropFilter: 'blur(20px) saturate(180%)',
-          }}
-          maxW={{ base: '100vw', md: '560px' }}
-          fontFamily={FONT_APPLE_TEXT}
-        >
           <DrawerCloseButton
             top={{ base: '12px', md: '14px' }}
             right={{ base: '12px', md: '14px' }}
@@ -892,7 +899,6 @@ function ProjectSourcesDrawer({ projectId, open, onClose }: Props) {
           </DrawerBody>
         </DrawerContent>
       </Drawer>
-    </Portal>
   );
 }
 

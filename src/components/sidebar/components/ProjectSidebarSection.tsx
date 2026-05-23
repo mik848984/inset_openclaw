@@ -89,10 +89,10 @@ function ProjectSidebarSection() {
   );
   const titleColor = useColorModeValue('navy.700', 'white');
   const hintColor = useColorModeValue('gray.500', 'whiteAlpha.700');
-  const modalSurface = useColorModeValue(
-    'rgba(255,255,255,0.88)',
-    'rgba(13,18,34,0.72)',
-  );
+  // Solid Apple-like sheet surface. Translucent + backdrop-blur контента
+  // приводил к ситуации «blur есть, окна нет», если overlay побеждал по
+  // z-index — surface блюрила overlay и сливалась с ним.
+  const modalSurface = useColorModeValue('#ffffff', '#1c1c1f');
   const modalBorder = useColorModeValue(
     'rgba(0,0,0,0.08)',
     'rgba(255,255,255,0.10)',
@@ -327,12 +327,19 @@ function ProjectSidebarSection() {
       )}
 
       {/* ── Create modal ────────────────────────────────────────────
-          Chakra Modal сам портится в document.body. Раньше его дополни-
-          тельно оборачивали в <Portal>, а sidebar (Drawer на mobile) под-
-          нимал свой stacking-context — модалка визуально оказывалась под
-          оверлеем. Убрали внешний Portal, подняли z-index выше любых
-          drawer/overlay/toast и оставили motionPreset для аккуратного
-          появления снизу на телефоне. */}
+          Chakra Modal через свой Portal монтируется в document.body.
+          portalProps.appendToParentPortal=false гарантирует, что Modal
+          НЕ вкладывается ни в какой родительский Chakra Portal (например,
+          sidebar Drawer на mobile) и всегда живёт на body-уровне.
+
+          z-index НЕ переопределяем: Chakra-дефолт `modal = 1400` уже
+          выше всего в проекте (navbar=1000, sticky composer=20, sidebar
+          auto). Раньше мы поднимали overlay до 20000 — это побеждало
+          dialog-wrapper (тоже 1400) и контент исчезал «под» оверлеем.
+
+          ModalContent — солидная поверхность без backdrop-blur: blur на
+          translucent surface давал «blur есть, окна нет», если overlay
+          оказывался поверх. */}
       <Modal
         isOpen={open}
         onClose={() => setOpen(false)}
@@ -342,6 +349,7 @@ function ProjectSidebarSection() {
         autoFocus
         closeOnOverlayClick
         closeOnEsc
+        portalProps={{ appendToParentPortal: false }}
       >
         <ModalOverlay
           bg="rgba(0,0,0,0.48)"
@@ -349,10 +357,8 @@ function ProjectSidebarSection() {
             backdropFilter: 'blur(14px) saturate(160%)',
             WebkitBackdropFilter: 'blur(14px) saturate(160%)',
           }}
-          zIndex={20000}
         />
         <ModalContent
-            zIndex={20001}
             mx={{ base: '16px', md: 'auto' }}
             my={{ base: '16px', md: 'auto' }}
             maxW={{ base: 'calc(100vw - 32px)', md: '640px' }}
@@ -364,11 +370,7 @@ function ProjectSidebarSection() {
             border="1px solid"
             borderColor={modalBorder}
             bg={modalSurface}
-            sx={{
-              backdropFilter: 'blur(22px) saturate(180%)',
-              WebkitBackdropFilter: 'blur(22px) saturate(180%)',
-            }}
-            boxShadow="0 24px 60px rgba(0,0,0,0.20)"
+            boxShadow="0 1px 2px rgba(15,23,42,0.04), 0 32px 64px -16px rgba(15,23,42,0.30)"
             overflow="hidden"
             display="flex"
             flexDirection="column"
