@@ -4,6 +4,7 @@ import {
   MdHome,
   MdOutlineManageAccounts,
   MdEditDocument,
+  MdSearch,
 } from 'react-icons/md';
 import { IoMdPerson } from 'react-icons/io';
 import { LuHistory } from 'react-icons/lu';
@@ -34,6 +35,13 @@ const routes: IRoute[] = [
   //   icon: <Icon as={MdLayers} width="20px" height="20px" color="inherit" />,
   //   collapse: false,
   // },
+  {
+    admin: true,
+    name: 'Поиск',
+    path: '/search',
+    icon: <Icon as={MdSearch} width="20px" height="20px" color="inherit" />,
+    collapse: false,
+  },
   {
     name: 'Чат',
     path: '/chat',
