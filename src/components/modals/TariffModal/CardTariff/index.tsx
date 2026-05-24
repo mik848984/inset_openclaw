@@ -74,6 +74,7 @@ function CardTariff({ price, grade, heading, description }: IProps) {
     setGrade!(grade);
     trackGoal('paywall_subscribe_click', { grade, price });
     setPaymentModalOpen!(true);
+    trackGoal('checkout_start', { grade, price });
   };
 
   return (

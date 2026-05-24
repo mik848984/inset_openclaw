@@ -17,6 +17,7 @@ import { CloseIcon } from '@chakra-ui/icons';
 import React, { useContext, useEffect, useRef, useState } from 'react';
 import { paymentService } from '@/services/ui/PaymentService';
 import { useUser } from '@/utils/hooks/useUser';
+import { trackGoal } from '@/utils/metrics';
 import { Link as LinkChakra } from '@chakra-ui/react';
 import {
   ModalContext,
@@ -87,6 +88,7 @@ function PaymentModal({ grade, open, onClose, itemId }: IProps) {
     });
 
     refCheckout.current?.on('success', async () => {
+      trackGoal('payment_success', { grade, itemId });
       setTimeout(() => {
         refreshUser();
         toast({
