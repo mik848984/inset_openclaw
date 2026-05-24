@@ -70,12 +70,44 @@ export async function GET(): Promise<Response> {
     }
 
     const session = await auth();
+    const email = session?.user?.email;
 
-    const user = await User.findOne({ email: session?.user?.email });
+    if (!email) {
+      return NextResponse.json(
+        {
+          authenticated: false,
+          user: null,
+          subscription: {
+            grade: 'Free',
+            startDate: null,
+            status: null,
+          },
+        },
+        { status: 200 },
+      );
+    }
+
+    const user = await User.findOne({ email });
+
+    if (!user) {
+      return NextResponse.json(
+        {
+          authenticated: false,
+          user: null,
+          subscription: {
+            grade: 'Free',
+            startDate: null,
+            status: null,
+          },
+        },
+        { status: 200 },
+      );
+    }
 
     const subscription = await Subscription.findOne({ user: user.id });
 
     return NextResponse.json({
+      authenticated: true,
       name: user.name,
       image: user.image,
       modelsBalance: user.modelsBalance,
