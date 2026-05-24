@@ -56,7 +56,8 @@ import {
   SearchScholarItem,
   SearchVideoItem,
 } from '@/utils/normalizeModelOutput';
-import React, { useContext, useEffect, useMemo, useState } from 'react';
+import React, { useContext, useEffect, useMemo, useRef, useState } from 'react';
+import { trackGoal } from '@/utils/metrics';
 import { NextAvatar } from '@/components/image/Avatar';
 import { useSession } from 'next-auth/react';
 import { TbCreditCardPay, TbSettingsDollar } from 'react-icons/tb';
@@ -85,6 +86,15 @@ function Message({ message, isLast }: IProps) {
   const textPrimary = useColorModeValue('#1d1d1f', '#f5f5f7');
   const textBody = useColorModeValue('#2b2b2f', 'rgba(245,245,247,0.88)');
   const textSecondary = useColorModeValue('#6e6e73', 'rgba(245,245,247,0.62)');
+  const limitCardBg = useColorModeValue(
+    'rgba(126,89,255,0.06)',
+    'rgba(126,89,255,0.10)',
+  );
+  const limitCardBorder = useColorModeValue(
+    'rgba(126,89,255,0.20)',
+    'rgba(160,130,255,0.25)',
+  );
+  const accentPurple = useColorModeValue('#7e59ff', '#9f7fff');
   const textColor = textBody;
   const borderColor = useColorModeValue(
     'rgba(0,0,0,0.08)',
@@ -978,6 +988,11 @@ function Message({ message, isLast }: IProps) {
                           border="1px solid"
                           borderColor={borderColor}
                           mb={'5'}
+                          onClick={() =>
+                            trackGoal('balance_prompt_signup_click', {
+                              source: 'chat_limit_message',
+                            })
+                          }
                           rightIcon={
                             <Icon
                               as={PiSignIn}
@@ -1005,6 +1020,11 @@ function Message({ message, isLast }: IProps) {
                         border="1px solid"
                         borderColor={borderColor}
                         mb={'5'}
+                        onClick={() =>
+                          trackGoal('web_search_register_signup_click', {
+                            source: 'chat_limit_message',
+                          })
+                        }
                         rightIcon={
                           <Icon
                             as={PiSignIn}
@@ -1020,23 +1040,66 @@ function Message({ message, isLast }: IProps) {
                 )}
 
                 {message.content === '__WEB_SEARCH_FREE_LIMIT__' && (
-                  <Grid mt="12px" gap="12px">
-                    <div>Закончились попытки бесплатного поиска :(</div>
-                    <div>Оформите подписку и получите 100 запросов в месяц!</div>
+                  <Grid
+                    mt="12px"
+                    gap="12px"
+                    p="16px"
+                    borderRadius="16px"
+                    border="1px solid"
+                    borderColor={limitCardBorder}
+                    bg={limitCardBg}
+                  >
+                    <Text
+                      fontSize="15px"
+                      fontWeight="600"
+                      color={textPrimary}
+                      lineHeight="1.3"
+                    >
+                      Поиск в интернете без ограничений
+                    </Text>
+                    <Text
+                      fontSize="14px"
+                      color={textSecondary}
+                      lineHeight="1.5"
+                    >
+                      С Premium вы получаете 100 поисковых запросов в месяц +
+                      GPT-4o, генерацию изображений и другие возможности. Всё за{' '}
+                      249 ₽/мес.
+                    </Text>
                     <Button
-                      onClick={() => setTariffModalOpen!(true)}
-                      border="1px solid"
-                      borderColor={borderColor}
+                      onClick={() => {
+                        trackGoal('web_search_limit_upgrade_click', {
+                          source: 'chat_limit_message',
+                          grade: user?.subscription?.grade || 'start',
+                        });
+                        setTariffModalOpen!(true);
+                      }}
+                      bg={accentPurple}
+                      color="white"
+                      borderRadius="12px"
+                      fontSize="14px"
+                      fontWeight="600"
+                      py="14px"
+                      _hover={{ opacity: 0.92 }}
+                      _active={{ transform: 'scale(0.98)' }}
+                      transition="opacity 0.14s ease, transform 0.12s ease"
                       rightIcon={
                         <Icon
                           as={TbSettingsDollar}
-                          width="20px"
-                          height="20px"
+                          width="18px"
+                          height="18px"
                         />
                       }
                     >
-                      Управлять подпиской
+                      Перейти на Premium — 249 ₽/мес
                     </Button>
+                    <Text
+                      fontSize="12px"
+                      color={textSecondary}
+                      textAlign="center"
+                    >
+                      Отмена в любой момент · Без скрытых платежей
+                    </Text>
                   </Grid>
                 )}
 
