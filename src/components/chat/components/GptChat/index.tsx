@@ -1264,6 +1264,31 @@ const handleSend = async (messageOverride?: string) => {
               </Box>
             </Flex>
 
+            {/* Premium link — always visible, non-intrusive */}
+            <Text
+              as="a"
+              href="/pricing"
+              fontSize="12px"
+              fontWeight="600"
+              color={brandPurple}
+              px="10px"
+              py="4px"
+              borderRadius="9999px"
+              border="1px solid"
+              borderColor={borderSubtle}
+              cursor="pointer"
+              flexShrink={0}
+              textDecoration="none"
+              _hover={{
+                bg: surfaceElevated,
+                borderColor: brandPurple,
+              }}
+              transition="background-color 0.14s ease, border-color 0.14s ease"
+              sx={{ WebkitTapHighlightColor: 'transparent' }}
+            >
+              Premium — 249 ₽
+            </Text>
+
             {/* Right: clear-chat — tiny muted icon, prevailing surface */}
             {!!messages?.length && (
               <Box
