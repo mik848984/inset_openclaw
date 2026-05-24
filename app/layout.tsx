@@ -179,7 +179,7 @@ export default function RootLayout({ children }: { children: ReactNode }) {
   return (
     <html lang="ru" className="html">
       <head>
-        <title>ИИ Сеть</title>
+        <title>ИИСеть</title>
         <meta
           name="description"
           content="ИИСеть – инновационная платформа генерации ИИ-контента. Создавайте уникальные тексты и изображения быстро и удобно. Бесплатный тестовый период!"
