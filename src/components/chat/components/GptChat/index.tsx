@@ -1268,6 +1268,7 @@ const handleSend = async (messageOverride?: string) => {
             <Text
               as="a"
               href="/pricing"
+              onClick={() => trackGoal('chat_header_premium_click', { source: 'chat_top_bar' })}
               fontSize="12px"
               fontWeight="600"
               color={brandPurple}
