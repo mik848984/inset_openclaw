@@ -15,6 +15,7 @@ import {
 } from '@chakra-ui/react';
 import ReactMarkdown from 'react-markdown';
 import ArticleTracker from '@/components/blog/ArticleTracker';
+import BlogPromoBanner from '@/components/blog/BlogPromoBanner';
 
 type Props = {
   params: {
@@ -538,7 +539,7 @@ export default function BlogPostPage({ params }: Props) {
           </Box>
         </Box>
 
-        {/* ── CTA glass card ───────────────────────────────────── */}
+        {/* ── CTA glass card (dynamic) ───────────────────────────── */}
         <Box
           mx="auto"
           maxW={{ base: '100%', md: '820px' }}
@@ -546,116 +547,7 @@ export default function BlogPostPage({ params }: Props) {
           minWidth={0}
           mb={{ base: '40px', md: '56px' }}
         >
-          <Box
-            bg="rgba(255,255,255,0.68)"
-            _dark={{
-              bg: 'rgba(13,18,34,0.62)',
-              borderColor: 'rgba(255,255,255,0.10)',
-            }}
-            backdropFilter="blur(20px) saturate(180%)"
-            sx={{
-              WebkitBackdropFilter: 'blur(20px) saturate(180%)',
-              position: 'relative',
-              '&::before': {
-                content: '""',
-                position: 'absolute',
-                inset: '0',
-                borderRadius: 'inherit',
-                pointerEvents: 'none',
-                background:
-                  'linear-gradient(180deg, rgba(255,255,255,0.45) 0%, rgba(255,255,255,0) 55%)',
-                opacity: 0.85,
-                zIndex: 0,
-              },
-              '& > *': { position: 'relative', zIndex: 1 },
-            }}
-            border="1px solid"
-            borderColor="rgba(255,255,255,0.68)"
-            borderRadius={{ base: '24px', md: '32px' }}
-            boxShadow="inset 0 1px 0 rgba(255,255,255,0.55), 0 18px 50px rgba(31,38,70,0.06)"
-            px={{ base: '22px', md: '32px' }}
-            py={{ base: '24px', md: '32px' }}
-          >
-            <Heading
-              as="h3"
-              fontFamily={FONT_APPLE_DISPLAY}
-              fontSize={{ base: '22px', md: '28px' }}
-              fontWeight="600"
-              lineHeight="1.2"
-              letterSpacing="-0.4px"
-              color="#1d1d1f"
-              _dark={{ color: '#f5f5f7' }}
-              mb="10px"
-            >
-              Попробуйте ИИСеть на практике
-            </Heading>
-            <Text
-              fontFamily={FONT_APPLE_TEXT}
-              fontSize={{ base: '15px', md: '16px' }}
-              lineHeight="1.55"
-              letterSpacing="-0.1px"
-              color="#3c3c43"
-              _dark={{ color: 'rgba(245,245,247,0.74)' }}
-              mb={{ base: '18px', md: '22px' }}
-              maxW="600px"
-            >
-              Откройте чат, выберите модель и примените идеи из статьи к своей
-              задаче.
-            </Text>
-            <Flex
-              direction={{ base: 'column', sm: 'row' }}
-              gap="10px"
-              w={{ base: '100%', sm: 'auto' }}
-            >
-              <Button
-                as={Link}
-                href="/chat"
-                bg="#0066cc"
-                color="white"
-                borderRadius="9999px"
-                h="46px"
-                px="24px"
-                fontFamily={FONT_APPLE_TEXT}
-                fontSize="15px"
-                fontWeight="500"
-                letterSpacing="-0.2px"
-                _hover={{ bg: '#0071e3' }}
-                _active={{ transform: 'scale(0.97)' }}
-                transition="background 0.16s ease, transform 0.12s ease"
-                boxShadow="0 1px 2px rgba(0,0,0,0.06)"
-                w={{ base: '100%', sm: 'auto' }}
-              >
-                Открыть чат
-              </Button>
-              <Button
-                as={Link}
-                href="/blog"
-                variant="ghost"
-                bg="rgba(255,255,255,0.62)"
-                _dark={{
-                  bg: 'rgba(255,255,255,0.06)',
-                  borderColor: 'rgba(255,255,255,0.10)',
-                  color: '#f5f5f7',
-                }}
-                border="1px solid"
-                borderColor="rgba(0,0,0,0.08)"
-                color="#1d1d1f"
-                borderRadius="9999px"
-                h="46px"
-                px="22px"
-                fontFamily={FONT_APPLE_TEXT}
-                fontSize="15px"
-                fontWeight="500"
-                letterSpacing="-0.2px"
-                _hover={{ borderColor: '#0066cc', color: '#0066cc' }}
-                _active={{ transform: 'scale(0.97)' }}
-                transition="border-color 0.16s ease, color 0.16s ease, transform 0.12s ease"
-                w={{ base: '100%', sm: 'auto' }}
-              >
-                Вернуться в блог
-              </Button>
-            </Flex>
-          </Box>
+          <BlogPromoBanner />
         </Box>
 
         {/* ── Related posts ────────────────────────────────────── */}
