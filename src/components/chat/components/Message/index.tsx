@@ -932,11 +932,13 @@ function Message({ message, isLast }: IProps) {
 
             {(message.content &&
               (message.content.startsWith('Ваш баланс для ') ||
+                message.content.startsWith('Бесплатный лимит') ||
                 message.content === '__WEB_SEARCH_REGISTER__' ||
                 message.content === '__WEB_SEARCH_FREE_LIMIT__' ||
                 message.content === '__WEB_SEARCH_PRO_LIMIT__')) && (
               <Grid gap="12px" mt="12px">
-                {message.content.startsWith('Ваш баланс для ') && (
+                {(message.content.startsWith('Ваш баланс для ') ||
+                  message.content.startsWith('Бесплатный лимит')) && (
                   <Flex
                     gap="12px"
                     mt="12px"
@@ -974,7 +976,8 @@ function Message({ message, isLast }: IProps) {
                 )}
 
                 {isAnonymous &&
-                  message.content.startsWith('Ваш баланс для ') && (
+                  (message.content.startsWith('Ваш баланс для ') ||
+                    message.content.startsWith('Бесплатный лимит')) && (
                     <Grid mt="12px" gap="14px">
                       <div>
                         Авторизуйтесь и получите бесплатно 160 страниц генерации
