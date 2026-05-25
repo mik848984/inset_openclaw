@@ -265,12 +265,13 @@ class ModelsService {
     }
 
     if (mode === 'chat') {
-      if (user.modelsBalance <= 0) return 'Ваш баланс для моделей исчерпан! 😞';
+      if (user.modelsBalance <= 0)
+        return 'Бесплатный лимит генерации текста исчерпан. Оформите Premium и получите GPT-4o, Claude и Google Gemini на русском, поиск в интернете и генерацию изображений — всё за 249 ₽/мес.';
     }
 
     if (mode === 'images') {
       if (user.imageGenerationBalance <= 0)
-        return 'Ваш баланс для Генерации изображений моделей исчерпан! 😞';
+        return 'Бесплатный лимит генерации изображений исчерпан. С Premium вы получаете 150 изображений в месяц плюс GPT-4o и поиск в интернете — всего за 249 ₽/мес.';
     }
 
     return null;

@@ -65,6 +65,10 @@ const urls = [
   `https://${host}/blog`,
   `https://${host}/life-agents`,
   `https://${host}/all-templates`,
+  `https://${host}/pricing`,
+  `https://${host}/iiset-vs-chatgpt`,
+  `https://${host}/iiset-vs-aijora`,
+  `https://${host}/blog/iiset-vs-chatgpt-ru`,
 ];
 
 const payload = {
