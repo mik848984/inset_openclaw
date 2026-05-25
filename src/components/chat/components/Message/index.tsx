@@ -960,8 +960,9 @@ function Message({ message, isLast }: IProps) {
                     </Button>
                     <Button
                       onClick={() => setTariffModalOpen!(true)}
-                      border="1px solid"
-                      borderColor={borderColor}
+                      bg="#422AFB"
+                      color="white"
+                      _hover={{ bg: '#3311DB' }}
                       rightIcon={
                         <Icon
                           as={TbSettingsDollar}
@@ -970,7 +971,7 @@ function Message({ message, isLast }: IProps) {
                         />
                       }
                     >
-                      Активировать тариф
+                      Оформить Premium — 249 ₽/мес
                     </Button>
                   </Flex>
                 )}
@@ -980,8 +981,7 @@ function Message({ message, isLast }: IProps) {
                     message.content.startsWith('Бесплатный лимит')) && (
                     <Grid mt="12px" gap="14px">
                       <div>
-                        Авторизуйтесь и получите бесплатно 160 страниц генерации
-                        текста бесплатно! 🔥
+                        Авторизуйтесь и получите GPT-4o, Claude и Gemini на русском + веб-поиск со ссылками на источники. Без VPN. 🔥
                       </div>
                       <Link
                         style={{ width: '100%' }}
