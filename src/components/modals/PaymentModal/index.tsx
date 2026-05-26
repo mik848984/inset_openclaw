@@ -83,6 +83,7 @@ function PaymentModal({ grade, open, onClose, itemId }: IProps) {
     refCheckout.current = new window.YooMoneyCheckoutWidget({
       confirmation_token: payment.confirmation_token,
       error_callback: function (error: any) {
+        trackGoal('payment_widget_error', { grade, itemId, error: error?.error_code || 'unknown' });
         console.log(error);
       },
     });
@@ -100,6 +101,11 @@ function PaymentModal({ grade, open, onClose, itemId }: IProps) {
         closeHandler();
       }, 5000);
     });
+
+    refCheckout.current?.on('fail', async (error: any) => {
+      trackGoal('payment_fail', { grade, itemId, error: error?.error_code || 'unknown' });
+    });
+
     refCheckout.current?.render('payment');
   };
 
