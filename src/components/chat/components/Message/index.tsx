@@ -939,41 +939,77 @@ function Message({ message, isLast }: IProps) {
               <Grid gap="12px" mt="12px">
                 {(message.content.startsWith('Ваш баланс для ') ||
                   message.content.startsWith('Бесплатный лимит')) && (
-                  <Flex
-                    gap="12px"
+                  <Grid
                     mt="12px"
-                    direction={{ base: 'column', md: 'row' }}
+                    gap="12px"
+                    p="16px"
+                    borderRadius="16px"
+                    border="1px solid"
+                    borderColor={limitCardBorder}
+                    bg={limitCardBg}
                   >
-                    <Button
-                      onClick={() => setPayBalanceModalOpen!(true)}
-                      border="1px solid"
-                      borderColor={borderColor}
-                      rightIcon={
-                        <Icon
-                          as={TbCreditCardPay}
-                          width="20px"
-                          height="20px"
-                        />
-                      }
+                    <Flex
+                      gap="12px"
+                      direction={{ base: 'column', md: 'row' }}
                     >
-                      Пополнить баланс
-                    </Button>
-                    <Button
-                      onClick={() => setTariffModalOpen!(true)}
-                      bg="#422AFB"
-                      color="white"
-                      _hover={{ bg: '#3311DB' }}
-                      rightIcon={
-                        <Icon
-                          as={TbSettingsDollar}
-                          width="20px"
-                          height="20px"
-                        />
-                      }
+                      <Button
+                        onClick={() => {
+                          trackGoal('text_limit_paybalance_click', {
+                            source: 'chat_limit_message',
+                            type: message.content.includes('изображений')
+                              ? 'image'
+                              : 'text',
+                          });
+                          setPayBalanceModalOpen!(true);
+                        }}
+                        border="1px solid"
+                        borderColor={borderColor}
+                        rightIcon={
+                          <Icon
+                            as={TbCreditCardPay}
+                            width="20px"
+                            height="20px"
+                          />
+                        }
+                      >
+                        Пополнить баланс
+                      </Button>
+                      <Button
+                        onClick={() => {
+                          trackGoal('text_limit_upgrade_click', {
+                            source: 'chat_limit_message',
+                            grade: user?.subscription?.grade || 'start',
+                            is_anonymous: !user,
+                            type: message.content.includes('изображений')
+                              ? 'image'
+                              : 'text',
+                          });
+                          setTariffModalOpen!(true);
+                        }}
+                        bg="#422AFB"
+                        color="white"
+                        _hover={{ bg: '#3311DB' }}
+                        rightIcon={
+                          <Icon
+                            as={TbSettingsDollar}
+                            width="20px"
+                            height="20px"
+                          />
+                        }
+                      >
+                        Оформить Premium — 249 ₽/мес
+                      </Button>
+                    </Flex>
+                    <Text
+                      fontSize="12px"
+                      color={textSecondary}
+                      textAlign="center"
+                      lineHeight="1.4"
                     >
-                      Оформить Premium — 249 ₽/мес
-                    </Button>
-                  </Flex>
+                      Менее 9 ₽ в день · Более 5 000 пользователей уже с
+                      нами · Отмена в любой момент
+                    </Text>
+                  </Grid>
                 )}
 
                 {isAnonymous &&
