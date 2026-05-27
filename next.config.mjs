@@ -8,6 +8,16 @@ const nextConfig = {
   typescript: {
     ignoreBuildErrors: true,
   },
+  redirects() {
+    return [
+      {
+        source: '/ai-assistant',
+        destination: '/chat',
+        permanent: true,
+      },
+    ];
+  },
+
   webpack(config, { isServer, dev }) {
     config.experiments = {
       asyncWebAssembly: true,

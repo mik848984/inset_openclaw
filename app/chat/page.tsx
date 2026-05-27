@@ -9,9 +9,9 @@ import OnboardingHintManager from '@/components/onboarding/OnboardingHintManager
 import { Viewport } from 'next';
 
 export const metadata: Metadata = {
-  title: 'Чат с искусственным интеллектом — IISet Chat',
+  title: 'Чат ИИСеть — ИИ-помощник для работы, учёбы и творчества',
   description:
-    'Главная рабочая среда ИИСети: диалоги с искусственным интеллектом, генерация текстов и изображений, работа с файлами и интернет-поиск в одном интерфейсе.',
+    'Чат ИИСеть — GPT-4o, Claude и Gemini на русском с веб-поиском и генерацией изображений. Без VPN, без иностранных карт.',
 };
 
 export function generateViewport(): Viewport {
@@ -19,7 +19,6 @@ export function generateViewport(): Viewport {
     width: 'device-width',
     initialScale: 1,
     maximumScale: 1,
-    userScalable: false,
   };
 }
 
