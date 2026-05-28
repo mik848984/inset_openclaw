@@ -95,6 +95,22 @@ function Message({ message, isLast }: IProps) {
     'rgba(160,130,255,0.25)',
   );
   const accentPurple = useColorModeValue('#7e59ff', '#9f7fff');
+  const socialProofBg = useColorModeValue(
+    'rgba(34,197,94,0.06)',
+    'rgba(34,197,94,0.10)',
+  );
+  const socialProofBorder = useColorModeValue(
+    'rgba(34,197,94,0.18)',
+    'rgba(34,197,94,0.22)',
+  );
+  const urgencyBg = useColorModeValue(
+    'rgba(126,89,255,0.08)',
+    'rgba(160,130,255,0.12)',
+  );
+  const urgencyBorder = useColorModeValue(
+    'rgba(126,89,255,0.22)',
+    'rgba(160,130,255,0.28)',
+  );
   const textColor = textBody;
   const borderColor = useColorModeValue(
     'rgba(0,0,0,0.08)',
@@ -937,11 +953,10 @@ function Message({ message, isLast }: IProps) {
                 message.content === '__WEB_SEARCH_FREE_LIMIT__' ||
                 message.content === '__WEB_SEARCH_PRO_LIMIT__')) && (
               <Grid gap="12px" mt="12px">
-                {(message.content.startsWith('Ваш баланс для ') ||
-                  message.content.startsWith('Бесплатный лимит')) && (
-                  <Grid
-                    mt="12px"
+                {message.content.startsWith('Ваш баланс для ') && (
+                  <Flex
                     gap="12px"
+                    mt="12px"
                     p="16px"
                     borderRadius="16px"
                     border="1px solid"
@@ -1008,6 +1023,143 @@ function Message({ message, isLast }: IProps) {
                     >
                       Менее 9 ₽ в день · Более 5 000 пользователей уже с
                       нами · Отмена в любой момент
+                    </Text>
+                  </Flex>
+                )}
+
+                {message.content.startsWith('Бесплатный лимит') && (
+                  <Grid
+                    mt="12px"
+                    gap="12px"
+                    p={{ base: '14px', md: '16px' }}
+                    borderRadius="16px"
+                    border="1px solid"
+                    borderColor={limitCardBorder}
+                    bg={limitCardBg}
+                    maxWidth="100%"
+                  >
+                    <Text
+                      fontFamily={FONT_APPLE_DISPLAY}
+                      fontSize={{ base: '16px', md: '17px' }}
+                      fontWeight="600"
+                      color={textPrimary}
+                      lineHeight="1.3"
+                      letterSpacing="-0.2px"
+                    >
+                      Тексты без ограничений
+                    </Text>
+                    <Text
+                      fontFamily={FONT_APPLE_TEXT}
+                      fontSize={{ base: '13px', md: '14px' }}
+                      color={textSecondary}
+                      lineHeight="1.5"
+                    >
+                      С Premium вы получаете GPT-4o, Claude и Gemini без
+                      лимитов. Генерация изображений, веб-поиск и другие
+                      возможности. Всё за 249 ₽/мес.
+                    </Text>
+
+                    {/* Social proof strip */}
+                    <Flex
+                      align="center"
+                      gap="10px"
+                      px="12px"
+                      py="10px"
+                      bg={socialProofBg}
+                      border="1px solid"
+                      borderColor={socialProofBorder}
+                      borderRadius="12px"
+                    >
+                      <Box
+                        w="6px"
+                        h="6px"
+                        borderRadius="50%"
+                        bg="#22c55e"
+                        flexShrink={0}
+                      />
+                      <Text
+                        fontFamily={FONT_APPLE_TEXT}
+                        fontSize="13px"
+                        color={textPrimary}
+                        letterSpacing="-0.1px"
+                        lineHeight="1.4"
+                      >
+                        <Text as="span" fontWeight="600">
+                          Более 5 000
+                        </Text>{' '}
+                        пользователей уже работают с ИИСетью ежедневно
+                      </Text>
+                    </Flex>
+
+                    {/* Urgency strip */}
+                    <Flex
+                      align="center"
+                      gap="10px"
+                      px="12px"
+                      py="10px"
+                      bg={urgencyBg}
+                      border="1px solid"
+                      borderColor={urgencyBorder}
+                      borderRadius="12px"
+                    >
+                      <Box
+                        w="6px"
+                        h="6px"
+                        borderRadius="50%"
+                        bg={accentPurple}
+                        flexShrink={0}
+                      />
+                      <Text
+                        fontFamily={FONT_APPLE_TEXT}
+                        fontSize="13px"
+                        color={textPrimary}
+                        letterSpacing="-0.1px"
+                        lineHeight="1.4"
+                      >
+                        <Text as="span" fontWeight="600">
+                          Менее 9 ₽ в день
+                        </Text>{' '}
+                        — дешевле чашки кофе
+                      </Text>
+                    </Flex>
+
+                    <Button
+                      onClick={() => {
+                        trackGoal('paywall_subscribe_click', {
+                          source: 'chat_limit_message',
+                          grade: user?.subscription?.grade || 'start',
+                        });
+                        setTariffModalOpen!(true);
+                      }}
+                      bg={accentPurple}
+                      color="white"
+                      borderRadius="12px"
+                      fontSize="14px"
+                      fontWeight="600"
+                      py="14px"
+                      w="100%"
+                      _hover={{ opacity: 0.92 }}
+                      _active={{ transform: 'scale(0.98)' }}
+                      transition="opacity 0.14s ease, transform 0.12s ease"
+                      rightIcon={
+                        <Icon
+                          as={TbSettingsDollar}
+                          width="18px"
+                          height="18px"
+                        />
+                      }
+                    >
+                      Оформить Premium — 249 ₽/мес
+                    </Button>
+
+                    <Text
+                      fontFamily={FONT_APPLE_TEXT}
+                      fontSize="12px"
+                      color={textSecondary}
+                      textAlign="center"
+                      lineHeight="1.4"
+                    >
+                      Отмена в любой момент · Без скрытых платежей
                     </Text>
                   </Grid>
                 )}
