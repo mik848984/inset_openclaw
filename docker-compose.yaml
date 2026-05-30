@@ -26,6 +26,7 @@ services:
 
       - "traefik.http.middlewares.redirect-to-https.redirectscheme.scheme=https"
       - "traefik.http.middlewares.redirect-to-https.redirectscheme.permanent=true"
+      - "traefik.docker.network=iiset_app-network"
 
     volumes:
       - ./content/blog:/app/content/blog
