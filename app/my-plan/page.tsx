@@ -396,7 +396,7 @@ export default function MyPlanPage() {
                     setTariffModalOpen && setTariffModalOpen(true);
                   }}
                 >
-                  Перейти на Premium — 249 ₽/мес
+                  Перейти на Premium — 249 ₽/мес (≈ 9 ₽/день)
                   <Icon
                     as={LuChevronRight}
                     w="18px"

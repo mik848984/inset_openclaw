@@ -166,6 +166,29 @@ function CardTariff({ price, grade, heading, description }: IProps) {
             </Text>
           </Flex>
 
+          {/* Per‑day anchor to reduce price friction */}
+          <Text
+            fontSize={{ base: '13px', md: '14px' }}
+            fontWeight="500"
+            letterSpacing="-0.1px"
+            lineHeight="1.4"
+            color="green.500"
+            mt="2px"
+          >
+            ≈ {Math.ceil(price / 30)} ₽ в день
+          </Text>
+
+          {/* Value reframe — less than a coffee */}
+          <Text
+            fontSize={{ base: '12px', md: '13px' }}
+            letterSpacing="-0.1px"
+            lineHeight="1.4"
+            color={textSecondary}
+            mt="4px"
+          >
+            Меньше стоимости кофе — безлимитный ИИ на целый месяц
+          </Text>
+
           {/* Description with brain icon */}
           <Flex align="flex-start" gap="8px" mt="6px">
             <Flex
