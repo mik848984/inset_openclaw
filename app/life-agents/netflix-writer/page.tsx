@@ -1,10 +1,12 @@
-
-'use client';
-/*eslint-disable*/
-
-import React from 'react';
 import LifeAgentPage from '@/components/life-agents/LifeAgentPage';
+import { Metadata } from 'next';
 
+export const metadata: Metadata = {
+  title: 'Netflix-сценарист — агент, который пишет серию про вашу жизнь',
+  description:
+    'Агент Netflix-сценарист превращает факты о вас в сценарий эпизода сериала. Помогает увидеть себя героем истории и взглянуть на текущие события под другим углом.',
+  alternates: { canonical: 'https://iiset.io/life-agents/netflix-writer' },
+};
 
 export default function Page() {
   return (

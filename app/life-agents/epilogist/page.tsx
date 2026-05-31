@@ -1,10 +1,12 @@
-
-'use client';
-/*eslint-disable*/
-
-import React from 'react';
 import LifeAgentPage from '@/components/life-agents/LifeAgentPage';
+import { Metadata } from 'next';
 
+export const metadata: Metadata = {
+  title: 'Эпилогист — спокойный итог главы вашей жизни',
+  description:
+    'Игровой агент Эпилогист помогает подвести мягкий итог выбранному периоду жизни и увидеть, какой путь вы уже прошли, без приговоров и диагнозов.',
+  alternates: { canonical: 'https://iiset.io/life-agents/epilogist' },
+};
 
 export default function Page() {
   return (

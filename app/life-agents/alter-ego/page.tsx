@@ -1,10 +1,12 @@
-
-'use client';
-/*eslint-disable*/
-
-import React from 'react';
 import LifeAgentPage from '@/components/life-agents/LifeAgentPage';
+import { Metadata } from 'next';
 
+export const metadata: Metadata = {
+  title: 'Альтер-эго — альтернативная версия вас через ИИ-агент',
+  description:
+    'Игровой ИИ-агент Альтер-эго создаёт логически связанную альтернативную версию вас из другой вселенной на основе ваших черт и привычек. Не медицинский диагноз — способ поиграть со смыслом.',
+  alternates: { canonical: 'https://iiset.io/life-agents/alter-ego' },
+};
 
 export default function Page() {
   return (

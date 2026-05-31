@@ -1,10 +1,12 @@
-
-'use client';
-/*eslint-disable*/
-
-import React from 'react';
 import LifeAgentPage from '@/components/life-agents/LifeAgentPage';
+import { Metadata } from 'next';
 
+export const metadata: Metadata = {
+  title: 'Психоаналитик — игровой ИИ-агент ИИСеть',
+  description:
+    'Игровой ИИ-агент Психоаналитик мягко разбирает ваши интересы, привычки и переживания, подчёркивая сильные стороны и мотивы. Это не психотерапия, а способ по-новому посмотреть на себя.',
+  alternates: { canonical: 'https://iiset.io/life-agents/psychoanalyst' },
+};
 
 export default function Page() {
   return (
