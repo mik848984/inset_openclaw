@@ -1,10 +1,15 @@
 import Link from "next/link";
 import { TrackedPricingCTA } from "@/components/TrackedPricingCTA";
 
-export const metadata = {
+import { Metadata } from "next";
+
+export const metadata: Metadata = {
   title: "Premium ИИСеть за 249 ₽/мес — тарифы Free и Premium",
   description:
     "Premium-доступ к ИИСеть: ИИ-чат на русском, интернет-поиск, тексты, изображения и AI-агенты за 249 ₽ в месяц.",
+  alternates: {
+    canonical: "https://iiset.io/pricing",
+  },
 };
 
 const comparisonRows = [
@@ -39,6 +44,10 @@ const faq = [
   {
     q: "Почему цена 249 ₽/мес?",
     a: "Это низкий порог входа: меньше 9 ₽ в день. Для сравнения — ChatGPT Plus стоит около 1 830 ₽/мес, а российские агрегаторы — от 500 ₽/мес. ИИСеть даёт чат, поиск, тексты, изображения и агентов в одном окне.",
+  },
+  {
+    q: "Есть ли гарантия возврата?",
+    a: "Да. Если Premium не подойдёт, сообщите нам в течение 7 дней после оплаты — вернём деньги без вопросов.",
   },
   {
     q: "Это замена ChatGPT?",
@@ -278,7 +287,7 @@ export default function PricingPage() {
       >
         <p style={{ color: "#6D5DF6", fontWeight: 800, marginTop: 0 }}>Доверие</p>
         <h2 style={{ marginTop: 0, fontSize: "clamp(28px, 4vw, 42px)" }}>
-          ИИСеть уже используют 5 268+ пользователей
+          Более 8 000 пользователей уже используют ИИСеть
         </h2>
         <p style={{ color: "#4E5568", fontSize: 18, lineHeight: 1.65, maxWidth: 760 }}>
           Мы не показываем вымышленные отзывы. Вместо этого честно показываем, что
