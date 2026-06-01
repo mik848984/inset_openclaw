@@ -11,7 +11,7 @@ import { CloseIcon } from '@chakra-ui/icons';
 import React, { useContext, useEffect, useRef } from 'react';
 import CardTariff from '@/components/modals/TariffModal/CardTariff';
 import Modal from '../Modal/Modal';
-import { getExpiredDate, getTariffName } from '../../../../app/profile/page';
+import { getExpiredDate, getTariffName } from '../../../../app/profile/profile-helpers';
 import { useUser } from '@/utils/hooks/useUser';
 import SubscriptionButton from '@/components/modals/TariffModal/SubscriptionButton';
 import { ModalContext } from '@/contexts/ModalContext';
