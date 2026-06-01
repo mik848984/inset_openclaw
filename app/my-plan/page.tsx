@@ -19,6 +19,7 @@ import {
   LuClock,
   LuShieldCheck,
   LuChevronRight,
+  LuUsers,
 } from 'react-icons/lu';
 import Link from 'next/link';
 import { useUser } from '@/utils/hooks/useUser';
@@ -317,6 +318,22 @@ export default function MyPlanPage() {
               окне. Без VPN и иностранных карт.
             </Text>
 
+            <Flex align="center" gap="8px" mt="2px">
+              <Icon
+                as={LuUsers}
+                w="16px"
+                h="16px"
+                color={useColorModeValue('#0066cc', '#2997ff')}
+              />
+              <Text
+                fontSize={{ base: '13px', md: '14px' }}
+                color={textSecondary}
+                lineHeight="1.4"
+              >
+                Более 8,000 пользователей уже используют ИИСеть
+              </Text>
+            </Flex>
+
             <Grid
               templateColumns={{ base: '1fr', sm: '1fr 1fr' }}
               gap="10px"
@@ -411,7 +428,7 @@ export default function MyPlanPage() {
                 lineHeight="1.4"
                 textAlign={{ base: 'center', md: 'left' }}
               >
-                Отмена в любой момент · Без скрытых платежей
+                Отмена в любой момент · 7-дневная гарантия возврата · Без скрытых платежей
               </Text>
             </Flex>
           </Flex>
