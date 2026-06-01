@@ -15,7 +15,7 @@ const userSchema = new Schema(
     },
     modelsBalance: {
       type: Number,
-      default: 10_000,
+      default: 3_000,
       required: true,
       set: function (value: number) {
         return value < 0 ? 0 : value;
@@ -23,7 +23,7 @@ const userSchema = new Schema(
     },
     simpleModelsBalance: {
       type: Number,
-      default: 10_000,
+      default: 3_000,
       required: true,
       set: function (value: number) {
         return value < 0 ? 0 : value;

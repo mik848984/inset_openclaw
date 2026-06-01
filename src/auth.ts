@@ -74,7 +74,7 @@ export const authConfig: NextAuthConfig = {
             email,
             name,
             image,
-            modelsBalance: email.endsWith('@example.com') ? 20_000 : 100_000,
+            modelsBalance: email.endsWith('@example.com') ? 20_000 : 3_000,
             imageGenerationBalance: email.endsWith('@example.com') ? 5 : 12,
           });
         }
