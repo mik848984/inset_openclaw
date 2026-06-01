@@ -26,7 +26,7 @@ import { useUser } from '@/utils/hooks/useUser';
 import { ModalContext } from '@/contexts/ModalContext';
 import { trackGoal } from '@/utils/metrics';
 import { getProducts } from '@/components/modals';
-import { calculatePages, getExpiredDate } from '../profile/page';
+import { calculatePages, getExpiredDate } from '../profile/ProfileClient';
 
 const FONT_APPLE_TEXT = `'SF Pro Text', -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif`;
 const FONT_APPLE_DISPLAY = `'SF Pro Display', -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif`;

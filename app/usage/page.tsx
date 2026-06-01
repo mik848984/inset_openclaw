@@ -4,7 +4,7 @@ import { Box, Heading, Skeleton, Stack } from '@chakra-ui/react';
 import { LuChartNetwork } from 'react-icons/lu';
 import { FaChartArea } from 'react-icons/fa';
 
-import { calculatePages } from '../profile/page';
+import { calculatePages } from '../profile/ProfileClient';
 import LineChartUsage from '../../src/components/LineChartUsage';
 import { usageService } from '@/services/ui/UsageService';
 import { useSubscribe } from '@/utils/hooks/useSubscribe';
