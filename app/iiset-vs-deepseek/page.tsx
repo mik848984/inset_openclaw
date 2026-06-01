@@ -332,7 +332,7 @@ export default function ComparisonPage() {
             Доверие
           </p>
           <h2 style={{ marginTop: 0, fontSize: "clamp(28px, 4vw, 42px)", fontWeight: 700, lineHeight: 1.1 }}>
-            ИИСеть уже используют 6 700+ пользователей
+            ИИСеть уже используют 8 000+ пользователей
           </h2>
           <p style={{ color: "#4E5568", fontSize: 18, lineHeight: 1.65, maxWidth: 760 }}>
             Платформа работает на российской инфраструктуре, принимает оплату картами РФ и
