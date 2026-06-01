@@ -1,5 +1,23 @@
 # Changelog
 
+## [2.4.2] 2026-06-02
+
+### SEO — FAQPage JSON-LD schema added to /pricing
+
+- Added `const faqJsonLd` object with `@context: "https://schema.org"` and `@type: "FAQPage"`.
+- Rendered via `<script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(faqJsonLd) }} />`.
+- Includes 7 Q&A pairs covering trial, Premium features, price justification, refund guarantee, ChatGPT comparison, work use-cases, and hidden fees.
+- FAQ section HTML and visible layout unchanged.
+- Production verified: `https://iiset.io/pricing` returns HTTP 200 with valid JSON-LD FAQPage schema in HTML.
+
+## [2.4.1] 2026-05-19
+
+### Added social proof and urgency to landing and paywall
+
+- Homepage: added trust section with user count, daily-framing copy, and trust signals
+- TariffModal: added social proof banner inside paywall modal
+- CardTariff: added "Популярный выбор" badge and "Меньше 9 ₽ в день" microcopy for paid plans
+
 ## [2.4.0] 2024-05-30
 
 ### Removed all vulnerabilities
