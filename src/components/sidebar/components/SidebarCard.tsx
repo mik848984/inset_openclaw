@@ -8,7 +8,7 @@ import {
   groupDataByTime,
 } from '@/components/LineChartUsage/utils';
 import { usageService } from '@/services/ui/UsageService';
-import { calculatePages } from '../../../../app/profile/page';
+import { calculatePages } from '../../../../app/profile/profile-helpers';
 import { useSubscribe } from '@/utils/hooks/useSubscribe';
 import Link from 'next/link';
 

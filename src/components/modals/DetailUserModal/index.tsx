@@ -24,7 +24,7 @@ import LineChartUsage from '@/components/LineChartUsage';
 import { FaChartArea } from 'react-icons/fa';
 import { calculatePages } from '../../../../app/admin-user/Content';
 import { MdOutlinePaid } from 'react-icons/md';
-import { getExpiredDate, getTariffName } from '../../../../app/profile/page';
+import { getExpiredDate, getTariffName } from '../../../../app/profile/profile-helpers';
 
 interface IProps {
   open: boolean;
