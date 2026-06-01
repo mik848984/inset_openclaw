@@ -9,16 +9,34 @@ import OnboardingHintManager from '@/components/onboarding/OnboardingHintManager
 import { Viewport } from 'next';
 
 export const metadata: Metadata = {
+  metadataBase: new URL('https://iiset.io'),
   title: 'Чат ИИСеть — ИИ-помощник для работы, учёбы и творчества',
   description:
     'Чат ИИСеть — GPT-4o, Claude и Gemini на русском с веб-поиском и генерацией изображений. Без VPN, без иностранных карт.',
+  alternates: {
+    canonical: '/chat',
+  },
+  openGraph: {
+    title: 'Чат ИИСеть — ИИ-помощник для работы, учёбы и творчества',
+    description:
+      'Чат ИИСеть — GPT-4o, Claude и Gemini на русском с веб-поиском и генерацией изображений. Без VPN, без иностранных карт.',
+    url: 'https://iiset.io/chat',
+    siteName: 'ИИСеть',
+    locale: 'ru_RU',
+    type: 'website',
+  },
+  twitter: {
+    card: 'summary_large_image',
+    title: 'Чат ИИСеть — ИИ-помощник для работы, учёбы и творчества',
+    description:
+      'Чат ИИСеть — GPT-4o, Claude и Gemini на русском с веб-поиском и генерацией изображений. Без VPN, без иностранных карт.',
+  },
 };
 
 export function generateViewport(): Viewport {
   return {
     width: 'device-width',
     initialScale: 1,
-    maximumScale: 1,
   };
 }
 
