@@ -155,6 +155,23 @@ export default function ComparisonPage() {
           </TrackedPricingCTA>
         </section>
 
+        {/* ── Related: ChatGPT без VPN ────────────────────────── */}
+        <section style={{ ...cardStyle, marginBottom: 34, background: "linear-gradient(135deg, rgba(109,93,246,0.05), rgba(77,140,255,0.04))", border: "1px solid rgba(109,93,246,0.12)" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 20, flexWrap: "wrap", justifyContent: "space-between" }}>
+            <div style={{ flex: 1, minWidth: 260 }}>
+              <p style={{ margin: "0 0 6px", fontSize: 17, fontWeight: 700 }}>
+                ChatGPT не работает в России без VPN?
+              </p>
+              <p style={{ margin: 0, color: "#596174", fontSize: 15, lineHeight: 1.55 }}>
+                Попробуйте ИИСеть — GPT-4o, DeepSeek, Claude и Gemini без VPN, регистрации и иностранных карт.
+              </p>
+            </div>
+            <Link href="/chatgpt-bez-vpn" style={primaryButton}>
+              ChatGPT без VPN →
+            </Link>
+          </div>
+        </section>
+
         {/* ── At-a-glance table ──────────────────────────────── */}
         <section style={{ ...cardStyle, marginBottom: 34, overflowX: "auto" }}>
           <div style={{ overflowX: "auto" }}>
