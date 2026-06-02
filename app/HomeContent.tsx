@@ -363,7 +363,7 @@ function DemoCard({
 const footerLinks: Record<string, { label: string; href: string }[]> = {
   Продукт: [
     { label: "Чат", href: "/chat" },
-    { label: "Тарифы", href: "/profile" },
+    { label: "Тарифы", href: "/pricing" },
     { label: "Агенты", href: "/life-agents" },
     { label: "Шаблоны", href: "/all-templates" },
   ],
@@ -623,6 +623,9 @@ export default function HomeContent() {
               Открыть ИИСеть
             </CtaPrimary>
             <CtaSecondary href="#features">Посмотреть возможности</CtaSecondary>
+            <CtaGhost href="/pricing" large>
+              Тарифы — от 249 ₽
+            </CtaGhost>
           </HStack>
 
           <Box mx="auto" maxW="1200px">
