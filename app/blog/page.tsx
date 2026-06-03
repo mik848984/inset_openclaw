@@ -17,8 +17,7 @@ import HeroBlogCard from '@/components/blog/HeroBlogCard';
 import BlogPromoBanner from '@/components/blog/BlogPromoBanner';
 import BlogPageTracker from '@/components/blog/BlogPageTracker';
 
-export const dynamic = 'force-dynamic';
-export const revalidate = 0;
+export const revalidate = 3600;
 
 export const metadata: Metadata = {
   metadataBase: new URL('https://iiset.io'),
