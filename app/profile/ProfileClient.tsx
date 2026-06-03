@@ -253,36 +253,189 @@ export default function NewTemplate() {
 
           {/* CTA cluster */}
           <Flex
-            direction={{ base: 'column', md: 'row' }}
+            direction="column"
             gap="8px"
             w={{ base: '100%', md: 'auto' }}
             flexShrink={0}
           >
-            {isAnonymous ? (
-              <Link href="/others/sign-in" style={{ width: '100%' }}>
-                <Button
-                  w="100%"
-                  bg={accentBlue}
-                  color="white"
-                  borderRadius="9999px"
-                  h="44px"
-                  px="22px"
-                  fontFamily={FONT_APPLE_TEXT}
-                  fontWeight="500"
-                  fontSize="15px"
-                  letterSpacing="-0.2px"
-                  _hover={{ bg: accentBlueHover }}
-                  _active={{ transform: 'scale(0.96)' }}
-                  transition="all 0.16s ease"
-                  rightIcon={<Icon as={PiSignIn} w="18px" h="18px" />}
+            {isAnonymous && (
+              <>
+                <Text
+                  fontSize={{ base: '13px', md: '14px' }}
+                  color={textSecondary}
+                  letterSpacing="-0.1px"
+                  lineHeight="1.5"
+                  maxW="420px"
                 >
-                  Авторизоваться
-                </Button>
-              </Link>
-            ) : null}
+                  Вы используете ИИСеть без учётной записи. Создайте аккаунт,
+                  чтобы сохранить историю диалогов, или войдите, если уже
+                  зарегистрированы.
+                </Text>
+                <SimpleGrid columns={{ base: 1, md: 2 }} spacing="8px" w="100%">
+                  <Link href="/others/register" style={{ width: '100%' }}>
+                    <Button
+                      w="100%"
+                      bg={accentBlue}
+                      color="white"
+                      borderRadius="9999px"
+                      h="44px"
+                      px="22px"
+                      fontFamily={FONT_APPLE_TEXT}
+                      fontWeight="500"
+                      fontSize="15px"
+                      letterSpacing="-0.2px"
+                      _hover={{ bg: accentBlueHover }}
+                      _active={{ transform: 'scale(0.96)' }}
+                      transition="all 0.16s ease"
+                    >
+                      Создать аккаунт
+                    </Button>
+                  </Link>
+                  <Link href="/others/sign-in" style={{ width: '100%' }}>
+                    <Button
+                      w="100%"
+                      bg="transparent"
+                      color={accentBlue}
+                      border="1px solid"
+                      borderColor={accentBlue}
+                      borderRadius="9999px"
+                      h="44px"
+                      px="22px"
+                      fontFamily={FONT_APPLE_TEXT}
+                      fontWeight="500"
+                      fontSize="15px"
+                      letterSpacing="-0.2px"
+                      _hover={{ bg: 'rgba(0,102,204,0.06)' }}
+                      _active={{ transform: 'scale(0.96)' }}
+                      transition="all 0.16s ease"
+                    >
+                      Войти
+                    </Button>
+                  </Link>
+                </SimpleGrid>
+              </>
+            )}
           </Flex>
         </Flex>
       </Box>
+
+      {/* ── Anonymous upsell card ──────────────────────────────── */}
+      {isAnonymous && (
+        <Box
+          bg={surfaceGlass}
+          backdropFilter="blur(22px) saturate(180%)"
+          border="1px solid"
+          borderColor={borderGlass}
+          borderRadius={{ base: '20px', md: '24px' }}
+          boxShadow={cardShadow}
+          p={{ base: '18px', md: '24px' }}
+          mb={{ base: '14px', md: '18px' }}
+          sx={glassCardSx}
+          width="100%"
+          maxWidth="100%"
+          minWidth={0}
+        >
+          <Text
+            fontSize="11px"
+            fontWeight="600"
+            letterSpacing="0.6px"
+            textTransform="uppercase"
+            color={textSecondary}
+            mb="6px"
+          >
+            Премиум
+          </Text>
+          <Heading
+            fontFamily={FONT_APPLE_DISPLAY}
+            fontSize={{ base: '22px', md: '26px' }}
+            fontWeight="600"
+            lineHeight="1.2"
+            letterSpacing="-0.4px"
+            color={textPrimary}
+            mb="8px"
+          >
+            Безлимитный доступ к ИИСеть
+          </Heading>
+          <Text
+            fontSize={{ base: '13px', md: '14px' }}
+            color={textSecondary}
+            letterSpacing="-0.1px"
+            lineHeight="1.5"
+            mb="14px"
+            maxW="560px"
+          >
+            Анонимный режим ограничен. С Premium вы получаете доступ ко всем моделям и функциям без ограничений.
+          </Text>
+          <Flex direction="column" gap="8px" mb="18px">
+            <Flex align="center" gap="10px">
+              <Box w="6px" h="6px" borderRadius="50%" bg={accentBlue} />
+              <Text fontSize="14px" color={textPrimary} letterSpacing="-0.1px">
+                GPT-4o, Claude, Gemini — 6 моделей в одном окне
+              </Text>
+            </Flex>
+            <Flex align="center" gap="10px">
+              <Box w="6px" h="6px" borderRadius="50%" bg={accentBlue} />
+              <Text fontSize="14px" color={textPrimary} letterSpacing="-0.1px">
+                Безлимитные тексты и генерация изображений
+              </Text>
+            </Flex>
+            <Flex align="center" gap="10px">
+              <Box w="6px" h="6px" borderRadius="50%" bg={accentBlue} />
+              <Text fontSize="14px" color={textPrimary} letterSpacing="-0.1px">
+                Веб-поиск с источниками в реальном времени
+              </Text>
+            </Flex>
+            <Flex align="center" gap="10px">
+              <Box w="6px" h="6px" borderRadius="50%" bg={accentBlue} />
+              <Text fontSize="14px" color={textPrimary} letterSpacing="-0.1px">
+                Сохранение истории диалогов на всех устройствах
+              </Text>
+            </Flex>
+          </Flex>
+          <SimpleGrid columns={{ base: 1, md: 2 }} spacing="10px" w="100%">
+            <Link href="/pricing" style={{ width: '100%' }}>
+              <Button
+                w="100%"
+                bg={accentBlue}
+                color="white"
+                borderRadius="9999px"
+                h="44px"
+                px="22px"
+                fontFamily={FONT_APPLE_TEXT}
+                fontWeight="500"
+                fontSize="15px"
+                letterSpacing="-0.2px"
+                _hover={{ bg: accentBlueHover }}
+                _active={{ transform: 'scale(0.96)' }}
+                transition="all 0.16s ease"
+              >
+                Оформить Premium — 249 ₽/мес
+              </Button>
+            </Link>
+            <Link href="/others/register" style={{ width: '100%' }}>
+              <Button
+                w="100%"
+                bg="transparent"
+                color={accentBlue}
+                border="1px solid"
+                borderColor={accentBlue}
+                borderRadius="9999px"
+                h="44px"
+                px="22px"
+                fontFamily={FONT_APPLE_TEXT}
+                fontWeight="500"
+                fontSize="15px"
+                letterSpacing="-0.2px"
+                _hover={{ bg: 'rgba(0,102,204,0.06)' }}
+                _active={{ transform: 'scale(0.96)' }}
+                transition="all 0.16s ease"
+              >
+                Создать аккаунт бесплатно
+              </Button>
+            </Link>
+          </SimpleGrid>
+        </Box>
+      )}
 
       {/* ── Unified billing entry point ─────────────────────────────
           Один Apple-glass payment-блок вместо двух отдельных кнопок
