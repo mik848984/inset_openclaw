@@ -163,6 +163,23 @@ export default function ComparisonPage() {
           </TrackedPricingCTA>
         </section>
 
+        {/* ── Related: Нейросеть онлайн ────────────────────────── */}
+        <section style={{ ...cardStyle, marginBottom: 34, background: "linear-gradient(135deg, rgba(109,93,246,0.05), rgba(77,140,255,0.04))", border: "1px solid rgba(109,93,246,0.12)" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 20, flexWrap: "wrap", justifyContent: "space-between" }}>
+            <div style={{ flex: 1, minWidth: 260 }}>
+              <p style={{ margin: "0 0 6px", fontSize: 17, fontWeight: 700 }}>
+                Ищете нейросеть онлайн без VPN и регистрации?
+              </p>
+              <p style={{ margin: 0, color: "#596174", fontSize: 15, lineHeight: 1.55 }}>
+                ИИСеть объединяет 6 моделей — GPT-4o, DeepSeek, Claude, Gemini и другие — в одном окне. Работает из России, с оплатой картой РФ. От 249 ₽/мес.
+              </p>
+            </div>
+            <Link href="/neiroset-online" style={primaryButton}>
+              Нейросеть онлайн →
+            </Link>
+          </div>
+        </section>
+
         {/* ── At-a-glance table ──────────────────────────────── */}
         <section style={{ ...cardStyle, marginBottom: 34, overflowX: "auto" }}>
           <div style={{ overflowX: "auto" }}>
