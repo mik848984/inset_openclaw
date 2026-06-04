@@ -225,6 +225,20 @@ export default function NeirosetOnlinePage() {
         <p className="mt-4 text-sm text-ink/48">
           Без VPN · Без регистрации · Оплата картой РФ
         </p>
+        <div className="mt-8 flex flex-wrap justify-center gap-x-6 gap-y-2 text-sm text-ink/60">
+          <span className="inline-flex items-center gap-1.5">
+            <span className="inline-flex h-4 w-4 items-center justify-center rounded-full bg-[#0066cc] text-white text-[10px]">✓</span>
+            10 000+ пользователей
+          </span>
+          <span className="inline-flex items-center gap-1.5">
+            <span className="inline-flex h-4 w-4 items-center justify-center rounded-full bg-[#0066cc] text-white text-[10px]">✓</span>
+            6 нейросетей в одном окне
+          </span>
+          <span className="inline-flex items-center gap-1.5">
+            <span className="inline-flex h-4 w-4 items-center justify-center rounded-full bg-[#0066cc] text-white text-[10px]">✓</span>
+            Работает без VPN
+          </span>
+        </div>
       </section>
 
       {/* ── CAPABILITIES ─────────────────────────────────── */}

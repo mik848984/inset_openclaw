@@ -236,7 +236,7 @@ function TariffModal({ open, onClose }: IProps) {
               lineHeight="1.5"
             >
               <Text as="span" fontWeight="600">
-                Более 8 000
+                Более 10 000
               </Text>{' '}
               пользователей уже используют ИИСеть
             </Text>
