@@ -92,7 +92,7 @@ export function getAllPosts(): BlogPostMeta[] {
   return posts.sort((a, b) => (a.date < b.date ? 1 : -1));
 }
 
-export function getPostBySlug(slug: string): BlogPost {
+export function getPostBySlug(slug: string): BlogPost | null {
   ensurePostsDirectory();
 
   const fileNames = fs
@@ -121,7 +121,7 @@ export function getPostBySlug(slug: string): BlogPost {
     }
   }
 
-  throw new Error(`Post with slug "${slug}" not found`);
+  return null;
 }
 
 export type BlogPostInput = {

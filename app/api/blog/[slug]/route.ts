@@ -16,13 +16,11 @@ export async function GET(
   _req: Request,
   { params }: Params,
 ): Promise<Response> {
-  try {
-    const post = getPostBySlug(params.slug);
-    return NextResponse.json(post);
-  } catch (error) {
-    console.error(error);
+  const post = getPostBySlug(params.slug);
+  if (!post) {
     return new Response('Not found', { status: 404 });
   }
+  return NextResponse.json(post);
 }
 
 export async function PUT(req: Request, { params }: Params): Promise<Response> {
