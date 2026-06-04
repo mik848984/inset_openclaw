@@ -464,6 +464,10 @@ export default function ChatGPTBezVPNPage() {
             <Link href="/iiset-vs-gigachat" className="text-[#0066cc] hover:underline">
               ИИСеть vs GigaChat
             </Link>
+            {' · '}
+            <Link href="/neiroset-online" className="text-[#0066cc] hover:underline">
+              Нейросеть онлайн
+            </Link>
           </p>
         </div>
       </section>
