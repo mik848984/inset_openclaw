@@ -287,7 +287,7 @@ export default function PricingPage() {
       >
         <p style={{ color: "#6D5DF6", fontWeight: 800, marginTop: 0 }}>Доверие</p>
         <h2 style={{ marginTop: 0, fontSize: "clamp(28px, 4vw, 42px)" }}>
-          Более 8 000 пользователей уже используют ИИСеть
+          Более 10 000 пользователей уже используют ИИСеть
         </h2>
         <p style={{ color: "#4E5568", fontSize: 18, lineHeight: 1.65, maxWidth: 760 }}>
           Мы не показываем вымышленные отзывы. Вместо этого честно показываем, что

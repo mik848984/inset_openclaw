@@ -643,6 +643,109 @@ export default function HomeContent() {
         </Box>
       </Box>
 
+      {/* ── 1.5 Social Proof / Trust Bar ─────────────────────────── */}
+      <Box
+        as="section"
+        bg={C.canvas}
+        py={{ base: "48px", md: "72px" }}
+        px={{ base: "24px", md: "48px" }}
+        textAlign="center"
+        borderBottom="1px solid"
+        borderColor={C.hairlineSoft}
+      >
+        <Box mx="auto" maxW="880px">
+          <SectionEyebrow>Доверие</SectionEyebrow>
+          <SectionHeading>Более 10 000 пользователей.</SectionHeading>
+          <SectionLead maxW="680px">
+            Уже более 10 000 человек используют ИИСеть для текстов, поиска,
+            изображений и работы с документами. Без VPN, без регистрации,
+            на русском языке.
+          </SectionLead>
+
+          <SimpleGrid
+            columns={{ base: 1, sm: 3 }}
+            spacing={{ base: "12px", md: "16px" }}
+            mt={{ base: "28px", md: "40px" }}
+            maxW="640px"
+            mx="auto"
+          >
+            {[
+              { value: "10 000+", label: "пользователей" },
+              { value: "6", label: "нейросетей" },
+              { value: "24/7", label: "доступ без VPN" },
+            ].map((stat) => (
+              <Box
+                key={stat.label}
+                bg={C.canvasPearl}
+                border="1px solid"
+                borderColor={C.hairlineSoft}
+                borderRadius="18px"
+                p={{ base: "16px", md: "20px" }}
+                textAlign="center"
+              >
+                <Text
+                  fontFamily={FD}
+                  fontSize={{ base: "28px", md: "34px" }}
+                  fontWeight="600"
+                  letterSpacing="-0.022em"
+                  color={C.ink}
+                  lineHeight="1.1"
+                  mb="4px"
+                >
+                  {stat.value}
+                </Text>
+                <Text
+                  fontFamily={FT}
+                  fontSize="14px"
+                  color={C.inkSecondary}
+                  lineHeight="1.4"
+                >
+                  {stat.label}
+                </Text>
+              </Box>
+            ))}
+          </SimpleGrid>
+
+          {/* Honest trust pills */}
+          <Flex
+            gap={{ base: "8px", md: "12px" }}
+            flexWrap="wrap"
+            justify="center"
+            mt={{ base: "24px", md: "32px" }}
+          >
+            {TRUST_POINTS.slice(0, 4).map((p) => (
+              <Flex
+                key={p}
+                align="center"
+                gap="6px"
+                px="12px"
+                py="6px"
+                borderRadius="9999px"
+                bg={C.canvasPearl}
+                border="1px solid"
+                borderColor={C.hairlineSoft}
+              >
+                <Box
+                  w="5px"
+                  h="5px"
+                  borderRadius="50%"
+                  bg={C.actionBlue}
+                  flexShrink={0}
+                />
+                <Text
+                  fontFamily={FT}
+                  fontSize="13px"
+                  color={C.ink}
+                  fontWeight="500"
+                >
+                  {p}
+                </Text>
+              </Flex>
+            ))}
+          </Flex>
+        </Box>
+      </Box>
+
       {/* ── 2. Dark Search Poster ─────────────────────────────────── */}
       <Box
         as="section"
