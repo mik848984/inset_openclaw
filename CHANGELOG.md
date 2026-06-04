@@ -1,5 +1,23 @@
 # Changelog
 
+## [2.4.3] 2026-06-04
+
+### SEO — `/neiroset-online` use-case landing page created and deployed
+
+- Created `app/neiroset-online/page.tsx` targeting exact-match query "нейросеть онлайн".
+- Full metadata export: title with exact keyword, description, keywords (10), canonical URL, OpenGraph tags.
+- JSON-LD FAQPage schema with 6 Q&A pairs (what is, models, registration, free usage, vs ChatGPT, work use-cases).
+- JSON-LD WebPage schema with `@id`, `url`, `name`, `description`, `inLanguage`.
+- Hero with H1 exact match, trust pills (10 000+ users, 6 models, без VPN).
+- Feature sections: capabilities grid (6 cards), models grid (6 models), dark features checklist (6 items), how-it-works steps (4 steps).
+- Tracked CTAs to `/chat` (primary) and `/pricing` (secondary) in hero and bottom sections.
+- Footer cross-links to `/chatgpt-bez-vpn`, comparison pages.
+- Updated `app/sitemap.ts` with `/neiroset-online` entry (priority 0.95).
+- Added inbound cross-link from `/chatgpt-bez-vpn` footer.
+- Updated freshness keyword from "2025" to "2026".
+- Production verified: HTTP 200, title, description, canonical, OG, JSON-LD schema, CTA links.
+- 173/173 static pages generated, zero new errors, IndexNow 202 response.
+
 ## [2.4.2] 2026-06-02
 
 ### SEO — FAQPage JSON-LD schema added to /pricing
